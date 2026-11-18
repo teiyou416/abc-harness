@@ -91,4 +91,5 @@ model client.
 
 ## Commands
 
-`make check` (lint + offline tests) · `make test` · `make lint` · `make fmt`
+`make check` (lint + offline tests) · `make test` · `make test-docker` · `make lint` · `make fmt`
+`make image` (build the execution image) · `make example` (review and run `examples/simblock-baseline.toml`)

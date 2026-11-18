@@ -1,0 +1,33 @@
+[project]
+name = "abc-harness"
+version = "0.1.0"
+description = "Local CLI that turns a research question into an approved, reproducible blockchain simulation"
+readme = "README.md"
+authors = [
+    { name = "teiyou", email = "teiyou416@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+abc-harness = "abc_harness:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "docker: needs a Docker daemon",
+    "live: calls a real model or external API",
+]
+
+[tool.ruff]
+line-length = 120
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.5",
+]

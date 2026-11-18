@@ -1,0 +1,26 @@
+# One target per command in AGENTS.md. Each target is the command you would
+# otherwise type.
+
+.PHONY: hooks check lint fmt test test-docker test-live
+
+hooks:                    ## enable the branch-protection hooks for this clone
+	git config core.hooksPath scripts/git-hooks
+	git config merge.ff false
+
+check: lint test          ## run before every commit
+
+lint:                     ## lint src/ and tests/
+	uv run ruff check src tests
+
+fmt:                      ## format and auto-fix
+	uv run ruff format src tests
+	uv run ruff check --fix src tests
+
+test:                     ## offline tests: no Docker, no API key
+	uv run pytest -m "not docker and not live"
+
+test-docker:              ## tests that need a Docker daemon
+	uv run pytest -m docker
+
+test-live:                ## tests that call a real model or API
+	uv run pytest -m live

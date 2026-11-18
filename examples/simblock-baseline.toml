@@ -1,0 +1,22 @@
+# Example plan for milestone M1. The researcher reviews and approves it with:
+#   uv run abc-harness run examples/simblock-baseline.toml
+
+title = "SimBlock: block interval versus propagation and orphans"
+question = "With 300 nodes, how do the time for a block to reach 90% of nodes and the orphan rate change when the block interval shrinks from 600 s to 30 s?"
+simulator = "simblock"
+rationale = "SimBlock models block propagation over a Bitcoin-like peer-to-peer network with regional bandwidth and latency, and reports per-node reception times and orphan blocks, which are the two quantities this question compares."
+seeds = [1, 2, 3, 4, 5]
+metrics = ["t90_ms", "orphan_rate"]
+run_timeout_seconds = 120
+
+[baseline]
+NUM_OF_NODES = 300
+END_BLOCK_HEIGHT = 100
+INTERVAL = 600000
+
+[[configurations]]
+name = "interval-600s"
+
+[[configurations]]
+name = "interval-30s"
+params = { INTERVAL = 30000 }

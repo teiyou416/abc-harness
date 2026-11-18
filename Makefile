@@ -1,7 +1,7 @@
 # One target per command in AGENTS.md. Each target is the command you would
 # otherwise type.
 
-.PHONY: check lint fmt test test-docker test-live
+.PHONY: check lint fmt test test-docker test-live image example
 
 check: lint test          ## run before every commit
 
@@ -20,3 +20,9 @@ test-docker:              ## tests that need a Docker daemon
 
 test-live:                ## tests that call a real model or API
 	uv run pytest -m live
+
+image:                    ## build the SimBlock execution image
+	uv run abc-harness image build
+
+example:                  ## review and run the M1 example plan
+	uv run abc-harness run examples/simblock-baseline.toml

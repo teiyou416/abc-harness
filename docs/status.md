@@ -11,8 +11,6 @@ append to it. Git already records the history.
   `docs/project-spec.md`, `docs/architecture.md`, `docs/development-plan.md`,
   and `docs/context/`.
 - `make check` runs ruff, the offline tests, and the rulebook test.
-- Git hooks block direct commits on `main` and `dev` and run `make check`
-  before merge commits into them.
 - The package `abc_harness` installs. Its CLI only prints a greeting.
 
 ## Known broken

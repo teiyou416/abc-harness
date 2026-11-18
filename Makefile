@@ -1,11 +1,7 @@
 # One target per command in AGENTS.md. Each target is the command you would
 # otherwise type.
 
-.PHONY: hooks check lint fmt test test-docker test-live
-
-hooks:                    ## enable the branch-protection hooks for this clone
-	git config core.hooksPath scripts/git-hooks
-	git config merge.ff false
+.PHONY: check lint fmt test test-docker test-live
 
 check: lint test          ## run before every commit
 

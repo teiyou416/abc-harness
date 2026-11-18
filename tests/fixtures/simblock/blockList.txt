@@ -1,0 +1,4 @@
+OnChain : 1 : simblock.block.ProofOfWorkBlock@4d5e6f
+OnChain : 2 : simblock.block.ProofOfWorkBlock@7a8b9c
+Orphan : 2 : simblock.block.ProofOfWorkBlock@abcdef
+OnChain : 3 : simblock.block.ProofOfWorkBlock@123456

@@ -5,8 +5,9 @@ which parts the first release builds, and which module holds each part. The
 diagram shows the long-term design. The table below is authoritative where the
 two differ.
 
-Most modules do not exist yet. A module marked _planned_ names where the code
-will go; replace the mark when the module lands.
+A module marked _planned_ names where code will go; replace the mark when the
+module lands. `task.py` orchestrates one task from a plan file, `report.py`
+writes the report, and `simulators/base.py` defines the adapter interface.
 
 ## Data flow
 
@@ -29,33 +30,40 @@ will go; replace the mark when the module lands.
 
 | Diagram element | First release | Module |
 |---|---|---|
-| Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `loop.py`, `limits.py` _planned_ |
+| Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `loop.py` _planned_; `limits.py` |
 | Tools: Files | Yes. Reads anywhere in the repository and task; writes only inside the task workspace and permitted files. | `tools/files.py` _planned_ |
-| Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `runner.py`, `tools/sandbox.py` _planned_ |
+| Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `runner.py`; `tools/sandbox.py` _planned_ |
 | Tools: Web Retrieval | Yes. Sources are listed in the project specification. | `tools/literature.py` _planned_ |
-| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/human.py`, `approval.py` _planned_ |
+| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `approval.py`, and `cli.py` (`prompt_decision`) until M2 adds `tools/human.py` |
 | Tools: Custom Tools | Later | |
-| Simulators: SimBlock, BlockSim | Yes | `simulators/simblock.py`, `simulators/blocksim.py` _planned_ |
+| Simulators: SimBlock, BlockSim | Yes | `simulators/simblock.py`; `simulators/blocksim.py` _planned_ |
 | Simulators: Blockemulator | Later | |
 | Literature boxes | Partial. Papers With Code is gone; IEEE Xplore needs its own API key and is optional. | `tools/literature.py` _planned_ |
 | System prompt, user prompt, working memory | Yes, with a single system prompt file. | `prompts/system.md` _planned_ |
 | SOUL.md, SKILL.md, History.md | Later. `trace.jsonl` and the artifact directory are the record of a task. | |
-| Context summarization and token caps | Partial. A hard context limit stops the task with a recorded reason. Summarization waits until traces show the need. | `limits.py` _planned_ |
-| Draft | Yes. The draft is the structured plan shown for review. | `plan.py` _planned_ |
-| LLM Ops: trace | Yes. One `trace.jsonl` per task and a CLI summary of calls, tokens, latency, and errors. | `trace.py` _planned_ |
+| Context summarization and token caps | Partial. A hard context limit stops the task with a recorded reason. Summarization waits until traces show the need. | `limits.py` |
+| Draft | Yes. The draft is the structured plan shown for review. | `plan.py` |
+| LLM Ops: trace | Yes. One `trace.jsonl` per task and a CLI summary of calls, tokens, latency, and errors. | `trace.py` |
 | LLM Ops: LLM-as-a-judge, Diagnose, Gate, Release | Later. Result verification is deterministic. | |
 
 All module paths are relative to `src/abc_harness/`.
 
 ## Execution environment
 
-- `docker/Dockerfile` builds the execution image for arm64. It installs SimBlock
-  and BlockSim at pinned commits with their build and runtime dependencies. Each
-  task manifest records the image digest and simulator commits.
+- Each simulator has its own image, built from `docker/<simulator>/Dockerfile`
+  with `abc-harness image build`. The SimBlock image is a digest-pinned
+  `eclipse-temurin:21-jdk` plus the SimBlock source at a pinned commit, checked
+  by SHA-256. Each task manifest records the image ID and simulator commit.
+- SimBlock reads its parameters from Java constants and hard-codes its random
+  seed, so every simulation run gets its own source copy with the planned
+  constants and seed written in, and compiles it with `javac` in its container.
+  The upstream Gradle wrapper is not used.
 - The harness and the model client run on the host. The API key never enters a
-  container, and containers receive only allowlisted environment variables.
+  container: the docker CLI receives only an allowlist of Docker variables, and
+  containers receive no host variables at all.
 - At task start, the harness copies the simulator source from the image into the
-  task workspace and mounts only that directory into containers.
+  task workspace. Each simulation run's container mounts only that run's
+  directory.
 - Containers run with `--network none`, CPU and memory limits, and a task label.
   On a timeout or limit, the harness stops and removes every container with that
   label.

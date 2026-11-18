@@ -7,39 +7,32 @@ Every milestone keeps two kinds of tests apart:
 - **Test doubles** make logic tests deterministic and fast. Reports and test names must say when a result comes from a double.
 - **Real components** (the model, the simulators, literature APIs) are required for the demonstration and acceptance of the milestone.
 
-## M1: SimBlock execution path without an LLM
+## M1: SimBlock execution path without an LLM (done 2026-11-19)
 
-The plan is a hand-written file. This milestone proves the approval gate, the runner, and the artifacts before any model is involved. It is sized for a single coding agent.
+The plan is a hand-written file. This milestone proves the approval gate, the runner, and the artifacts before any model is involved.
 
-**What the researcher can do.** Build the execution image, run `abc-harness run examples/simblock-baseline.yaml`, review the plan, and approve or reject it. Approval runs SimBlock and prints the artifact directory.
+**What the researcher can do.** Build the execution image, run `abc-harness run examples/simblock-baseline.toml`, review the plan, and approve or reject it. Approval runs SimBlock and prints the artifact directory.
 
-**Scope**
+**Delivered**
 
-- `docker/Dockerfile` with SimBlock at a pinned commit and its JDK and Gradle dependencies. `abc-harness image build` builds it.
-- CLI commands `image build` and `run`.
-- Plan schema with a content-hash version. Approval records written by the harness.
-- Docker runner: copy the simulator source into the task workspace, apply parameters from the plan, build, execute the planned repetitions, enforce per-run timeouts, run without network, pass only allowlisted environment variables, and remove containers by task label.
-- The 30-minute active-runtime limit, configurable for tests.
-- One metric parser for SimBlock output.
-- `report.md`, `manifest.json` (simulator commit, image digest, commands, configuration, seeds), and `trace.jsonl`.
-- README sections for setup, the exact commands used, and an independent command that recalculates the reported metric from raw output.
-- `make` targets for the new commands, listed under "Commands" in `AGENTS.md`.
+- `docker/simblock/Dockerfile` and `abc-harness image build`.
+- `abc-harness run` with a TOML plan, a content-hash plan version, and approval records.
+- Docker runner with per-run source copies, parameter and seed patching from a closed set, per-run timeouts, no network, no host environment, and label-based cleanup.
+- The 30-minute active-runtime limit, which excludes time spent waiting for the researcher.
+- Metrics `t90_ms` and `orphan_rate`, with an independent recalculation script `scripts/recompute_metric.py`.
+- `report.md`, `results.json`, `manifest.json`, `trace.jsonl`, raw output, and per-run diffs.
+- README steps that reproduce the example.
 
 **Real components:** SimBlock in the execution image.
 
-**Test doubles**
+**Test doubles:** `tests/doubles/fake_runner.py` replaces the Docker runner for approval, status, and limit tests. Docker tests (`make test-docker`) check that containers get no host environment and no network route, that a timeout removes the container, and that a real run matches the recalculation script.
 
-- A `FakeRunner` behind the runner interface for approval, rejection, and limit logic. These tests do not need Docker.
-- A fake simulator script inside the image that writes output, sleeps, or fails. Integration tests use it to check timeout cleanup, missing runs, and that the container environment contains no API key. Mark these tests as requiring Docker.
-
-**Demonstration:** build the image, approve the example plan, open the report, and recalculate the metric with the README command. Run again and reject the plan.
-
-**Acceptance**
+**Acceptance (passed)**
 
 - Approving the plan runs the simulation and prints the artifact directory.
 - Rejecting the plan exits without starting a container.
-- Following the README reproduces the example, and at least one reported measurement can be recalculated from the saved raw output.
-- All tests pass.
+- Following the README reproduces the example, and the recalculation script reproduces a run's metrics from saved raw output.
+- `make check` and `make test-docker` pass.
 
 ## M2: Agent loop plans a SimBlock experiment
 

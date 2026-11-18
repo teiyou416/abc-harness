@@ -2,7 +2,7 @@
 
 How changes get made in ABC Harness, for the maintainer and coding agents
 alike. A rule that a test can enforce belongs in the test instead of here, and
-`AGENTS.md` lists those under "What the local checks block".
+`AGENTS.md` lists those under "What `make check` blocks".
 
 ## 1. Language
 
@@ -57,8 +57,7 @@ about 400 lines. `docs/architecture.md` maps each diagram box to its module.
 ## 5. Git, branches and commits
 
 This is a personal project with no remote CI and no pull requests. Two
-long-lived branches exist, and git hooks in `scripts/git-hooks/` protect both.
-Run `make hooks` once per clone to enable them.
+long-lived branches exist, and nobody commits to either directly.
 
 | Branch | Holds | Receives changes from |
 |---|---|---|
@@ -69,18 +68,15 @@ Run `make hooks` once per clone to enable them.
 The workflow for every change:
 
 1. `git switch dev && git switch -c feature/<name>`.
-2. Commit on the work branch. Run `make check` before each commit.
-3. When the work is done and tested, `git switch dev && git merge --no-ff feature/<name>`.
-   The `pre-merge-commit` hook runs `make check` and aborts the merge if it fails.
-   Delete the work branch afterwards.
+2. Commit on the work branch. Before each commit, run `make check` and confirm
+   with `git branch --show-current` that you are not on `main` or `dev`.
+3. When the work is done and tested, `git switch dev && git merge --no-ff feature/<name>`,
+   then delete the work branch. `--no-ff` keeps each piece of work visible as
+   one merge in the history.
 4. Merge `dev` into `main` only after `dev` passes `make check`, the Docker and
    live tests that the merged work touches, and the demonstration of the
    current milestone in `docs/development-plan.md`:
    `git switch main && git merge --no-ff dev`.
-
-Always merge with `--no-ff`. A fast-forward merge creates no merge commit, so
-the `pre-merge-commit` hook never runs. `make hooks` sets `merge.ff=false` for
-this repository to make `--no-ff` the default.
 
 Commit messages and content:
 
@@ -111,4 +107,4 @@ in `pyproject.toml`.
 | `docs/context/gotchas.md` | traps someone already stepped on | The only append-only file. Each entry has a date and a `Retire when:` (test); 40 entries at most (test). |
 
 A rule that can become a test becomes one: write the test, add a row to "What
-the local checks block" in `AGENTS.md`, and delete the sentence here.
+`make check` blocks" in `AGENTS.md`, and delete the sentence here.

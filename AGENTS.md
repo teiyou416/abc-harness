@@ -69,19 +69,18 @@ caps it at 100 lines, so the detail lives in the files it points to.
    runner, and the agent's build and test commands go through sandbox exec. Do
    not add a general shell tool on the host.
 8. **Fix the doc your change makes false** in the same commit.
-9. **Protect `main` and `dev`.** Never commit to either directly. Cut a branch
-   from `dev`, test it, and merge it into `dev` with `--no-ff`. Merge `dev` into
-   `main` only after `dev` passes its checks and runs correctly.
+9. **Protect `main` and `dev`.** Never commit to either directly; run
+   `git branch --show-current` before committing. Cut a branch from `dev`, test
+   it, and merge it into `dev`. Merge `dev` into `main` only after `dev` passes
+   its checks and runs correctly.
 
-## What the local checks block
+## What `make check` blocks
 
-There is no hosted CI. Run `make hooks` once per clone; the hooks and
-`make check` fail on:
+There is no hosted CI. Run `make check` before every commit and merge; it
+fails on:
 
 | Blocked | Checked by |
 |---|---|
-| a direct commit on `main` or `dev` | `scripts/git-hooks/pre-commit` |
-| a merge commit into `main` or `dev` while `make check` fails | `scripts/git-hooks/pre-merge-commit` |
 | a lint error in `src/` or `tests/` | `ruff check` |
 | a failing test that needs neither Docker nor an API key | `pytest` |
 | this file over 100 lines, a broken relative link, an unindexed doc, a gotcha without `Retire when:` | `tests/test_rulebook.py` |
@@ -92,4 +91,4 @@ model client.
 
 ## Commands
 
-`make hooks` (once per clone) · `make check` (lint + offline tests) · `make test` · `make lint` · `make fmt`
+`make check` (lint + offline tests) · `make test` · `make lint` · `make fmt`

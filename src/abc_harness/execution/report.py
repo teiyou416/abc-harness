@@ -97,7 +97,7 @@ def write_report(
                 cells.append(f"{_fmt(statistics.fmean(values))} ± {_fmt(statistics.stdev(values))} (n={len(values)})")
         lines.append(f"| {name} | " + " | ".join(cells) + " |")
 
-    lines += _sources(artifact_dir, plan)
+    lines += _citations(artifact_dir, plan)
     lines += ["", "## Simulation runs", "", "| Run | Status | " + " | ".join(plan.metrics) + " | Raw output | Changes |"]
     lines.append("|---|---|" + "---|" * len(plan.metrics) + "---|---|")
     for r in records:
@@ -144,25 +144,32 @@ def _write_planless_report(artifact_dir: Path, manifest: dict[str, Any], summary
     (artifact_dir / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _sources(artifact_dir: Path, plan: Plan) -> list[str]:
-    """Each citation with the place the harness finds its quote, recomputed from the task's artifacts."""
+def _citations(artifact_dir: Path, plan: Plan) -> list[str]:
+    """Each citation with what the harness found for it, recomputed from the task's artifacts."""
     library = Library.load(artifact_dir)
     citations = plan.data.get("citations") or []
     if not citations and not library.searches:
         return []
-    lines = ["", "## Sources", ""]
+    lines = ["", "## Citations", ""]
     for c in citations:
+        evidence = f"\"{c['quote']}\"" if "quote" in c else f"{c['figure']}: {c['reading']}"
         paper = library.papers.get(c["paper"])
         if paper is None:
-            lines.append(f"- **{c['supports']}**: `{c['paper']}`: \"{c['quote']}\" "
+            lines.append(f"- **{c['supports']}**: `{c['paper']}`: {evidence} "
                          "(_not checked: this citation came with the plan file, not from a search in this task_)")  # fmt: skip
             continue
-        where = library.locate(c["paper"], c["quote"])
-        found = f"quote found in {where}" if where else "**quote not found in the saved text**"
+        if "quote" in c:
+            where = library.locate(c["paper"], c["quote"])
+            found = f"quote found in {where}" if where else "**quote not found in the saved text**"
+        else:
+            saved = next((v for k, v in library.viewed.get(c["paper"], {}).items()
+                          if k.lower() == c["figure"].strip().lower()), None)  # fmt: skip
+            images = ", ".join(f"[image]({rel})" for rel in saved) if saved else "**figure not viewed**"
+            found = f"_figure reading: read off the figure by the model, approximate, not checked against text_; {images}"
         lines.append(f"- **{c['supports']}**: [{paper.title}]({paper.url}) ({paper.year}, {paper.venue or 'venue unknown'}): "
-                     f"\"{c['quote']}\" ({found})")  # fmt: skip
+                     f"{evidence} ({found})")  # fmt: skip
     if not citations:
         lines.append("The plan cites no paper.")
-    texts = "; full texts in `papers/`" if library.full_texts else ""
-    lines += ["", f"{len(library.searches)} searches found {len(library.papers)} papers, all listed in `sources.json`{texts}."]
+    texts = "; full texts and viewed figures in `papers/`" if library.full_texts else ""
+    lines += ["", f"{len(library.searches)} searches found {len(library.papers)} papers, all listed in `literature.json`{texts}."]
     return lines

@@ -37,7 +37,7 @@ def test_first_round_searches_only_the_configured_venues(tmp_path):
                                          "IEEE International Conference on Blockchain and Cryptocurrency (ICBC)"}  # fmt: skip
     assert "primary_location.source.id" in fetcher.requests[0][0]
     assert papers[0].abstract.startswith("A proof of work (PoW) blockchain protocol")
-    saved = json.loads((tmp_path / "sources.json").read_text())
+    saved = json.loads((tmp_path / "literature.json").read_text())
     assert saved["searches"][0]["venues"] == ["FC", "AFT", "ICBC"]
     assert len(saved["papers"]) == 3
 
@@ -56,7 +56,7 @@ def test_semantic_scholar_gets_the_key_and_nothing_else_does(tmp_path):
     assert fetcher.requests[0][1] == {"x-api-key": S2_KEY}
     lib.search("bitcoin block propagation delay", broaden=True, limit=3, time_left=60)
     assert all("x-api-key" not in headers for url, headers in fetcher.requests if "openalex" in url)
-    assert S2_KEY not in (tmp_path / "sources.json").read_text()
+    assert S2_KEY not in (tmp_path / "literature.json").read_text()
 
 
 def test_full_text_is_saved_once_and_paged_by_outline(tmp_path):
@@ -164,7 +164,7 @@ def test_agent_searches_reads_and_cites_and_the_report_shows_where(tmp_path):
     assert result.status == "completed", result.stop_reason
     assert "Outline:" in model.calls[2][-1]["content"][0]["content"]
     report = (result.artifact_dir / "report.md").read_text()
-    assert "## Sources" in report and "quote found in papers/2007.05614.txt line 27" in report
+    assert "## Citations" in report and "quote found in papers/2007.05614.txt line 27" in report
     assert (result.artifact_dir / "papers" / "2007.05614.txt").exists()
     plan = json.loads((result.artifact_dir / "plan.json").read_text())
     assert plan["citations"] == [citation]
@@ -227,3 +227,149 @@ def test_search_requests_and_results_are_traced_without_the_key(tmp_path):
     call = next(e for e in events if e["event"] == "tool_call")
     assert call["tool"] == "search_papers" and "arxiv:1311.0243" in call["result"]
     assert S2_KEY not in (result.artifact_dir / "trace.jsonl").read_text()
+
+
+# ----- figures (M4.1) -----
+
+FIGURE_READING = {"paper": "arxiv:2007.05614", "supports": "revenue saturates beyond horizon 100",
+                  "figure": "Figure 1", "reading": "0.954 ± 0.005 at expected horizon 10 (log x axis), alpha = 0.45"}  # fmt: skip
+
+
+def opened_library(tmp_path):
+    lib, fetcher = library(tmp_path)
+    lib.search("selfish mining", broaden=False, limit=3, time_left=60)
+    lib.read("arxiv:2007.05614", time_left=60)
+    return lib, fetcher
+
+
+def test_full_text_lists_figures_and_keeps_tables_as_markdown(tmp_path):
+    lib, _ = opened_library(tmp_path)
+    figures = lib.figures["arxiv:2007.05614"]
+    assert [f.label for f in figures] == ["Figure 1", "Figure 2", "Figure 3"]
+    assert figures[0].images == ["https://arxiv.org/html/2007.05614v2/expected_horizon.png"]
+    lines = (tmp_path / "papers" / "2007.05614.txt").read_text().splitlines()
+    assert lines[figures[0].line - 1].startswith("Figure 1. The effect of the expected horizon")
+    row = lines.index("| 1/3 |  | $0.337\\,05$ |  | $0.337\\,05$ |  |")
+    assert lines[row - 1].startswith("|---|")
+    assert not any(line.startswith("| $\\text{Pr}") for line in lines)  # equations stay plain lines
+
+
+def test_viewing_saves_the_image_and_records_the_view(tmp_path):
+    lib, fetcher = opened_library(tmp_path)
+    figure, images, skipped = lib.view("arxiv:2007.05614", "figure 1", time_left=60)
+    assert figure.label == "Figure 1" and skipped == []
+    rel, data = images[0]
+    assert rel == "papers/2007.05614/figures/figure-1-1.png" and (tmp_path / rel).read_bytes() == data
+    assert json.loads((tmp_path / "literature.json").read_text())["viewed"] == {"arxiv:2007.05614": {"Figure 1": [rel]}}
+    requests = len(fetcher.requests)
+    lib.view("arxiv:2007.05614", "Figure 1", time_left=60)
+    assert len(fetcher.requests) == requests
+
+
+def test_svg_figures_are_skipped(tmp_path):
+    lib, _ = opened_library(tmp_path)
+    _, images, skipped = lib.view("arxiv:2007.05614", "Figure 3", time_left=60)
+    assert images == [] and "SVG" in skipped[0]
+    assert "Figure 3" not in lib.viewed.get("arxiv:2007.05614", {})
+
+
+def test_image_tokens_come_from_pixels_not_base64():
+    import base64
+
+    from abc_harness.agent.context import content_text, estimate_tokens
+
+    data = RecordedFetcher().get("https://arxiv.org/html/2007.05614v2/expected_horizon.png", {}, 1)
+    block = {"type": "image", "source": {"type": "base64", "media_type": "image/png",
+                                         "data": base64.b64encode(data).decode()}}  # fmt: skip
+    assert 559 * 328 // 750 <= estimate_tokens([block]) <= 559 * 328 // 750 + 20
+    assert len(block["source"]["data"]) // 3 > 10 * estimate_tokens([block])
+    assert content_text([{"type": "text", "text": "caption"}, block]) == (
+        "caption\n[image; viewed earlier, not repeated here]")
+
+
+def figure_flow(citation, view=True):
+    steps = [
+        tool_turn("search_papers", {"query": "selfish mining", "limit": 3}),
+        tool_turn("read_paper", {"paper": "arxiv:2007.05614"}),
+    ]
+    if view:
+        steps.append(tool_turn("view_figure", {"paper": "arxiv:2007.05614", "figure": "Figure 1"}))
+    steps.append(tool_turn("propose_plan", blocksim_plan(citations=[citation])))
+    return steps
+
+
+def test_agent_views_a_figure_and_cites_a_reading(tmp_path):
+    literature, _ = recorded_literature()
+    rendered = []
+    model = ScriptedModel([*figure_flow(FIGURE_READING), run_last_proposed, text_turn("Done.")])
+    result = run_agent(model, tmp_path, literature, review=lambda p: rendered.append(p.render()) or ("approve", ""))
+    assert result.status == "completed", result.stop_reason
+    sent = model.calls[3][-1]["content"][0]["content"]
+    assert [b["type"] for b in sent] == ["text", "image"]
+    assert sent[1]["source"]["media_type"] == "image/png"
+    assert "Figures (view one with view_figure" in model.calls[2][-1]["content"][0]["content"]
+    assert "[figure] arxiv:2007.05614 Figure 1" in rendered[0]
+    assert "image: papers/2007.05614/figures/figure-1-* in the task directory" in rendered[0]
+    report = (result.artifact_dir / "report.md").read_text()
+    assert "figure reading: read off the figure by the model, approximate" in report
+    assert "[image](papers/2007.05614/figures/figure-1-1.png)" in report
+    history = (result.artifact_dir / "history.md").read_text()
+    assert "[image shown to the model: task/papers/2007.05614/figures/figure-1-1.png]" in history
+    assert "iVBORw0KGgo" not in history  # no base64 image data in the history
+    events = read_trace(result.artifact_dir / "trace.jsonl")
+    assert next(e for e in events if e.get("tool") == "view_figure")["images"] == ["papers/2007.05614/figures/figure-1-1.png"]
+
+
+@pytest.mark.parametrize(("citation", "view", "problem"), [
+    (FIGURE_READING, False, "was not viewed with view_figure"),
+    ({**FIGURE_READING, "figure": "Figure 9"}, True, "has no 'Figure 9'"),
+    ({**FIGURE_READING, "reading": "0.954 at horizon 10"}, True, "uncertainty with ±"),
+])  # fmt: skip
+def test_figure_readings_need_a_viewed_figure_and_an_uncertainty(tmp_path, citation, view, problem):
+    literature, _ = recorded_literature()
+    seen = []
+    model = ScriptedModel([*figure_flow(citation, view), lambda m: text_turn(last_tool_result(m)["content"])])
+    result = run_agent(model, tmp_path, literature, review=lambda p: seen.append(p) or ("approve", ""))
+    assert result.status == "not_executed" and seen == []
+    assert problem in model.calls[-1][-1]["content"][0]["content"]
+
+
+def test_view_figure_refuses_before_read_paper_and_for_svg(tmp_path):
+    literature, _ = recorded_literature()
+    model = ScriptedModel([
+        tool_turn("search_papers", {"query": "selfish mining", "limit": 3}),
+        tool_turn("view_figure", {"paper": "arxiv:2007.05614", "figure": "Figure 1"}),
+        tool_turn("read_paper", {"paper": "arxiv:2007.05614"}),
+        tool_turn("view_figure", {"paper": "arxiv:2007.05614", "figure": "Figure 3"}),
+        text_turn("ok"),
+    ])  # fmt: skip
+    run_agent(model, tmp_path, literature)
+    assert "call read_paper" in model.calls[2][-1]["content"][0]["content"]
+    assert "cannot be shown" in model.calls[4][-1]["content"][0]["content"]
+
+
+def test_compression_does_not_carry_images_into_the_new_window(tmp_path):
+    from abc_harness.agent.context import ContextLimits, estimate_tokens
+    from abc_harness.agent.loop import TOOLS, system_prompt
+
+    literature, _ = recorded_literature()
+    start = estimate_tokens(system_prompt()) + estimate_tokens(TOOLS) + 200
+    # With the 200-token margin in start, the window is about start + 2.4k before the image and start + 2.9k after.
+    limits = ContextLimits(soft_limit=start + 2650, hard_limit=200_000, max_output_tokens=1000,
+                           compact_max_tokens=500, tool_result_max_tokens=8192)  # fmt: skip
+    model = ScriptedModel([
+        tool_turn("search_papers", {"query": "selfish mining", "limit": 3}),
+        tool_turn("read_paper", {"paper": "arxiv:2007.05614"}),
+        tool_turn("view_figure", {"paper": "arxiv:2007.05614", "figure": "Figure 1"}),
+        text_turn("summary of the work so far"),
+        text_turn("done"),
+    ])  # fmt: skip
+    for step in model.steps:
+        if hasattr(step, "usage"):
+            step.usage = {}
+    result = run_agent_task("q", model, FakeRunner(), lambda q: "", lambda p: ("approve", ""),
+                            runs_root=tmp_path / "runs", literature=literature, limits=limits)  # fmt: skip
+    new_window = json.dumps(model.calls[-1])
+    assert "Summarize" not in new_window and "iVBORw0KGgo" not in new_window
+    assert "viewed Figure 1 (task/papers/2007.05614/figures/figure-1-1.png)" in new_window
+    assert json.loads((result.artifact_dir / "manifest.json").read_text())["context_windows"] == 2

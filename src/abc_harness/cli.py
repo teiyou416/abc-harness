@@ -99,6 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _announce(artifact_dir: Path) -> None:
+    print(f"Task directory: {artifact_dir} (paths shown during review are relative to it)")
+
+
 def _print_result(result: TaskResult) -> int:
     print(f"\nStatus: {result.status} ({result.stop_reason})")
     print(f"Artifacts: {result.artifact_dir}")
@@ -144,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
             budget=Budget(time_limit_seconds=args.time_limit_seconds, llm_call_limit=args.llm_call_limit),
             redact=secrets.redact,
             literature=literature,
+            on_start=_announce,
         )
         summary = (result.artifact_dir / "report.md").read_text(encoding="utf-8")
         if "## Agent summary" in summary:
@@ -161,5 +166,6 @@ def main(argv: list[str] | None = None) -> int:
         prompt_decision,
         runs_root=args.runs_dir,
         budget=Budget(time_limit_seconds=args.time_limit_seconds),
+        on_start=_announce,
     )
     return _print_result(result)

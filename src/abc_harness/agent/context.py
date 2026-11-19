@@ -14,10 +14,13 @@ from the harness's records.
 
 from __future__ import annotations
 
+import base64
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from abc_harness.literature.figures import image_tokens
 
 if TYPE_CHECKING:
     from abc_harness.execution.task import Task
@@ -43,8 +46,36 @@ class ContextLimits:
 
 
 def estimate_tokens(value: Any) -> int:
-    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
-    return len(text) // CHARS_PER_TOKEN + 1
+    """Text at CHARS_PER_TOKEN; an image block by its pixel size, not by the length of its base64 data."""
+    if isinstance(value, str):
+        return len(value) // CHARS_PER_TOKEN + 1
+    images: list[int] = []
+
+    def without_images(v: Any) -> Any:
+        if isinstance(v, dict):
+            if v.get("type") == "image" and isinstance(v.get("source"), dict):
+                images.append(image_tokens(base64.b64decode(v["source"].get("data", ""))))
+                return {"type": "image"}
+            return {k: without_images(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [without_images(x) for x in v]
+        return v
+
+    text = json.dumps(without_images(value), ensure_ascii=False, default=str)
+    return len(text) // CHARS_PER_TOKEN + 1 + sum(images)
+
+
+def content_text(content: Any) -> str:
+    """The text of a message or tool result content, with images replaced by a placeholder."""
+    if isinstance(content, str):
+        return content
+    parts = []
+    for block in content or []:
+        if block.get("type") == "text":
+            parts.append(block.get("text", ""))
+        elif block.get("type") == "image":
+            parts.append("[image; viewed earlier, not repeated here]")
+    return "\n".join(parts)
 
 
 def cap_text(text: str, max_tokens: int, where: str) -> str:
@@ -107,7 +138,7 @@ def render_transcript(messages: list[dict[str, Any]]) -> str:
                 lines.append(f"[tool call] {block['name']} {json.dumps(block.get('input'), ensure_ascii=False)}")
             elif kind == "tool_result":
                 flag = " (error)" if block.get("is_error") else ""
-                lines.append(f"[tool result{flag}]\n{block.get('content')}")
+                lines.append(f"[tool result{flag}]\n{content_text(block.get('content'))}")
     return "\n\n".join(lines)
 
 
@@ -135,6 +166,8 @@ def task_state(task: Task, clarifications: list[tuple[str, str]], library: Libra
         for paper in library.papers.values():
             text = f"; full text in task/{library.full_texts[paper.id]}" if paper.id in library.full_texts else ""
             lines.append(f"- `{paper.id}`: {paper.title} ({paper.year}){text}")
+            for label, saved in library.viewed.get(paper.id, {}).items():
+                lines.append(f"  - viewed {label} (task/{saved[0]}); view it again to read new values")
     if task.executed is not None:
         from abc_harness.tools.run_plan import run_summary
 
@@ -161,7 +194,7 @@ def latest_tool_results(messages: list[dict[str, Any]]) -> str:
         call = calls.get(block["tool_use_id"], {})
         args = json.dumps(call.get("input"), ensure_ascii=False)
         flag = " (error)" if block.get("is_error") else ""
-        parts.append(f"### `{call.get('name', '?')}` {args}{flag}\n\n{block.get('content')}")
+        parts.append(f"### `{call.get('name', '?')}` {args}{flag}\n\n{content_text(block.get('content'))}")
     return "\n\n".join(parts)
 
 

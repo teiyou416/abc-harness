@@ -38,6 +38,9 @@ def run(ctx: ToolContext, args: dict[str, Any]) -> str:
     except FetchError as e:
         raise ToolError(f"could not fetch the full text: {e}") from e
     sections = "\n".join(outline(lines)) or "(no section headings found)"
+    figures = "\n".join(f"- {f.label} (caption at line {f.line}): {f.caption[:160]}"
+                        for f in ctx.library.figures.get(paper_id, [])) or "(no figures with images)"  # fmt: skip
     first = "\n".join(lines[:FIRST_LINES])
     return (f"[{paper.title}: saved to task/{rel}, {len(lines)} lines. Read sections with read_file.]\n\n"
-            f"Outline:\n{sections}\n\nFirst {FIRST_LINES} lines:\n{first}")  # fmt: skip
+            f"Outline:\n{sections}\n\nFigures (view one with view_figure; tables are text in the outline):\n"
+            f"{figures}\n\nFirst {FIRST_LINES} lines:\n{first}")  # fmt: skip

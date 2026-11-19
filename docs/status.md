@@ -24,11 +24,12 @@ append to it. Git already records the history.
   its retries, may use only the task's remaining active time. A failed
   container cleanup is recorded and never stops the results and report from
   being written.
-- M4: the agent searches OpenAlex (and Semantic Scholar with a key) for
-  papers, reads arXiv full texts, and cites them with quotes the harness
-  checks verbatim. The report lists every citation and where its quote is.
-- `make check` runs ruff and 111 offline tests. `make test-docker` runs 5
-  integration tests against both execution images, and `make test-live` runs 6
+- M4 and M4.1: the agent searches OpenAlex (and Semantic Scholar with a key)
+  for papers, reads arXiv full texts and tables, and views figures. A plan
+  cites a quote the harness checks verbatim, or a figure reading from a figure
+  viewed in the task, marked as approximate.
+- `make check` runs ruff and 121 offline tests. `make test-docker` runs 5
+  integration tests against both execution images, and `make test-live` runs 7
   tests against the Claude API and the literature services.
 
 ## Known broken

@@ -39,10 +39,17 @@ PLAN_SCHEMA: dict[str, Any] = {
                     },
                     "quote": {
                         "type": "string",
-                        "description": "A sentence copied verbatim from the abstract or the saved full text.",
+                        "description": "A sentence copied verbatim from the abstract or the saved full text. "
+                        "Give either quote, or figure and reading.",
+                    },
+                    "figure": {"type": "string", "description": "A figure you viewed, e.g. 'Figure 3'."},
+                    "reading": {
+                        "type": "string",
+                        "description": "The value read off the figure with its uncertainty and where on the axes, "
+                        "e.g. '0.954 ± 0.003 at horizon 10 (log x axis), curve alpha = 0.45'.",
                     },
                 },
-                "required": ["paper", "supports", "quote"],
+                "required": ["paper", "supports"],
             },
         },
         "configurations": {
@@ -95,11 +102,18 @@ def run(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 
 def check_citations(ctx: ToolContext, citations: list[dict[str, str]]) -> list[str]:
-    """Every cited paper must come from this task's searches, and its quote must appear in it verbatim."""
+    """Every cited paper must come from this task's searches; a quote must appear in it verbatim, and a
+    figure reading must come from a figure viewed in this task."""
     problems = []
     for c in citations:
         if ctx.library is None or c["paper"] not in ctx.library.papers:
             problems.append(f"{c['paper']} was not returned by search_papers in this task")
+        elif "figure" in c:
+            if ctx.library.figure(c["paper"], c["figure"]) is None:
+                problems.append(f"{c['paper']} has no {c['figure']!r} in its saved full text")
+            elif not any(label.lower() == c["figure"].strip().lower()
+                         for label in ctx.library.viewed.get(c["paper"], {})):  # fmt: skip
+                problems.append(f"{c['figure']} of {c['paper']} was not viewed with view_figure in this task")
         elif ctx.library.locate(c["paper"], c["quote"]) is None:
             where = "its abstract or saved full text" if c["paper"] in ctx.library.full_texts else "its abstract"
             problems.append(f"the quote for {c['paper']} does not appear verbatim in {where} "

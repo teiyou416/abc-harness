@@ -249,10 +249,13 @@ def run_task(
     decide: DecideFn,
     runs_root: Path = Path("runs"),
     budget: Budget | None = None,
+    on_start: Callable[[Path], None] | None = None,
 ) -> TaskResult:
     """Review and run a hand-written plan file (milestone M1)."""
     plan = load_plan(plan_path)
     task = Task(runner, runs_root, budget, mode="plan_file", plan_file=str(plan_path))
+    if on_start:
+        on_start(task.artifact_dir)
     shutil.copyfile(plan_path, task.artifact_dir / "plan.toml")
     status, stop_reason = FAILED, "unknown"
     try:

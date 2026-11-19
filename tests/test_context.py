@@ -159,7 +159,7 @@ def test_anthropic_request_enables_caching_and_omits_empty_tools():
     assert sent[0]["cache_control"] == {"type": "ephemeral"}
     assert "tools" not in sent[0]
     assert sent[1]["tools"] is TOOLS and sent[1]["max_tokens"] == 500
-    assert sent[0]["max_tokens"] == 16_384
+    assert sent[0]["max_tokens"] == 65_536
 
 
 @pytest.mark.parametrize("text", ["short", "x" * 10_000])

@@ -16,7 +16,7 @@ flowchart TB
     end
 
     subgraph LOOP["Agent: agent/"]
-        CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 131,072"]
+        CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 180,224"]
         LLM["Model client: agent/model.py<br/>only holder of the API key"]
         TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_files, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan,<br/>make_figure"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
@@ -234,7 +234,7 @@ to what the first release builds.
 | Literature boxes | Partial. OpenAlex and Semantic Scholar replace DBLP (bot check) and Papers With Code (gone); arXiv serves full text; IEEE Xplore is optional and not built. | `literature/` |
 | System prompt, user prompt, working memory | Yes. The system prompt is `SOUL.md` followed by `rules.md`; the working memory is the current window. | `agent/prompts/`, `agent/loop.py`, `agent/secrets.py` (API keys from `.env`) |
 | SOUL.md, SKILL.md, History.md | SOUL.md and a per-task `history.md` are built; SKILL.md and memory across tasks are later. | `agent/prompts/SOUL.md`, `agent/context.py` |
-| Context summarization and token caps | Yes, with the diagram's numbers: soft limit 106,496, hard limit 131,072, output 16,384, summary 8,192. | `agent/context.py`, `agent/loop.py` |
+| Context summarization and token caps | Yes: soft limit 106,496 and summary 8,192 as in the diagram; output 65,536 and hard limit 180,224 instead of the diagram's 16,384 and 131,072, because thinking counts toward the output cap (same input room). | `agent/context.py`, `agent/loop.py` |
 | Draft | Yes. The draft is the structured plan shown for review. | `planning/plan.py` |
 | LLM Ops: trace | Yes. One `trace.jsonl` per task and a CLI summary of calls, tokens, latency, and errors. | `execution/trace.py` |
 | LLM Ops: LLM-as-a-judge, Diagnose, Gate, Release | Later. Result verification is deterministic. | |
@@ -251,7 +251,7 @@ applies them.
 - Before every model call the agent estimates the next input from the last
   reported input tokens, the reply, and the new tool results. Past the soft
   limit (106,496 tokens) it compresses first. An input that would leave less
-  than one full reply (16,384 tokens) inside the hard limit (131,072 tokens)
+  than one full reply (65,536 tokens, thinking included) inside the hard limit (180,224 tokens)
   stops the task with reason `context`.
 - Compression asks the model, with `agent/prompts/compact.md` and no tools, for a
   summary of at most 8,192 tokens. The summary call counts toward the

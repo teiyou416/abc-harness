@@ -58,7 +58,7 @@ class ScriptedModel:
         system: str,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
-        max_tokens: int = 16_384,
+        max_tokens: int = 65_536,
         timeout_seconds: float | None = None,
     ) -> ModelTurn:
         self.calls.append(json.loads(json.dumps(messages)))

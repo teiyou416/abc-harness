@@ -140,3 +140,14 @@ def test_the_task_state_lists_drawn_figures(tmp_path):
 
     state = task_state(Done(), [])  # type: ignore[arg-type]
     assert "- `stale-rate`: task/figures/stale-rate.png, script task/figures/stale-rate.py" in state
+
+
+def test_a_model_that_cannot_see_images_gets_the_figure_saved_but_not_shown(tmp_path):
+    model = ScriptedModel(after_run(figure_call(), tool_turn("view_figure", {"paper": "x", "figure": "Figure 1"}),
+                                    text_turn("Done.")))  # fmt: skip
+    model.sees_images = False
+    result = run_agent_task("q", model, FakeRunner(), lambda q: "", lambda p: ("approve", ""), runs_root=tmp_path / "runs")
+    drawn = model.calls[3][-1]["content"][0]["content"]
+    assert isinstance(drawn, str) and "cannot see images, so the figure is saved and in the report" in drawn
+    assert (result.artifact_dir / "figures" / "stale-rate.png").exists()
+    assert "cannot see images, so it cannot read a figure" in model.calls[4][-1]["content"][0]["content"]

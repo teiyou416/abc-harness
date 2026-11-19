@@ -26,6 +26,9 @@ SPEC: dict[str, Any] = {
 
 
 def run(ctx: ToolContext, args: dict[str, Any]) -> ToolOutput:
+    if not ctx.sees_images:
+        raise ToolError("the model running this task cannot see images, so it cannot read a figure; use the "
+                        "caption and the text, and do not cite a figure reading")  # fmt: skip
     if ctx.library is None:
         raise ToolError("literature search is not configured for this task")
     paper_id, label = str(args.get("paper", "")), str(args.get("figure", ""))

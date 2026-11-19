@@ -61,7 +61,10 @@ append to it. Git already records the history.
   computed only when a plan asks for them. Before this, a task that redefined
   `orphan_rate` as the attacker's revenue share failed because the unused
   `t90_ms` could not be computed.
-- `make check` runs ruff and 216 offline tests. `make test-docker` runs 11
+- The agent can run on DeepSeek (`deepseek-v4-pro`, `deepseek-flash`) through
+  DeepSeek's Anthropic-compatible API, chosen with `--model` or `/model`; the
+  model list is fixed to four current Claude models and these two.
+- `make check` runs ruff and 218 offline tests. `make test-docker` runs 11
   integration tests against both execution images, the PDF parser image, and the plot image, and `make test-live` runs 7
   tests against the Claude API and the literature services.
 
@@ -71,6 +74,10 @@ Nothing is known broken.
 
 ## Not verified yet
 
+- DeepSeek has not been called for real yet (no `DEEPSEEK_API_KEY` was
+  available): the request shape, thinking blocks, tool calls, and the usage
+  fields the cost estimate reads follow DeepSeek's documentation only.
+  `make test-live` checks them once the key is in `.env`.
 - The harness has run only on macOS with Apple silicon and Docker Desktop.
 - The real model has not read a supplied PDF yet; `make test-live` has no
   PDF test. MinerU quality was measured on two arXiv papers only.

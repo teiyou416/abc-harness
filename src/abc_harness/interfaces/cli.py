@@ -9,8 +9,15 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from abc_harness.agent.model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelUnavailable
-from abc_harness.agent.secrets import DEFAULT_ENV_FILE, MissingSecret, Secrets
+from abc_harness.agent.model import (
+    API_KEY_NAMES,
+    DEFAULT_EFFORT,
+    DEFAULT_MODEL,
+    MODELS,
+    ModelUnavailable,
+    make_model,
+)
+from abc_harness.agent.secrets import DEFAULT_ENV_FILE, Secrets
 from abc_harness.execution.export import ExportError, export_task
 from abc_harness.execution.figures import PLOT_IMAGE
 from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LIMIT_SECONDS, Budget
@@ -125,7 +132,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _chat(args: argparse.Namespace, model: Any, literature: Any, redact: Callable[[str], str]) -> int:
+def _chat(
+    args: argparse.Namespace, model: Any, literature: Any, redact: Callable[[str], str], key: Callable[[str], Any]
+) -> int:
     from abc_harness.agent.session import ChatSession
 
     read = terminal_reader(args.runs_dir / ".chat_history")
@@ -135,11 +144,14 @@ def _chat(args: argparse.Namespace, model: Any, literature: Any, redact: Callabl
 
     def switch(name: str) -> str | None:
         try:
-            current["model"].check(name)
+            current["model"] = make_model(name, args.effort, key)
         except ModelUnavailable as e:
             return str(e)
-        current["model"] = current["model"].switched(name)
         return None
+
+    def available() -> list[str]:
+        return [name if key(spec.provider.key_name) else f"{name} (needs {spec.provider.key_name} in .env)"
+                for name, spec in MODELS.items()]  # fmt: skip
 
     def turn(session: ChatSession, text: str) -> Any:
         return session.run_turn(
@@ -151,7 +163,7 @@ def _chat(args: argparse.Namespace, model: Any, literature: Any, redact: Callabl
         )  # fmt: skip
 
     print(f"ABC Harness chat with {model.name}.")
-    models = ModelControl(lambda: current["model"].name, switch, current["model"].model_ids)
+    models = ModelControl(lambda: current["model"].name, switch, available)
     return run_chat(lambda: ChatSession(args.runs_dir, list(args.paper)), turn, read, show_answers=args.quiet,
                     models=models)  # fmt: skip
 
@@ -198,22 +210,25 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command in ("ask", "chat"):
         from abc_harness.agent.loop import run_agent_task
-        from abc_harness.agent.model import AnthropicModel
         from abc_harness.literature import HttpFetcher, Literature
 
         problem = check_papers(args.paper)
         if problem:
             print(f"error: --paper {problem}", file=sys.stderr)
             return 2
-        secrets = Secrets.load(args.env_file, names=("ANTHROPIC_API_KEY", S2_KEY))
+        secrets = Secrets.load(args.env_file, names=(*API_KEY_NAMES, S2_KEY))
+
+        def key(name: str) -> str | None:
+            return secrets.get(name) if secrets.has(name) else None
+
         try:
-            model = AnthropicModel(secrets.get("ANTHROPIC_API_KEY"), model=args.model, effort=args.effort)
-        except MissingSecret as e:
-            print(f"error: {e.args[0]}", file=sys.stderr)
+            model = make_model(args.model, args.effort, key)
+        except ModelUnavailable as e:
+            print(f"error: {e}", file=sys.stderr)
             return 2
         literature = Literature(HttpFetcher(), secrets.get(S2_KEY) if secrets.has(S2_KEY) else None)
         if args.command == "chat":
-            return _chat(args, model, literature, secrets.redact)
+            return _chat(args, model, literature, secrets.redact, key)
         result = run_agent_task(
             args.question,
             model,

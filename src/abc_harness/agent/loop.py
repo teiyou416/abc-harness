@@ -236,6 +236,7 @@ def run_agent_task(
         on_start(task.artifact_dir)
     agent = Agent(task, model, ask, review, limits)
     agent.tools.previous_tasks = dict(previous_tasks)
+    agent.tools.sees_images = getattr(model, "sees_images", True)
     try:
         runner.image_info(PARSER_IMAGE)
         convert = task.convert_pdf

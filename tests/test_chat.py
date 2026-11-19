@@ -186,12 +186,13 @@ def test_model_command_shows_and_switches_the_model_for_following_tasks(tmp_path
     current = {"name": "claude-opus-5-5"}
 
     def switch(name):
-        if name == "claude-opus-4-5-20251101":
-            return "claude-opus-4-5-20251101 has no adaptive thinking, which the harness's requests use"
+        if name == "deepseek-flash":
+            return "deepseek-flash needs DEEPSEEK_API_KEY in .env"
         current["name"] = name
         return None
 
-    models = ModelControl(lambda: current["name"], switch, lambda: ["claude-opus-5-5", "claude-sonnet-5-5"])
+    listed = ["claude-opus-5-5", "deepseek-v4-pro", "deepseek-flash (needs DEEPSEEK_API_KEY in .env)"]
+    models = ModelControl(lambda: current["name"], switch, lambda: listed)
     model = ScriptedModel([text_turn("Hi.")])
     used = []
 
@@ -201,10 +202,10 @@ def test_model_command_shows_and_switches_the_model_for_following_tasks(tmp_path
         return session.run_turn(text, model, FakeRunner(), lambda q: "", lambda p: ("approve", ""))
 
     out = []
-    inputs = Inputs("/model", "/model claude-opus-4-5-20251101", "/model claude-sonnet-5-5", "hello", "/tasks", "/quit")
+    inputs = Inputs("/model", "/model deepseek-flash", "/model deepseek-v4-pro", "hello", "/tasks", "/quit")
     run_chat(lambda: ChatSession(tmp_path / "runs"), turn, inputs, out.append, models=models)
     joined = "\n".join(out)
-    assert "Model: claude-opus-5-5\nAvailable: claude-opus-5-5, claude-sonnet-5-5" in joined
-    assert "! claude-opus-4-5-20251101 has no adaptive thinking" in joined
-    assert "The following tasks use claude-sonnet-5-5. Earlier tasks keep the model they ran with." in joined
-    assert used == ["claude-sonnet-5-5"] and "not_executed  claude-sonnet-5-5  hello" in joined
+    assert "Model: claude-opus-5-5\nModels:\n  claude-opus-5-5\n  deepseek-v4-pro\n  deepseek-flash (needs" in joined
+    assert "! deepseek-flash needs DEEPSEEK_API_KEY in .env" in joined
+    assert "The following tasks use deepseek-v4-pro. It cannot see images" in joined
+    assert used == ["deepseek-v4-pro"] and "not_executed  deepseek-v4-pro  hello" in joined

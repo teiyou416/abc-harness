@@ -82,6 +82,15 @@ the next task), and the agent can cite them:
 uv run abc-harness ask "Reproduce Figure 2 of this paper." --paper ~/papers/selfish-mining.pdf
 ```
 
+### Models
+
+`--model` (and `/model` in chat) takes one of: `claude-opus-5-5` (default),
+`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-2`, `deepseek-v4-pro`,
+and `deepseek-flash`. The DeepSeek models need `DEEPSEEK_API_KEY` in `.env`
+and send your question, papers, and results to DeepSeek's servers.
+`deepseek-v4-pro` cannot see images, so it cannot read figures in papers or
+check the figures it draws.
+
 ### Chat
 
 Ready-made prompts, in Chinese, Japanese, and English, are in `examples/prompts/`;

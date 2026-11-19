@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import csv
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -151,18 +152,26 @@ class BlockSim:
         files.update({f"{s}.csv": f"output/{s}.csv" for s in ("SimOutput", "Chain", "Profit", "InputConfig")})
         return files
 
-    def compute_metrics(self, raw_dir: Path, params: dict[str, Any]) -> dict[str, float]:
-        sim = _rows(raw_dir / "SimOutput.csv")
-        if len(sim) != 1:
-            raise SimulatorError(f"SimOutput.csv should hold one run, found {len(sim)}")
-        total = float(sim[0]["Total Blocks"])
-        if total <= 0:
-            raise SimulatorError("the run produced no blocks")
-        chain = [r for r in _rows(raw_dir / "Chain.csv") if int(float(r["Block Depth"])) > 0]
-        if not chain:
-            raise SimulatorError("the main chain holds no block beyond genesis")
-        node0 = sum(1 for r in chain if r["Miner ID"] and int(float(r["Miner ID"])) == 0)
-        return {"stale_rate": float(sim[0]["Stale Blocks"]) / total, "node0_block_share": node0 / len(chain)}
+    def compute_metrics(
+        self, raw_dir: Path, params: dict[str, Any], metrics: Sequence[str] | None = None
+    ) -> dict[str, float]:
+        wanted = self.supported_metrics if metrics is None else metrics
+        values: dict[str, float] = {}
+        if "stale_rate" in wanted:
+            sim = _rows(raw_dir / "SimOutput.csv")
+            if len(sim) != 1:
+                raise SimulatorError(f"SimOutput.csv should hold one run, found {len(sim)}")
+            total = float(sim[0]["Total Blocks"])
+            if total <= 0:
+                raise SimulatorError("the run produced no blocks")
+            values["stale_rate"] = float(sim[0]["Stale Blocks"]) / total
+        if "node0_block_share" in wanted:
+            chain = [r for r in _rows(raw_dir / "Chain.csv") if int(float(r["Block Depth"])) > 0]
+            if not chain:
+                raise SimulatorError("the main chain holds no block beyond genesis")
+            node0 = sum(1 for r in chain if r["Miner ID"] and int(float(r["Miner ID"])) == 0)
+            values["node0_block_share"] = node0 / len(chain)
+        return values
 
 
 def _literal(value: Any) -> str:

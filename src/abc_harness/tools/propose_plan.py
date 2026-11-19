@@ -23,7 +23,24 @@ PLAN_SCHEMA: dict[str, Any] = {
             "description": "Why this simulator fits, citing capability card entry IDs, plus assumptions and limits.",
         },
         "seeds": {"type": "array", "items": {"type": "integer"}, "description": "Distinct integer seeds."},
-        "metrics": {"type": "array", "items": {"type": "string"}},
+        "metrics": {"type": "array", "items": {"type": "string"}, "description": "Built-in metrics from the "
+                    "capability card, and any custom_metrics you define."},
+        "custom_metrics": {
+            "type": "array",
+            "description": "Only with permitted_edits, when the question needs a quantity no built-in metric "
+            "measures (for example the attacker's revenue share). Each has a new name and a precise definition; "
+            "your edited source prints one line 'ABC_METRIC <name>=<value>' to stdout at the end of each run, and "
+            "the harness reads it. Never give a built-in metric a new meaning instead.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Lowercase letters, digits, _; e.g. attacker_revenue_share."},
+                    "definition": {"type": "string", "description": "What is counted and divided by what, e.g. "
+                                   "'blocks mined by the pool on the final main chain / all main-chain blocks'."},
+                },
+                "required": ["name", "definition"],
+            },
+        },
         "run_timeout_seconds": {"type": "integer", "description": "Timeout for one simulation run."},
         "baseline": {"type": "object", "description": "Parameters shared by every configuration."},
         "permitted_edits": {

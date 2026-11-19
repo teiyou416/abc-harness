@@ -81,8 +81,12 @@ def write_report(
     lines += ["", "## Results", ""]
     lines += [
         "Each value is the mean over completed runs, with the sample standard deviation and the number of runs. "
-        "Metric definitions are in `src/abc_harness/simulators/" + plan.simulator + ".py`.",
+        "Built-in metric definitions are in `src/abc_harness/simulators/" + plan.simulator + ".py`.",
         "",
+        *([("Custom metrics, defined by this plan and computed by the agent-written code (each run's "
+           "`ABC_METRIC <name>=<value>` line in `raw/<run_id>/stdout.txt`):"), "",
+           *(f"- `{name}`: {definition}" for name, definition in plan.custom_metrics.items()), ""]
+          if plan.custom_metrics else []),
         "| Configuration | " + " | ".join(plan.metrics) + " |",
         "|---|" + "---|" * len(plan.metrics),
     ]

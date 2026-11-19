@@ -60,6 +60,8 @@ class FakeRunner:
     sandbox_handler: Callable[[str, Path, Path], RunOutcome] | None = None
     # called with (run_id, workdir) before a run writes its output, so a test can see which source it got
     inspect: Callable[[str, Path], None] | None = None
+    # extra stdout per run, appended after the fixture output; e.g. the ABC_METRIC lines edited code prints
+    stdout_extra: Callable[[str, Path], str] | None = None
     # the PDF parser: "complete" (default), "fail", "timeout", or "garbage"; and the parser run time per PDF
     pdf_behaviour: str = "complete"
     seconds_per_pdf: float = 120.0
@@ -123,6 +125,9 @@ class FakeRunner:
             self._write_blocksim(workdir, behaviour)
         else:
             self._write_simblock(workdir, behaviour)
+        if self.stdout_extra:
+            with (workdir / "stdout.txt").open("a") as f:
+                f.write(self.stdout_extra(run_id, workdir))
         return RunOutcome(0, False, self.seconds_per_run)
 
     def sandbox(

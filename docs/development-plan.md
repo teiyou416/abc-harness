@@ -34,17 +34,27 @@ The plan is a hand-written file. This milestone proves the approval gate, the ru
 - Following the README reproduces the example, and the recalculation script reproduces a run's metrics from saved raw output.
 - `make check` and `make test-docker` pass.
 
-## M2: Agent loop plans a SimBlock experiment
+## M2: Agent loop plans a SimBlock experiment (implemented; real-model demonstration pending)
 
-**What the researcher can do.** Describe a SimBlock experiment in natural language, answer clarification questions, request changes, and approve the revised plan.
+**What the researcher can do.** Run `abc-harness ask "<question>"`, answer clarification questions, approve, revise, or reject the agent's plan, and read the agent's summary next to the computed results.
 
-**Scope:** model client; one agent loop; tools for reading files, asking the researcher, proposing a plan, and running the approved plan; the 500-call limit; a context hard limit; `abc-harness trace summary`.
+**Delivered**
 
-**Real components:** the model provider and SimBlock.
+- `agent.py`: one loop over the Claude Messages API with five tools (`describe_simulator`, `read_file`, `ask_researcher`, `propose_plan`, `run_plan`). The harness validates plans, records decisions, and refuses unapproved versions.
+- `model.py`: `claude-opus-5-5` at effort `high` by default, with server-side refusal fallback.
+- `secrets.py`: API keys from `.env`, passed only to the model client and redacted from traces.
+- The 500-call limit and a context limit, checked before every model call.
+- A SimBlock capability card (`simulators/simblock_card.md`), ahead of M3.
+- `abc-harness trace summary`.
 
-**Test doubles:** a scripted fake model that replays tool calls.
+**Real components:** the Claude API and SimBlock.
 
-**Acceptance:** the "Plan approval" row of the specification; the call limit stops a task under a small test budget; the API key does not appear in the trace or artifacts.
+**Test doubles:** `tests/doubles/scripted_model.py` replays tool calls. `tests/test_live.py` calls the real API and rejects the first plan, so no simulator runs.
+
+**Acceptance**
+
+- Passed: the "Plan approval" row with the scripted model (approval runs, rejection ends the task, a revised plan needs fresh approval and the old version is refused); the call limit stops a task under a budget of 2; secrets stay out of traces.
+- Pending: `make test-live` and one `abc-harness ask` demonstration with a real key in `.env`.
 
 ## M3: BlockSim and simulator selection
 

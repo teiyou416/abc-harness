@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from abc_harness.agent.model import PRICES_PER_MTOK
+from abc_harness.agent.model import price_for
 from abc_harness.agent.session import ChatSession, Turn
 from abc_harness.execution.runner import DockerRunner, RunnerError
 from abc_harness.interfaces.console import Write, task_summary
@@ -139,7 +139,7 @@ def _model_command(models: ModelControl | None, name: str) -> str:
     problem = models.switch(name)
     if problem:
         return f"! {problem}"
-    note = "" if any(name.startswith(p) for p in PRICES_PER_MTOK) else " (no list price known: cost estimates will say unknown)"
+    note = "" if price_for(name) else " (no list price known: cost estimates will say unknown)"
     return f"The following tasks use {name}.{note} Earlier tasks keep the model they ran with."
 
 

@@ -17,7 +17,7 @@ Terms such as task, plan version, and simulation run are defined in [AGENTS.md](
 
 - Use one agent loop and a local CLI. The first release supports one cloud model provider behind a thin client interface; the researcher supplies their own API key in `.env`, which also holds any other external service key.
 - Run the harness on the researcher's Mac. The initial target is an Apple M5 with 32 GB of memory. Simulators run in a local Docker container (see [Execution environment](#execution-environment)).
-- Apply two hard limits to each task: **30 minutes of active runtime** and **500 LLM calls**. Active runtime excludes time spent waiting for the researcher; the trace records that waiting time separately. Every model call counts toward the call limit, including calls made for summarization or by any future sub-agent. Stop when either limit is reached and preserve partial results.
+- Apply two hard limits to each task: **30 minutes of active runtime** and **500 LLM calls**. Active runtime excludes time spent waiting for the researcher; the trace records that waiting time separately. Every model call counts toward the call limit, including calls made for summarization or by any future sub-agent. Each model call, with its retries, may use only the task's remaining active time, and a response that arrives after the limit, even a final answer, leaves the task `stopped_by_limit`. Stop when either limit is reached and preserve partial results.
 - Use the Human Interaction tool for clarification and plan approval. Bind approval to the displayed plan version.
 - Limit writes to the task workspace and the files explicitly permitted in the approved plan.
 - Keep the first release focused on literature-assisted experiment planning and execution. Full paper reproduction, additional simulators, a web interface, and sub-agents are future work.
@@ -31,7 +31,7 @@ Each supported simulator has a capability card in the repository. A card lists w
 - Before approval, the agent may only read files, search literature, and ask the researcher questions.
 - The researcher can approve, request changes with comments, or reject. A change request produces a new plan version that needs its own approval. A rejection ends the task without starting any simulator container.
 - The harness writes each decision to the artifact directory with the plan hash and version. The runner and sandbox exec refuse to start unless an approval for the current plan version exists.
-- A change to the simulator, parameters, metrics, permitted edits, validation check, or execution image requires a new plan version and fresh approval.
+- A change to the simulator, parameters, metrics, permitted edits, validation check, or execution image requires a new plan version and fresh approval. Before the researcher sees a plan, the harness writes the execution image's ID into the plan's `execution_image` field, so the plan version covers the image. The agent cannot set this field. The runner starts only that image ID; if it no longer exists, the harness refuses to run and a new plan version is needed.
 - Retrying one simulation run once after a transient failure, with an unchanged configuration, does not require new approval. The trace records the retry.
 
 ## Permitted edits

@@ -29,9 +29,12 @@ about 400 lines. `docs/architecture.md` maps each diagram box to its module.
 
 - A new simulator is an adapter module plus a capability card, not a change to
   the runner.
-- A new agent tool is a `tool_<name>` method on `Agent` plus its schema in
-  `TOOLS` (both in `agent.py`). It never calls the model or another tool
-  directly, and it signals a refused request by raising `ToolError`.
+- A new agent tool is one module in `tools/` that exports `SPEC` (the
+  definition sent to the model) and `run(ctx, args)`, added to the explicit
+  list in `tools/__init__.py`. It reads and changes task state only through
+  `ToolContext`, never calls the model or another tool directly, signals a
+  refused request by raising `ToolError`, and ends the task by raising
+  `EndTask`. Closely related tools may share a module.
 - Code under `src/` never imports from `tests/`.
 - Simulator source never enters this repository. The execution image fetches it
   at a pinned commit.

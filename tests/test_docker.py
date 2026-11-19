@@ -126,4 +126,6 @@ name = "tiny"
     manifest = json.loads((result.artifact_dir / "manifest.json").read_text())
     assert manifest["simulator_revision"] == BLOCKSIM_COMMIT
     assert manifest["image"] == BlockSim.image_tag
+    pinned = json.loads((result.artifact_dir / "plan.json").read_text())["execution_image"]
+    assert manifest["image_id"] == pinned == runner.image_info(BlockSim.image_tag)["image_id"]
     assert running_containers(result.task_id) == []

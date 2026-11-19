@@ -19,7 +19,12 @@ append to it. Git already records the history.
 - M2.5: the agent keeps each window under the soft limit by compressing it,
   starts the next window from harness-written task state plus a model summary,
   and archives every message in `history.md`. Prompt caching works.
-- `make check` runs ruff and 74 offline tests. `make test-docker` runs 5
+- Each plan pins its execution image by ID, so an approval covers the exact
+  image, and a rebuilt image needs a new plan version. Every model call, with
+  its retries, may use only the task's remaining active time. A failed
+  container cleanup is recorded and never stops the results and report from
+  being written.
+- `make check` runs ruff and 90 offline tests. `make test-docker` runs 5
   integration tests against both execution images, and `make test-live` runs 5
   tests against the Claude API.
 

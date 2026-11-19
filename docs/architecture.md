@@ -17,7 +17,7 @@ flowchart TB
     subgraph LOOP["Agent loop: agent.py"]
         CTX["Context window: context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 131,072"]
         LLM["Model client: model.py<br/>only holder of the API key"]
-        TOOLS["Tools<br/>describe_simulator, read_file,<br/>ask_researcher, propose_plan, run_plan"]
+        TOOLS["Tools: tools/<br/>describe_simulator, read_file,<br/>ask_researcher, propose_plan, run_plan"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
     end
 
@@ -69,9 +69,11 @@ both in the plan's rationale.
 
 ## Agent tools
 
-The agent has five tools, all defined in `agent.py` as `tool_<name>` methods
-with their schemas in `TOOLS`: `describe_simulator`, `read_file`,
-`ask_researcher`, `propose_plan`, and `run_plan`. The harness validates every
+The agent has five tools, one module each in `tools/`: `describe_simulator`,
+`read_file`, `ask_researcher`, `propose_plan`, and `run_plan`. Each module
+holds the definition sent to the model and the harness code that runs it;
+`agent.py` keeps only the loop, context compression, and the dispatch by tool
+name. The harness validates every
 proposed plan in code before the researcher sees it, records each decision
 itself, and refuses `run_plan` for any plan version without a recorded
 approval. A rejection ends the task without another model call.
@@ -84,9 +86,11 @@ approval. A rejection ends the task without another model call.
 3. The model requests a tool. The harness checks the request against the
    limits and the approval state, executes it, writes a trace event, and
    returns the result to the model.
-4. The model drafts a plan. The Human Interaction tool shows it to the
-   researcher, and the harness records the decision for that plan version.
-5. After approval, the runner executes simulation runs in the execution image.
+4. The model drafts a plan. The harness pins the execution image's ID into
+   it, the Human Interaction tool shows it to the researcher, and the harness
+   records the decision for that plan version.
+5. After approval, the runner executes simulation runs in exactly that image
+   ID, even if the image tag was rebuilt in the meantime.
    The report step matches planned runs against completed runs and computes
    metrics from raw output.
 6. The loop ends when the model finishes, the researcher rejects the plan, or a
@@ -101,10 +105,10 @@ to what the first release builds.
 | Diagram element | First release | Module |
 |---|---|---|
 | Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `agent.py`, `model.py`, `limits.py` |
-| Tools: Files | Yes. Reads anywhere in the repository and task; writes only inside the task workspace and permitted files. | `agent.py` (`read_file`, read-only in M2); write tools _planned_ for M5 |
+| Tools: Files | Yes. Reads anywhere in the repository and task; writes only inside the task workspace and permitted files. | `tools/read_file.py` (read-only); write tools _planned_ for M5 |
 | Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `runner.py`; sandbox exec _planned_ for M5 |
 | Tools: Web Retrieval | Yes. Sources are listed in the project specification. | _planned_ for M4 |
-| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `agent.py` (`ask_researcher`, `propose_plan`), `approval.py`, `cli.py` (terminal prompts) |
+| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `approval.py`, `cli.py` (terminal prompts) |
 | Tools: Custom Tools | Later | |
 | Simulators: SimBlock, BlockSim | Yes. BlockSim runs its Bitcoin model only. | `simulators/simblock.py`, `simulators/blocksim.py` |
 | Simulators: Blockemulator | Later | |
@@ -152,7 +156,9 @@ applies them.
 - Each simulator has its own image, built from `docker/<simulator>/Dockerfile`
   with `abc-harness image build`. The SimBlock image is a digest-pinned
   `eclipse-temurin:21-jdk` plus the SimBlock source at a pinned commit, checked
-  by SHA-256. Each task manifest records the image ID and simulator commit.
+  by SHA-256. Each plan pins the image ID it runs in, and each task manifest
+  records that ID and the simulator commit. Rebuilding an image therefore
+  changes the version of every new plan.
 - SimBlock reads its parameters from Java constants and hard-codes its random
   seed, so every simulation run gets its own source copy with the planned
   constants and seed written in, and compiles it with `javac` in its container.
@@ -173,7 +179,9 @@ applies them.
   directory.
 - Containers run with `--network none`, CPU and memory limits, and a task label.
   On a timeout or limit, the harness stops and removes every container with that
-  label.
+  label. If removal fails (for example, the Docker daemon is unreachable), the
+  harness records the error in the trace, the manifest, and the report, and
+  still writes the results and the final status.
 - Nothing is installed at runtime. A new dependency means a new image, which
   requires a new plan version and fresh approval.
 

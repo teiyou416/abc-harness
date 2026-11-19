@@ -2,23 +2,26 @@
 
 It copies fixture source instead of exporting it from an image, and instead of
 starting a container it writes fixture output (or fails, or times out) and
-advances an optional fake clock by a fixed number of seconds. The image name
-selects the fixture set: an image containing "blocksim" gets BlockSim files.
+advances an optional fake clock by a fixed number of seconds. Each image tag
+points to a fake image ID; `rebuild` points the tag at a new ID, as
+`abc-harness image build` would. The tag behind an ID selects the fixture set:
+a tag containing "blocksim" gets BlockSim files.
 """
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from abc_harness.runner import RunOutcome
+from abc_harness.runner import RunnerError, RunOutcome
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
-def _fixtures(image: str) -> Path:
-    return FIXTURES / ("blocksim" if "blocksim" in image else "simblock")
+def _fixtures(tag: str) -> Path:
+    return FIXTURES / ("blocksim" if "blocksim" in tag else "simblock")
 
 
 class FakeClock:
@@ -44,16 +47,41 @@ class FakeRunner:
     images: list[str] = field(default_factory=list)
     exports: list[str] = field(default_factory=list)
     cleanups: list[str] = field(default_factory=list)
+    cleanup_error: str | None = None  # set to make cleanup fail, as with an unreachable Docker daemon
+    tags: dict[str, str] = field(default_factory=dict)  # tag -> current image ID
+    built: dict[str, str] = field(default_factory=dict)  # every image ID that exists -> its tag
+
+    def rebuild(self, tag: str, remove_old: bool = False) -> str:
+        """Point the tag at a new image ID, as rebuilding the image would."""
+        old = self._current(tag)
+        if remove_old:
+            del self.built[old]
+        new = "sha256:" + hashlib.sha256(f"{old}-rebuilt".encode()).hexdigest()
+        self.tags[tag], self.built[new] = new, tag
+        return new
+
+    def _current(self, tag: str) -> str:
+        if tag not in self.tags:
+            self.tags[tag] = "sha256:" + hashlib.sha256(tag.encode()).hexdigest()
+            self.built[self.tags[tag]] = tag
+        return self.tags[tag]
+
+    def _tag(self, image: str) -> str:
+        return self.built.get(image, image)
 
     def image_info(self, image: str) -> dict[str, str]:
-        return {"image": f"fake:{image}", "image_id": "sha256:fake"}
+        if image.startswith("sha256:"):
+            if image not in self.built:
+                raise RunnerError(f"execution image {image} not found")
+            return {"image": image, "image_id": image}
+        return {"image": image, "image_id": self._current(image)}
 
     def export(self, image: str, image_path: str, dest: Path) -> None:
         self.exports.append(image_path)
         if image_path.endswith("REVISION"):
-            shutil.copyfile(_fixtures(image) / "REVISION", dest)
+            shutil.copyfile(_fixtures(self._tag(image)) / "REVISION", dest)
         else:
-            shutil.copytree(_fixtures(image) / "source", dest)
+            shutil.copytree(_fixtures(self._tag(image)) / "source", dest)
 
     def run(
         self, image: str, task_id: str, run_id: str, workdir: Path, command: str, timeout_seconds: float
@@ -67,7 +95,7 @@ class FakeRunner:
             return RunOutcome(None, True, timeout_seconds)
         if behaviour == "fail":
             return RunOutcome(1, False, self.seconds_per_run)
-        if "blocksim" in image:
+        if "blocksim" in self._tag(image):
             self._write_blocksim(workdir, behaviour)
         else:
             self._write_simblock(workdir, behaviour)
@@ -75,6 +103,8 @@ class FakeRunner:
 
     def cleanup(self, task_id: str) -> None:
         self.cleanups.append(task_id)
+        if self.cleanup_error:
+            raise RunnerError(self.cleanup_error)
 
     @staticmethod
     def _write_simblock(workdir: Path, behaviour: str) -> None:

@@ -9,9 +9,12 @@ import pytest
 from doubles.fake_runner import FakeClock, FakeRunner
 
 from abc_harness import cli
+from abc_harness import runner as runner_module
 from abc_harness.approval import NotApproved, read_decisions, require_approval
 from abc_harness.limits import Budget
-from abc_harness.plan import load_plan
+from abc_harness.plan import Plan, load_plan
+from abc_harness.runner import RunnerError
+from abc_harness.simulators.simblock import SimBlock
 from abc_harness.task import run_task
 from abc_harness.trace import read_trace
 
@@ -52,10 +55,16 @@ def test_approving_runs_every_planned_run_and_writes_artifacts(write_plan, tmp_p
     assert read_trace(d / "trace.jsonl")[-1]["event"] == "task_finished"
 
 
+def pinned(plan, runner):
+    image_id = runner.image_info(SimBlock.image_tag)["image_id"]
+    return Plan({**plan.data, "execution_image": image_id})
+
+
 def test_approval_covers_only_the_approved_version(write_plan, tmp_path):
-    result = run_task(write_plan(interval=30000, name="v1.toml"), FakeRunner(), approve, runs_root=tmp_path / "runs")
-    v1 = load_plan(write_plan(interval=30000, name="v1.toml")).version
-    v2 = load_plan(write_plan(interval=60000, name="v2.toml")).version
+    runner = FakeRunner()
+    result = run_task(write_plan(interval=30000, name="v1.toml"), runner, approve, runs_root=tmp_path / "runs")
+    v1 = pinned(load_plan(write_plan(interval=30000, name="v1.toml")), runner).version
+    v2 = pinned(load_plan(write_plan(interval=60000, name="v2.toml")), runner).version
     require_approval(result.artifact_dir, v1)
     with pytest.raises(NotApproved):
         require_approval(result.artifact_dir, v2)
@@ -86,6 +95,32 @@ def test_time_limit_stops_the_task_and_reports_missing_runs(write_plan, tmp_path
     assert "fast__seed-2 (missing)" in (result.artifact_dir / "report.md").read_text()
 
 
+@pytest.mark.parametrize("limited", [False, True])
+def test_failed_cleanup_still_writes_results_and_report(write_plan, tmp_path, limited):
+    clock = FakeClock()
+    runner = FakeRunner(cleanup_error="Cannot connect to the Docker daemon", clock=clock, seconds_per_run=4)
+    budget = Budget(time_limit_seconds=10 if limited else 1800, clock=clock)
+    result = run_task(write_plan(), runner, approve, runs_root=tmp_path / "runs", budget=budget)
+    d = result.artifact_dir
+    assert result.status == ("stopped_by_limit" if limited else "completed")
+    manifest = json.loads((d / "manifest.json").read_text())
+    assert manifest["status"] == result.status
+    assert "Cannot connect to the Docker daemon" in manifest["cleanup_error"]
+    assert json.loads((d / "results.json").read_text())[0]["status"] == "completed"
+    assert "Container cleanup failed" in (d / "report.md").read_text()
+    events = [e["event"] for e in read_trace(d / "trace.jsonl")]
+    assert "cleanup_failed" in events and events[-1] == "task_finished"
+
+
+def test_docker_cleanup_raises_when_the_daemon_is_unreachable(monkeypatch):
+    def fake_docker(*args, check=True, timeout=None):
+        return subprocess.CompletedProcess(["docker", *args], 1, "", "Cannot connect to the Docker daemon")
+
+    monkeypatch.setattr(runner_module, "_docker", fake_docker)
+    with pytest.raises(RunnerError, match="could not list"):
+        runner_module.DockerRunner().cleanup("some-task")
+
+
 def test_time_spent_waiting_for_the_researcher_does_not_count(write_plan, tmp_path):
     clock = FakeClock()
 
@@ -109,11 +144,14 @@ def test_end_of_input_counts_as_rejection(write_plan):
     assert decision == "reject"
 
 
-def test_cli_rejection_never_calls_docker(write_plan, tmp_path, monkeypatch, capsys):
-    def no_subprocess(*args, **kwargs):
-        raise AssertionError(f"subprocess called: {args}")
+def test_cli_rejection_starts_no_container(write_plan, tmp_path, monkeypatch, capsys):
+    # Before approval the harness may only read the image ID it pins into the plan.
+    def inspect_only(cmd, **kwargs):
+        if cmd[:3] != ["docker", "image", "inspect"]:
+            raise AssertionError(f"subprocess called before approval: {cmd}")
+        return subprocess.CompletedProcess(cmd, 0, "sha256:" + "a" * 64 + "\n", "")
 
-    monkeypatch.setattr(subprocess, "run", no_subprocess)
+    monkeypatch.setattr(subprocess, "run", inspect_only)
     answers = iter(["reject", ""])
     monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
     code = cli.main(["run", str(write_plan()), "--runs-dir", str(tmp_path / "runs")])
@@ -121,3 +159,61 @@ def test_cli_rejection_never_calls_docker(write_plan, tmp_path, monkeypatch, cap
     assert code == 0
     assert "No simulator was started." in out
     assert "Artifacts: " in out
+
+
+def test_plan_pins_the_image_id_and_runs_only_that_image(write_plan, tmp_path):
+    runner = FakeRunner()
+    shown = []
+    result = run_task(write_plan(), runner, lambda p: (shown.append(p.render()), ("approve", ""))[1],
+                      runs_root=tmp_path / "runs")  # fmt: skip
+    image_id = runner.image_info(SimBlock.image_tag)["image_id"]
+    assert result.status == "completed"
+    assert f"Execution image: {image_id}" in shown[0]
+    assert json.loads((result.artifact_dir / "plan.json").read_text())["execution_image"] == image_id
+    assert set(runner.images) == {image_id}
+    assert json.loads((result.artifact_dir / "manifest.json").read_text())["image_id"] == image_id
+
+
+def test_rebuilding_the_image_changes_the_plan_version(write_plan, tmp_path):
+    runner = FakeRunner()
+    first = run_task(write_plan(), runner, approve, runs_root=tmp_path / "runs")
+    runner.rebuild(SimBlock.image_tag)
+    second = run_task(write_plan(), runner, approve, runs_root=tmp_path / "runs")
+    v1, v2 = (read_decisions(r.artifact_dir)[0].plan_version for r in (first, second))
+    assert v1 != v2
+
+
+def test_a_rebuild_after_approval_does_not_change_what_runs(write_plan, tmp_path):
+    runner = FakeRunner()
+    approved_id = runner.image_info(SimBlock.image_tag)["image_id"]
+
+    def approve_then_rebuild(plan):
+        runner.rebuild(SimBlock.image_tag)
+        return "approve", ""
+
+    result = run_task(write_plan(), runner, approve_then_rebuild, runs_root=tmp_path / "runs")
+    assert result.status == "completed"
+    assert set(runner.images) == {approved_id}
+
+
+def test_a_removed_approved_image_is_refused(write_plan, tmp_path):
+    runner = FakeRunner()
+
+    def approve_then_remove(plan):
+        runner.rebuild(SimBlock.image_tag, remove_old=True)
+        return "approve", ""
+
+    result = run_task(write_plan(), runner, approve_then_remove, runs_root=tmp_path / "runs")
+    assert result.status == "failed"
+    assert "no longer available" in result.stop_reason
+    assert runner.runs == [] and runner.exports == []
+
+
+def test_rerunning_a_saved_plan_reuses_its_version_and_image(write_plan, tmp_path):
+    runner = FakeRunner()
+    first = run_task(write_plan(), runner, approve, runs_root=tmp_path / "runs")
+    approved_id = runner.image_info(SimBlock.image_tag)["image_id"]
+    runner.rebuild(SimBlock.image_tag)
+    again = run_task(first.artifact_dir / "plan.json", runner, approve, runs_root=tmp_path / "runs")
+    assert read_decisions(again.artifact_dir)[0].plan_version == read_decisions(first.artifact_dir)[0].plan_version
+    assert runner.images[-1] == approved_id

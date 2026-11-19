@@ -92,7 +92,7 @@ def test_example_plan_runs_in_the_blocksim_image(tmp_path):
     result = run_task(ROOT / "examples" / "blocksim-baseline.toml", runner, lambda p: ("approve", ""),
                       runs_root=tmp_path / "runs")  # fmt: skip
     assert result.status == "completed"
-    assert set(runner.images) == {BlockSim.image_tag}
+    assert set(runner.images) == {runner.image_info(BlockSim.image_tag)["image_id"]}
     assert len(runner.runs) == 10
     assert result.runs[0].metrics == {"stale_rate": 0.2, "node0_block_share": 0.625}
     assert (result.artifact_dir / "raw" / "delay-60s__seed-5" / "Chain.csv").exists()

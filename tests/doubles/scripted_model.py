@@ -11,7 +11,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from abc_harness.model import ModelTurn
+from abc_harness.model import ModelDeadlineExceeded, ModelTurn
 
 Step = ModelTurn | Callable[[list[dict[str, Any]]], ModelTurn]
 
@@ -45,16 +45,29 @@ def run_last_proposed(messages: list[dict[str, Any]]) -> ModelTurn:
 class ScriptedModel:
     name = "scripted-model"
 
-    def __init__(self, steps: list[Step]) -> None:
+    def __init__(self, steps: list[Step], clock: Any = None, seconds_per_call: float = 0.0) -> None:
         self.steps = list(steps)
+        self.clock = clock  # a FakeClock; each call advances it by seconds_per_call
+        self.seconds_per_call = seconds_per_call
         self.calls: list[list[dict[str, Any]]] = []
         self.requests: list[dict[str, Any]] = []
 
     def create(
-        self, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]], max_tokens: int = 16_384
+        self,
+        system: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        max_tokens: int = 16_384,
+        timeout_seconds: float | None = None,
     ) -> ModelTurn:
         self.calls.append(json.loads(json.dumps(messages)))
-        self.requests.append({"system": system, "tools": [t["name"] for t in tools], "max_tokens": max_tokens})
+        self.requests.append({"system": system, "tools": [t["name"] for t in tools], "max_tokens": max_tokens,
+                              "timeout_seconds": timeout_seconds})  # fmt: skip
+        if self.clock:
+            if timeout_seconds is not None and self.seconds_per_call > timeout_seconds:
+                self.clock.advance(timeout_seconds)
+                raise ModelDeadlineExceeded("scripted call outlasted its deadline")
+            self.clock.advance(self.seconds_per_call)
         if not self.steps:
             raise AssertionError("ScriptedModel ran out of steps")
         step = self.steps.pop(0)

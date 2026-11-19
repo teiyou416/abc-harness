@@ -10,12 +10,14 @@ from doubles.fake_runner import FakeRunner
 from doubles.scripted_model import ScriptedModel, text_turn, tool_turn
 
 from abc_harness import agent as agent_module
-from abc_harness.agent import TOOLS, Agent, prompt_hashes, run_agent_task, system_prompt
+from abc_harness import model as model_module
+from abc_harness.agent import TOOLS, prompt_hashes, run_agent_task, system_prompt
 from abc_harness.context import ContextLimits, estimate_tokens, task_state
 from abc_harness.limits import Budget
-from abc_harness.model import AnthropicModel
+from abc_harness.model import AnthropicModel, ModelDeadlineExceeded
 from abc_harness.plan import validate_plan
 from abc_harness.task import Task
+from abc_harness.tools import ToolContext, read_file
 from abc_harness.trace import read_trace
 
 QUESTION = "Compare intervals."
@@ -76,11 +78,11 @@ def test_soft_limit_compresses_into_a_new_window(tmp_path):
 
 def test_task_state_comes_from_harness_records(tmp_path):
     task = Task(FakeRunner(), tmp_path / "runs", Budget())
-    plan = validate_plan({
+    plan = task.pin_image(validate_plan({
         "title": "Intervals", "question": "q", "simulator": "simblock", "rationale": "r", "seeds": [1, 2],
         "metrics": ["orphan_rate"], "run_timeout_seconds": 5,
         "baseline": {"NUM_OF_NODES": 10, "END_BLOCK_HEIGHT": 3}, "configurations": [{"name": "base"}],
-    })  # fmt: skip
+    }))  # fmt: skip
     task.add_plan(plan)
     task.review(plan, lambda p: ("approve", ""))
     task.execute(plan)
@@ -120,8 +122,8 @@ def test_summary_calls_count_toward_the_call_limit(tmp_path):
 def test_read_file_pages_through_lines(tmp_path):
     task = Task(FakeRunner(), tmp_path / "runs", Budget())
     (task.artifact_dir / "notes.txt").write_text("\n".join(f"line {i}" for i in range(1, 11)))
-    agent = Agent(task, ScriptedModel([]), lambda q: "", lambda p: ("reject", ""))
-    page = agent.tool_read_file({"path": "task/notes.txt", "offset": 3, "limit": 2})
+    ctx = ToolContext(task, lambda q: "", lambda p: ("reject", ""))
+    page = read_file.run(ctx, {"path": "task/notes.txt", "offset": 3, "limit": 2})
     assert page.splitlines() == ["[task/notes.txt: lines 3-4 of 10] [more: use offset 5]", "line 3", "line 4"]
     task.close("not_executed", "test")
 
@@ -163,3 +165,49 @@ def test_anthropic_request_enables_caching_and_omits_empty_tools():
 @pytest.mark.parametrize("text", ["short", "x" * 10_000])
 def test_estimate_errs_high(text):
     assert estimate_tokens(text) >= len(text) / 4
+
+
+class _FlakyMessages:
+    def __init__(self, failures, error):
+        self.failures, self.error, self.timeouts = failures, error, []
+
+    def create(self, **kwargs):
+        if self.failures:
+            self.failures -= 1
+            raise self.error
+        block = SimpleNamespace(to_dict=lambda: {"type": "text", "text": "hi"})
+        usage = SimpleNamespace(to_dict=lambda: {"input_tokens": 1})
+        return SimpleNamespace(content=[block], stop_reason="end_turn", model="m", usage=usage)
+
+
+def _flaky_model(failures, monkeypatch):
+    import anthropic
+
+    # Only the type matters to the retry rule; skip the constructor's HTTP request object.
+    error = anthropic.APIConnectionError.__new__(anthropic.APIConnectionError)
+    messages = _FlakyMessages(failures, error)
+    model = AnthropicModel("sk-test-not-used")
+
+    def with_options(timeout):
+        messages.timeouts.append(timeout)
+        return SimpleNamespace(beta=SimpleNamespace(messages=messages))
+
+    model._client = SimpleNamespace(with_options=with_options)
+    monkeypatch.setattr(model_module.time, "sleep", lambda s: None)
+    return model, messages
+
+
+def test_retries_happen_inside_the_deadline(monkeypatch):
+    model, messages = _flaky_model(2, monkeypatch)
+    assert model.create("s", [{"role": "user", "content": "q"}], [], timeout_seconds=30).text() == "hi"
+    assert len(messages.timeouts) == 3
+    assert all(0 < t <= 30 for t in messages.timeouts)
+
+
+def test_a_call_that_outlives_the_deadline_raises(monkeypatch):
+    model, messages = _flaky_model(10, monkeypatch)
+    clock = iter(range(0, 1000, 20))
+    monkeypatch.setattr(model_module.time, "monotonic", lambda: next(clock))
+    with pytest.raises(ModelDeadlineExceeded):
+        model.create("s", [{"role": "user", "content": "q"}], [], timeout_seconds=30)
+    assert len(messages.timeouts) == 1

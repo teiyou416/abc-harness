@@ -23,6 +23,10 @@ CONTAINER_WORKDIR = "/work"
 DOCKER_CLI_ENV_ALLOWLIST = ("PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "DOCKER_CERT_PATH")
 
 
+class RunnerError(RuntimeError):
+    """Docker could not do what the harness asked (missing image, daemon unreachable, cleanup failed)."""
+
+
 @dataclass(frozen=True)
 class RunOutcome:
     exit_code: int | None
@@ -62,7 +66,7 @@ class DockerRunner:
     def image_info(self, image: str) -> dict[str, str]:
         result = _docker("image", "inspect", image, "--format", "{{.Id}}", check=False)
         if result.returncode != 0:
-            raise RuntimeError(f"execution image {image} not found; run `abc-harness image build` first")
+            raise RunnerError(f"execution image {image} not found; run `abc-harness image build` first")
         return {"image": image, "image_id": result.stdout.strip()}
 
     def export(self, image: str, image_path: str, dest: Path) -> None:
@@ -95,9 +99,15 @@ class DockerRunner:
         return RunOutcome(result.returncode, False, time.monotonic() - started)
 
     def cleanup(self, task_id: str) -> None:
-        ids = _docker("ps", "-aq", "--filter", f"label={TASK_LABEL}={task_id}", check=False).stdout.split()
+        """Remove every container of the task. Raises RunnerError if that cannot be confirmed."""
+        listed = _docker("ps", "-aq", "--filter", f"label={TASK_LABEL}={task_id}", check=False)
+        if listed.returncode != 0:
+            raise RunnerError(f"could not list the task's containers: {listed.stderr.strip()}")
+        ids = listed.stdout.split()
         if ids:
-            _docker("rm", "-f", *ids, check=False)
+            removed = _docker("rm", "-f", *ids, check=False)
+            if removed.returncode != 0:
+                raise RunnerError(f"could not remove containers {', '.join(ids)}: {removed.stderr.strip()}")
 
 
 def build_image(context: Path, tag: str) -> str:

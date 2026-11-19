@@ -71,7 +71,10 @@ def describe_event(e: dict[str, Any]) -> list[str]:
                  f"{tokens_in:,} tokens in, {usage.get('output_tokens', 0):,} out")]  # fmt: skip
         for thought in e.get("thinking") or []:
             lines += _indent("thinking", thought)
-        if e.get("text"):
+        final = not e.get("tool_uses") and e.get("stop_reason") == "end_turn"
+        if e.get("text") and final:
+            lines += ["", e["text"].strip(), ""]  # the agent's answer, shown once and unindented
+        elif e.get("text"):
             lines += _indent("says", e["text"])
         lines += [f"  → {t['name']} {_short(t.get('input'))}" for t in e.get("tool_uses") or []]
         return lines

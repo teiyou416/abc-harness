@@ -129,3 +129,59 @@ def test_real_model_names_the_missing_capability(tmp_path):
     assert result.status == "not_executed", result.stop_reason
     assert reviewed == []
     assert "SB-N1" in report and "BS-N2" in report
+
+
+def test_real_model_finds_and_cites_a_source(tmp_path):
+    """Acceptance row "Literature retrieval": a question that needs a reference, with no paper supplied."""
+    from abc_harness.literature import HttpFetcher, Library, Literature
+
+    secrets = Secrets.load(ROOT / ".env")
+    if not secrets.has("ANTHROPIC_API_KEY"):
+        pytest.skip("ANTHROPIC_API_KEY is not set in .env")
+    s2_key = secrets.get("SEMANTIC_SCHOLAR_API_KEY") if secrets.has("SEMANTIC_SCHOLAR_API_KEY") else None
+    reviewed = []
+    result = run_agent_task(
+        "In BlockSim, compare the stale block rate at the average Bitcoin block propagation delay reported in "
+        "published measurements of the Bitcoin network with a delay ten times larger.",
+        AnthropicModel(secrets.get("ANTHROPIC_API_KEY")), FakeRunner(), lambda q: "Use your defaults.",
+        lambda plan: reviewed.append(plan) or ("reject", "live test: stop before running"),
+        runs_root=tmp_path / "runs", budget=Budget(llm_call_limit=30), redact=secrets.redact,
+        literature=Literature(HttpFetcher(), s2_key),
+    )  # fmt: skip
+    assert result.status == "rejected", result.stop_reason
+    citations = reviewed[0].data.get("citations") or []
+    print("\n[literature] " + "\n".join(f"{c['paper']} -> {c['supports']}: {c['quote']}" for c in citations))
+    assert citations, "the plan must cite at least one source"
+    library = Library.load(result.artifact_dir)
+    for c in citations:
+        assert library.locate(c["paper"], c["quote"]) is not None
+
+
+def test_real_model_reads_a_value_off_a_figure(tmp_path):
+    """How far a figure reading can be trusted: Figure 1 of arXiv 2007.05614 puts the alpha = 0.45 curve at
+    about 0.954 for expected horizon 10 (log x axis, gridlines every 0.01)."""
+    import re
+
+    from abc_harness.execution.trace import read_trace
+    from abc_harness.literature import HttpFetcher, Literature
+
+    secrets = Secrets.load(ROOT / ".env")
+    if not secrets.has("ANTHROPIC_API_KEY"):
+        pytest.skip("ANTHROPIC_API_KEY is not set in .env")
+    result = run_agent_task(
+        "Find the paper 'Efficient MDP Analysis for Selfish-Mining in Blockchains' (AFT 2020). In its Figure 1, "
+        "what normalized revenue does the alpha = 0.45 curve show at an expected horizon of 10? Do not propose a "
+        "plan. End your answer with one line 'READING: <value> ± <uncertainty>'.",
+        AnthropicModel(secrets.get("ANTHROPIC_API_KEY")), FakeRunner(), lambda q: "Use your defaults.",
+        lambda plan: ("reject", "live test"), runs_root=tmp_path / "runs", budget=Budget(llm_call_limit=20),
+        redact=secrets.redact, literature=Literature(HttpFetcher()),
+    )  # fmt: skip
+    events = read_trace(result.artifact_dir / "trace.jsonl")
+    assert any(e.get("tool") == "view_figure" and e.get("images") for e in events), "the model must view the figure"
+    report = (result.artifact_dir / "report.md").read_text()
+    match = re.search(r"READING:\s*([0-9.]+)\s*±\s*([0-9.]+)", report)
+    print(f"\n[figure] {match.group(0) if match else report[-500:]}")
+    assert match, "the answer must end with a READING line"
+    value, uncertainty = float(match.group(1)), float(match.group(2))
+    assert abs(value - 0.954) <= 0.01
+    assert value - uncertainty <= 0.954 <= value + uncertainty

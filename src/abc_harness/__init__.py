@@ -7,6 +7,7 @@ Layers, from high to low; a module imports only its own layer or a lower one:
     tools/        what the agent may do, one module per tool
     execution/    one task end to end: runner, limits, trace, report
     planning/     plans, versions, and the researcher's decisions
+    literature/   academic search, arXiv full text, and the citation check
     simulators/   one adapter and capability card per simulator
 
 docs/architecture.md ("Module map") describes every file.

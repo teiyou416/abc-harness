@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from abc_harness.execution.task import DecideFn, Task
+from abc_harness.literature.library import Library
 
 AskFn = Callable[[str], str]
 
@@ -36,7 +37,17 @@ class ToolContext:
     review: DecideFn
     clarifications: list[tuple[str, str]] = field(default_factory=list)
     execution: tuple[str, str] | None = None  # (status, reason) once run_plan has executed a plan
+    library: Library | None = None  # the papers this task has found; None when literature search is off
+
+
+@dataclass
+class ToolOutput:
+    """A tool result with images. `text` goes to the model, the history, and the trace; each image is sent
+    to the model and recorded in the history and trace by its saved path only."""
+
+    text: str
+    images: list[tuple[str, bytes]] = field(default_factory=list)  # (path in the task, image bytes)
 
 
 class ToolRun(Protocol):
-    def __call__(self, ctx: ToolContext, args: dict[str, Any]) -> str: ...
+    def __call__(self, ctx: ToolContext, args: dict[str, Any]) -> str | ToolOutput: ...

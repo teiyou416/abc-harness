@@ -17,7 +17,7 @@ flowchart TB
     subgraph LOOP["Agent: agent/"]
         CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 131,072"]
         LLM["Model client: agent/model.py<br/>only holder of the API key"]
-        TOOLS["Tools: tools/<br/>describe_simulator, read_file,<br/>ask_researcher, propose_plan, run_plan"]
+        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan, run_plan"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
     end
 
@@ -44,7 +44,15 @@ flowchart TB
         FILES["approvals.jsonl, plans/, plan.json<br/>raw/, changes/, results.json<br/>report.md, manifest.json<br/>trace.jsonl, history.md"]
     end
 
-    ENV[(".env")] -->|key| LLM
+    subgraph LIT["Literature: literature/"]
+        LIB["Library: literature.json, papers/<br/>citations checked against it"]
+    end
+
+    ENV[(".env")] -->|keys| LLM
+    ENV -->|optional S2 key| LIB
+    TOOLS -->|search_papers, read_paper, view_figure| LIB
+    LIB <-->|HTTPS from the host| ACADEMIC(["OpenAlex, Semantic Scholar, arXiv"])
+    LIB --> FILES
     LLM <-->|Messages API| CLAUDE(["Claude API"])
     R --> ASK --> LOOP
     R --> RUN --> PLAN
@@ -67,7 +75,7 @@ both in the plan's rationale.
 
 ## Module map
 
-The package `src/abc_harness/` has one folder per layer. A module imports only
+The package `src/abc_harness/` has one folder per layer; `planning/` and `literature/` share the lowest layer above the simulators. A module imports only
 from its own layer or a lower one; `tests/test_rulebook.py` checks this, and it
 checks that every module appears in this table.
 
@@ -81,11 +89,14 @@ checks that every module appears in this table.
 | Agent | `agent/secrets.py` | Reads API keys from `.env` and redacts them from traces. |
 | Agent | `agent/prompts/` | `SOUL.md` (identity), `rules.md` (workflow), `compact.md` (summary instructions). |
 | Tools | `tools/__init__.py` | The explicit list of tools the agent can call. |
-| Tools | `tools/base.py` | `ToolContext` (shared task state), `ToolError` (refusal), `EndTask` (ends the task). |
+| Tools | `tools/base.py` | `ToolContext` (shared task state), `ToolOutput` (a result with images), `ToolError` (refusal), `EndTask` (ends the task). |
 | Tools | `tools/describe_simulator.py` | Returns a simulator's capability card. |
+| Tools | `tools/search_papers.py` | Searches the first-round venues, or everything when broadened. |
+| Tools | `tools/read_paper.py` | Fetches an arXiv paper's full text into `papers/` and returns its outline and figure list. |
+| Tools | `tools/view_figure.py` | Shows the model one figure as an image and records that it was viewed. |
 | Tools | `tools/read_file.py` | Reads `examples/` and the task's artifact directory, nothing else. |
 | Tools | `tools/ask_researcher.py` | Asks the researcher a question; the wait is not active time. |
-| Tools | `tools/propose_plan.py` | Validates a plan, pins the image, and gets the researcher's decision. |
+| Tools | `tools/propose_plan.py` | Validates a plan and its citations, pins the image, and gets the researcher's decision. |
 | Tools | `tools/run_plan.py` | Runs an approved plan and summarises the results for the model. |
 | Execution | `execution/task.py` | One task end to end: artifact directory, plan versions, image pinning, simulation runs, final artifacts. |
 | Execution | `execution/runner.py` | Docker: one container per simulation run, no network, label-based cleanup. |
@@ -94,6 +105,14 @@ checks that every module appears in this table.
 | Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
 | Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |
 | Planning | `planning/approval.py` | Records decisions in `approvals.jsonl` and refuses unapproved versions. |
+| Literature | `literature/__init__.py` | The public names of the literature layer. |
+| Literature | `literature/library.py` | `Literature` (the services and the Semantic Scholar key) and `Library` (one task's papers, figures, and views in `literature.json`; the quote check). |
+| Literature | `literature/openalex.py` | OpenAlex search: request URL and response parsing. |
+| Literature | `literature/semantic_scholar.py` | Semantic Scholar search: request URL and response parsing. |
+| Literature | `literature/fulltext.py` | Turns arXiv's HTML rendering of a paper into text lines, Markdown tables, an outline, and a figure list. |
+| Literature | `literature/figures.py` | The `Figure` record, and an image's format, size, and token cost read from its header. |
+| Literature | `literature/papers.py` | The `Paper` record, paper IDs, and the text normalisation used to match quotes. |
+| Literature | `literature/http.py` | HTTP requests with per-host pauses and retries that fit the task's remaining time. |
 | Simulators | `simulators/__init__.py` | The registry of supported simulators. |
 | Simulators | `simulators/base.py` | The interface every simulator adapter implements. |
 | Simulators | `simulators/simblock.py` | SimBlock adapter and `simblock_card.md`. |
@@ -111,14 +130,18 @@ cli.py -> agent/loop.py <-> agent/model.py
 
 ## Agent tools
 
-The agent has five tools, one module each in `tools/`: `describe_simulator`,
-`read_file`, `ask_researcher`, `propose_plan`, and `run_plan`. Each module
+The agent has eight tools, one module each in `tools/`: `describe_simulator`,
+`read_file`, `search_papers`, `read_paper`, `view_figure`, `ask_researcher`,
+`propose_plan`, and `run_plan`. Each module
 holds the definition sent to the model and the harness code that runs it;
 `agent/loop.py` keeps only the loop, context compression, and the dispatch by tool
 name. The harness validates every
 proposed plan in code before the researcher sees it, records each decision
 itself, and refuses `run_plan` for any plan version without a recorded
-approval. A rejection ends the task without another model call.
+approval. A rejection ends the task without another model call. A plan's
+citations pass only if each paper came from `search_papers` in the same task,
+and its quote appears verbatim in the paper's abstract or saved full text or
+its figure reading names a figure the agent viewed, with an uncertainty.
 
 ## Data flow
 
@@ -128,14 +151,17 @@ approval. A rejection ends the task without another model call.
 3. The model requests a tool. The harness checks the request against the
    limits and the approval state, executes it, writes a trace event, and
    returns the result to the model.
-4. The model drafts a plan. The harness pins the execution image's ID into
+4. When a choice needs evidence, the model searches the literature and reads
+   arXiv full texts. The harness performs every request from the host, so the
+   execution images stay offline, and records each paper in `literature.json`.
+5. The model drafts a plan. The harness checks its citations, pins the execution image's ID into
    it, the Human Interaction tool shows it to the researcher, and the harness
    records the decision for that plan version.
-5. After approval, the runner executes simulation runs in exactly that image
+6. After approval, the runner executes simulation runs in exactly that image
    ID, even if the image tag was rebuilt in the meantime.
    The report step matches planned runs against completed runs and computes
    metrics from raw output.
-6. The loop ends when the model finishes, the researcher rejects the plan, or a
+7. The loop ends when the model finishes, the researcher rejects the plan, or a
    limit stops the task. The harness writes the report and manifest in every
    case.
 
@@ -149,12 +175,12 @@ to what the first release builds.
 | Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `agent/loop.py`, `agent/model.py`, `execution/limits.py` |
 | Tools: Files | Yes. Reads anywhere in the repository and task; writes only inside the task workspace and permitted files. | `tools/read_file.py` (read-only); write tools _planned_ for M5 |
 | Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `execution/runner.py`; sandbox exec _planned_ for M5 |
-| Tools: Web Retrieval | Yes. Sources are listed in the project specification. | _planned_ for M4 |
+| Tools: Web Retrieval | Yes, for academic literature only: search and arXiv full text. Sources are listed in the project specification. | `tools/search_papers.py`, `tools/read_paper.py`, `literature/` |
 | Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `planning/approval.py`, `cli.py` (terminal prompts) |
 | Tools: Custom Tools | Later | |
 | Simulators: SimBlock, BlockSim | Yes. BlockSim runs its Bitcoin model only. | `simulators/simblock.py`, `simulators/blocksim.py` |
 | Simulators: Blockemulator | Later | |
-| Literature boxes | Partial. Papers With Code is gone; IEEE Xplore needs its own API key and is optional. | _planned_ for M4 |
+| Literature boxes | Partial. OpenAlex and Semantic Scholar replace DBLP (bot check) and Papers With Code (gone); arXiv serves full text; IEEE Xplore is optional and not built. | `literature/` |
 | System prompt, user prompt, working memory | Yes. The system prompt is `SOUL.md` followed by `rules.md`; the working memory is the current window. | `agent/prompts/`, `agent/loop.py`, `agent/secrets.py` (API keys from `.env`) |
 | SOUL.md, SKILL.md, History.md | SOUL.md and a per-task `history.md` are built; SKILL.md and memory across tasks are later. | `agent/prompts/SOUL.md`, `agent/context.py` |
 | Context summarization and token caps | Yes, with the diagram's numbers: soft limit 106,496, hard limit 131,072, output 16,384, summary 8,192. | `agent/context.py`, `agent/loop.py` |

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from abc_harness.literature.figures import slug
 from abc_harness.simulators import get_simulator
 
 REQUIRED_FIELDS = {
@@ -30,7 +31,11 @@ REQUIRED_FIELDS = {
     "baseline": dict,
     "configurations": list,
 }
-OPTIONAL_FIELDS = {"permitted_edits": list, "execution_image": str}
+OPTIONAL_FIELDS = {"permitted_edits": list, "execution_image": str, "citations": list}
+# A citation rests on a quote, or on a figure reading: a value with its uncertainty read off a figure.
+QUOTE_FIELDS = {"paper", "supports", "quote"}
+FIGURE_FIELDS = {"paper", "supports", "figure", "reading"}
+MAX_QUOTE_CHARS = 600
 IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
 
 
@@ -115,6 +120,15 @@ class Plan:
             f"Metrics: {', '.join(d['metrics'])}",
             f"Permitted edits beyond parameters and seeds: {', '.join(d.get('permitted_edits', [])) or 'none'}",
         ]
+        if d.get("citations"):
+            lines += ["", "Citations:"]
+            for c in d["citations"]:
+                if "quote" in c:
+                    lines.append(f"  [quote]  {c['paper']} supports {c['supports']}: \"{c['quote']}\"")
+                else:
+                    lines.append(f"  [figure] {c['paper']} {c['figure']} supports {c['supports']}: {c['reading']} "
+                                 "(read off the figure by the model; approximate)")  # fmt: skip
+                    lines.append(f"           image: {figure_image_glob(c['paper'], c['figure'])} in the task directory")
         return "\n".join(lines)
 
 
@@ -164,6 +178,15 @@ def validate_plan(data: dict[str, Any]) -> Plan:
         raise PlanError("configuration names must be unique")
     if "execution_image" in data and not IMAGE_ID.fullmatch(data["execution_image"]):
         raise PlanError("execution_image must be a full image ID (sha256: followed by 64 hex digits)")
+    for citation in data.get("citations", []):
+        if not isinstance(citation, dict) or set(citation) not in (QUOTE_FIELDS, FIGURE_FIELDS):
+            raise PlanError("each citation needs either paper, supports, quote or paper, supports, figure, reading")
+        if not all(isinstance(v, str) and v.strip() for v in citation.values()):
+            raise PlanError("citation fields must be non-empty text")
+        if len(citation.get("quote", "")) > MAX_QUOTE_CHARS:
+            raise PlanError(f"a citation quote may be at most {MAX_QUOTE_CHARS} characters")
+        if "reading" in citation and "±" not in citation["reading"]:
+            raise PlanError("a figure reading must state its uncertainty with ±, for example '0.954 ± 0.003'")
     if data.get("permitted_edits"):
         raise PlanError("permitted_edits is not supported until milestone M5")
 
@@ -172,3 +195,9 @@ def validate_plan(data: dict[str, Any]) -> Plan:
     for config in data["configurations"]:
         simulator.validate_params({**data["baseline"], **config.get("params", {})})
     return Plan(data)
+
+
+def figure_image_glob(paper_id: str, label: str) -> str:
+    """Where the harness saves a viewed figure, relative to the task's artifact directory."""
+    stem = paper_id.removeprefix("arxiv:").replace("/", "_")
+    return f"papers/{stem}/figures/{slug(label)}-*"

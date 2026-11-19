@@ -21,6 +21,8 @@ Read = Callable[[str], str]
 Write = Callable[[str], None]
 
 
+S2_KEY = "SEMANTIC_SCHOLAR_API_KEY"  # optional; without it literature search uses OpenAlex only
+
 def prompt_decision(
     plan: Plan, read: Read | None = None, write: Write = print, allow_revise: bool = False
 ) -> tuple[str, str]:
@@ -97,6 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _announce(artifact_dir: Path) -> None:
+    print(f"Task directory: {artifact_dir} (paths shown during review are relative to it)")
+
+
 def _print_result(result: TaskResult) -> int:
     print(f"\nStatus: {result.status} ({result.stop_reason})")
     print(f"Artifacts: {result.artifact_dir}")
@@ -123,13 +129,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "ask":
         from abc_harness.agent.loop import run_agent_task
         from abc_harness.agent.model import AnthropicModel
+        from abc_harness.literature import HttpFetcher, Literature
 
-        secrets = Secrets.load(args.env_file)
+        secrets = Secrets.load(args.env_file, names=("ANTHROPIC_API_KEY", S2_KEY))
         try:
             model = AnthropicModel(secrets.get("ANTHROPIC_API_KEY"), model=args.model, effort=args.effort)
         except MissingSecret as e:
             print(f"error: {e.args[0]}", file=sys.stderr)
             return 2
+        literature = Literature(HttpFetcher(), secrets.get(S2_KEY) if secrets.has(S2_KEY) else None)
         result = run_agent_task(
             args.question,
             model,
@@ -139,6 +147,8 @@ def main(argv: list[str] | None = None) -> int:
             runs_root=args.runs_dir,
             budget=Budget(time_limit_seconds=args.time_limit_seconds, llm_call_limit=args.llm_call_limit),
             redact=secrets.redact,
+            literature=literature,
+            on_start=_announce,
         )
         summary = (result.artifact_dir / "report.md").read_text(encoding="utf-8")
         if "## Agent summary" in summary:
@@ -156,5 +166,6 @@ def main(argv: list[str] | None = None) -> int:
         prompt_decision,
         runs_root=args.runs_dir,
         budget=Budget(time_limit_seconds=args.time_limit_seconds),
+        on_start=_announce,
     )
     return _print_result(result)

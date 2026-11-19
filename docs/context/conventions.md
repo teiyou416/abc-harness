@@ -29,7 +29,8 @@ The package `src/abc_harness/` has one folder per layer: `agent/`, `tools/`,
 [module map](../architecture.md#module-map) says what every file does.
 
 - A module imports only from its own layer or a lower one (order: entry,
-  agent, tools, execution, planning, simulators). If a lower layer needs
+  agent, tools, execution, then planning and literature side by side,
+  simulators). If a lower layer needs
   something from a higher one, move that code down or pass it in as a
   callback, as `execution/task.py` takes the review function.
 - A new module gets a row in the module map in the same commit.

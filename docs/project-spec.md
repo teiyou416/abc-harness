@@ -4,7 +4,7 @@ ABC Harness turns a researcher's question into a reproducible blockchain simulat
 
 The first release supports idea-driven experiments with [SimBlock](https://github.com/dsg-titech/simblock) and the Bitcoin model of [BlockSim](https://github.com/maher243/BlockSim). [architecture.md](architecture.md) describes the system as built and which parts of the original design sketch the first release implements. [AGENTS.md](../AGENTS.md) defines the rules for changing this repository, and the [development plan](development-plan.md) defines the milestone order.
 
-Terms such as task, plan version, and simulation run are defined in [AGENTS.md](../AGENTS.md#definitions).
+Terms such as task, plan version, simulation run, and citation are defined in the [glossary](glossary.md).
 
 ## What a researcher can do
 

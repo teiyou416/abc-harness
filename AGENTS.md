@@ -19,26 +19,15 @@ caps it at 100 lines, so the detail lives in the files it points to.
 | decide where new code goes | [conventions §3](docs/context/conventions.md#3-where-code-goes) |
 | write or change a test | [conventions §4](docs/context/conventions.md#4-testing) |
 | branch, commit or merge | [conventions §5](docs/context/conventions.md#5-git-branches-and-commits) |
+| name a concept in code, docs or prompts | [docs/glossary.md](docs/glossary.md), and add the term if it is missing |
 | hit something surprising | [docs/context/gotchas.md](docs/context/gotchas.md), and add it if it is missing |
 | look for any other doc | [docs/README.md](docs/README.md) |
 
 ## Definitions
 
-- **Task**: one research request. It has one task ID, one artifact directory
-  `runs/<task_id>/`, one `trace.jsonl`, and one set of limits.
-- **Plan version**: one immutable revision of a plan, identified by its
-  content hash. An approval applies to exactly one plan version.
-- **Simulation run**: one simulator invocation for one configuration and one
-  repetition. A task usually contains many simulation runs.
-- **Task workspace**: `runs/<task_id>/workspace/`, the task's copy of the
-  simulator source. Every file change for a task happens here.
-- **Execution image**: a prebuilt Docker image, one per simulator, that holds
-  that simulator at a pinned commit with its dependencies.
-- **Runner**: the tool that executes simulation runs from an approved plan.
-- **Sandbox exec**: the tool that runs the agent's own build and test commands
-  inside the execution image after approval.
-- **Test double**: a fake model, runner, simulator or HTTP response used in
-  tests. Results from a test double are labelled as such.
+The terms used here (task, plan version, simulation run, task workspace,
+execution image, runner, sandbox exec, test double, citation, quote, figure
+reading) are defined in [docs/glossary.md](docs/glossary.md).
 
 ## Hard rules
 

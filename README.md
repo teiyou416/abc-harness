@@ -5,8 +5,8 @@ reproducible blockchain simulation. The researcher reviews an experiment plan
 and approves it. The harness then runs the simulator in a Docker container and
 writes a report linked to the raw output.
 
-Milestone M1 is in place: the harness runs a hand-written SimBlock plan after
-approval. The agent loop that drafts plans arrives in M2.
+The harness runs a hand-written SimBlock plan after approval (milestone M1),
+and an agent drafts plans from a research question (milestone M2).
 [docs/status.md](docs/status.md) says what works today.
 
 ## Requirements
@@ -36,6 +36,25 @@ SimBlock at commit `8a1285aa37b832385b0be2ae6f804885a4a7031f` and JDK 21.
 - Answer `reject` to stop. The command prints `No simulator was started.` and
   still writes the decision, the trace and a report.
 
+## Ask the agent
+
+Copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY`. The harness reads
+the key from this file and passes it only to the Claude client; it never
+enters a container, a trace, or git.
+
+```bash
+cp .env.example .env   # then edit .env
+uv run abc-harness ask "With 300 nodes, does a 30 s block interval produce more orphans than 600 s?"
+```
+
+The agent may ask clarification questions, then shows a plan and asks
+`Approve this plan? [approve/revise/reject]:`. Choose `revise` to send it
+back with a comment; every new version needs a fresh approval. After the run,
+the command prints the agent's summary and the artifact directory.
+
+`uv run abc-harness trace summary runs/<task_id>` counts the task's model
+calls, tokens, tool calls, and errors.
+
 ## Check a result
 
 Open `runs/<task_id>/report.md`. It lists planned versus completed runs, the
@@ -56,7 +75,8 @@ entry in `runs/<task_id>/results.json`.
 
 | Path | Contents |
 |---|---|
-| `plan.toml`, `plan.json` | the plan as written, and the canonical form whose SHA-256 is the plan version |
+| `plan.toml`, `plan.json` | the plan file as written (run mode), and the executed plan's canonical form, whose SHA-256 is the plan version |
+| `plans/` | every plan version proposed in the task |
 | `approvals.jsonl` | every decision, bound to a plan version |
 | `trace.jsonl` | every event, with active and waiting time and the stop reason |
 | `manifest.json` | simulator commit, image ID, command, limits, and task status |
@@ -70,6 +90,7 @@ entry in `runs/<task_id>/results.json`.
 ```bash
 make check         # lint and offline tests; run before every commit
 make test-docker   # integration tests against the execution image
+make test-live     # one real Claude API call sequence; needs .env
 ```
 
 | Read | For |

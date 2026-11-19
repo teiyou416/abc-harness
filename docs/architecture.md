@@ -6,8 +6,19 @@ diagram shows the long-term design. The table below is authoritative where the
 two differ.
 
 A module marked _planned_ names where code will go; replace the mark when the
-module lands. `task.py` orchestrates one task from a plan file, `report.py`
-writes the report, and `simulators/base.py` defines the adapter interface.
+module lands. `task.py` owns a task's artifact directory and executes approved
+plans, `report.py` writes the report, and `simulators/base.py` defines the
+adapter interface. Each simulator adapter ships a capability card next to it,
+for example `simulators/simblock_card.md`.
+
+## Agent tools
+
+The agent has five tools, all defined in `agent.py` as `tool_<name>` methods
+with their schemas in `TOOLS`: `describe_simulator`, `read_file`,
+`ask_researcher`, `propose_plan`, and `run_plan`. The harness validates every
+proposed plan in code before the researcher sees it, records each decision
+itself, and refuses `run_plan` for any plan version without a recorded
+approval. A rejection ends the task without another model call.
 
 ## Data flow
 
@@ -30,16 +41,16 @@ writes the report, and `simulators/base.py` defines the adapter interface.
 
 | Diagram element | First release | Module |
 |---|---|---|
-| Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `loop.py` _planned_; `limits.py` |
-| Tools: Files | Yes. Reads anywhere in the repository and task; writes only inside the task workspace and permitted files. | `tools/files.py` _planned_ |
-| Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `runner.py`; `tools/sandbox.py` _planned_ |
-| Tools: Web Retrieval | Yes. Sources are listed in the project specification. | `tools/literature.py` _planned_ |
-| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `approval.py`, and `cli.py` (`prompt_decision`) until M2 adds `tools/human.py` |
+| Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `agent.py`, `model.py`, `limits.py` |
+| Tools: Files | Yes. Reads anywhere in the repository and task; writes only inside the task workspace and permitted files. | `agent.py` (`read_file`, read-only in M2); write tools _planned_ for M5 |
+| Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `runner.py`; sandbox exec _planned_ for M5 |
+| Tools: Web Retrieval | Yes. Sources are listed in the project specification. | _planned_ for M4 |
+| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `agent.py` (`ask_researcher`, `propose_plan`), `approval.py`, `cli.py` (terminal prompts) |
 | Tools: Custom Tools | Later | |
 | Simulators: SimBlock, BlockSim | Yes | `simulators/simblock.py`; `simulators/blocksim.py` _planned_ |
 | Simulators: Blockemulator | Later | |
-| Literature boxes | Partial. Papers With Code is gone; IEEE Xplore needs its own API key and is optional. | `tools/literature.py` _planned_ |
-| System prompt, user prompt, working memory | Yes, with a single system prompt file. | `prompts/system.md` _planned_ |
+| Literature boxes | Partial. Papers With Code is gone; IEEE Xplore needs its own API key and is optional. | _planned_ for M4 |
+| System prompt, user prompt, working memory | Yes, with a single system prompt file. | `prompts/system.md`, `secrets.py` (API keys from `.env`) |
 | SOUL.md, SKILL.md, History.md | Later. `trace.jsonl` and the artifact directory are the record of a task. | |
 | Context summarization and token caps | Partial. A hard context limit stops the task with a recorded reason. Summarization waits until traces show the need. | `limits.py` |
 | Draft | Yes. The draft is the structured plan shown for review. | `plan.py` |

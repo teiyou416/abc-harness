@@ -41,6 +41,18 @@ PARAMS: dict[str, tuple[str, float, float]] = {
     "CBR_USAGE_RATE": ("float", 0.0, 1.0),
     "CHURN_NODE_RATE": ("float", 0.0, 1.0),
 }
+# Meaning and upstream value at SIMBLOCK_COMMIT, shown to the agent.
+PARAM_DOCS: dict[str, tuple[str, str]] = {
+    "NUM_OF_NODES": ("number of nodes in the network", "300"),
+    "END_BLOCK_HEIGHT": ("block height at which the simulation stops (required; upstream debug value)", "3"),
+    "INTERVAL": ("target block interval in milliseconds", "600000"),
+    "BLOCK_SIZE": ("block size in bytes", "535000"),
+    "AVERAGE_MINING_POWER": ("mean mining power (hash rate) per node", "400000"),
+    "STDEV_OF_MINING_POWER": ("standard deviation of mining power per node", "100000"),
+    "CBR_USAGE_RATE": ("share of nodes that use compact block relay", "0.964"),
+    "CHURN_NODE_RATE": ("share of nodes that are churn nodes", "0.976"),
+}
+CARD = Path(__file__).with_name("simblock_card.md")
 # Upstream sets END_BLOCK_HEIGHT to 3 with a "TODO revert" note, so a plan
 # must state the chain length it wants. t90_ms depends on NUM_OF_NODES, so a
 # plan must state that too.
@@ -57,6 +69,25 @@ class SimBlock:
     source_path_in_image = "/opt/simblock/simulator/src"
     revision_path_in_image = "/opt/simblock/REVISION"
     supported_metrics = ("t90_ms", "orphan_rate")
+
+    def describe(self) -> str:
+        """Return the capability card plus the parameter table generated from PARAMS."""
+        rows = [
+            f"| {name} | {PARAM_DOCS[name][0]} | {java_type} | {low:g} to {high:g} | {PARAM_DOCS[name][1]} |"
+            for name, (java_type, low, high) in PARAMS.items()
+        ]
+        table = "\n".join(
+            [
+                "## Plan parameters",
+                "",
+                f"Required: {', '.join(REQUIRED_PARAMS)}. Any other name is refused.",
+                "",
+                "| Name | Meaning | Type | Allowed range | Upstream value |",
+                "|---|---|---|---|---|",
+                *rows,
+            ]
+        )
+        return f"{CARD.read_text(encoding='utf-8')}\n{table}\n\nRevision: SimBlock {SIMBLOCK_COMMIT}\n"
 
     def validate_params(self, params: dict[str, Any]) -> None:
         unknown = set(params) - set(PARAMS)

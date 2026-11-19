@@ -10,12 +10,19 @@ append to it. Git already records the history.
 - M1: `abc-harness run <plan>` reviews a hand-written plan and, after
   approval, runs SimBlock in Docker. Reports link every metric to raw output,
   and `scripts/recompute_metric.py` reproduces them.
-- M2 with the scripted model: `abc-harness ask "<question>"` runs the agent
-  loop. The agent reads the SimBlock capability card, asks clarification
+- M2: `abc-harness ask "<question>"` runs the agent loop against the Claude
+  API. The agent reads the SimBlock capability card, asks clarification
   questions, proposes plans for approval or revision, runs the approved
-  version, and writes a summary into the report.
+  version, and writes a summary into the report. A real run took 4 model
+  calls and 70 seconds for 20 SimBlock runs.
 - `make check` runs ruff and 48 offline tests. `make test-docker` runs 4
-  integration tests against the execution image.
+  integration tests against the execution image, and `make test-live` runs 1
+  test against the Claude API.
+
+## Known gaps
+
+- Prompt caching does not take effect yet: `cache_read_input_tokens` stays 0.
+  M2.5 addresses it.
 
 ## Known broken
 
@@ -23,8 +30,6 @@ Nothing is known broken.
 
 ## Not verified yet
 
-- The agent loop has not run against the real Claude API, because no
-  `ANTHROPIC_API_KEY` is in `.env` yet. `make test-live` skips until it is.
 - maher243/BlockSim is believed to lack a selfish mining strategy. Confirm this
   when M3 adds BlockSim.
 - The harness has run only on macOS with Apple silicon and Docker Desktop.
@@ -39,5 +44,5 @@ Nothing is known broken.
 
 ## Next
 
-Put `ANTHROPIC_API_KEY` in `.env`, run `make test-live` and one
-`abc-harness ask` demonstration, then start M3.
+M2.5 in `docs/development-plan.md`: context management with a soft limit,
+compression, and `history.md`. Then M3.

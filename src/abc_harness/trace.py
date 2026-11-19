@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -12,17 +14,19 @@ class Trace:
     """Writes one JSON object per line and flushes after every event.
 
     Flushing on every write keeps the trace readable after a crash or a kill.
-    Callers pass plain data only; the trace never reads the environment, so it
-    cannot pick up the API key by accident.
+    Every line passes through `redact` first, so a secret that reaches an event
+    by accident (for example inside an error message) is never written.
     """
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, redact: Callable[[str], str] | None = None) -> None:
         self.path = path
+        self._redact = redact or (lambda text: text)
         self._file = path.open("a", encoding="utf-8")
 
     def event(self, kind: str, **fields: Any) -> None:
         record = {"ts": datetime.now(UTC).isoformat(timespec="milliseconds"), "event": kind, **fields}
-        self._file.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        line = json.dumps(record, ensure_ascii=False, default=str)
+        self._file.write(self._redact(line) + "\n")
         self._file.flush()
 
     def close(self) -> None:
@@ -33,3 +37,26 @@ def read_trace(path: Path) -> list[dict[str, Any]]:
     """Return every event in a trace file, in order."""
     with path.open(encoding="utf-8") as f:
         return [json.loads(line) for line in f if line.strip()]
+
+
+def summarize_trace(path: Path) -> dict[str, Any]:
+    """Count model calls, tokens, latency, tool calls, and errors in one trace."""
+    events = read_trace(path)
+    calls = [e for e in events if e["event"] == "model_call"]
+    tools = [e for e in events if e["event"] == "tool_call"]
+    finished = next((e for e in reversed(events) if e["event"] == "task_finished"), {})
+    tokens: Counter[str] = Counter()
+    for call in calls:
+        tokens.update({k: v for k, v in (call.get("usage") or {}).items() if isinstance(v, int)})
+    return {
+        "status": finished.get("status", "unfinished"),
+        "stop_reason": finished.get("stop_reason"),
+        "active_seconds": finished.get("active_seconds"),
+        "model_calls": len(calls),
+        "model_latency_seconds": round(sum(c.get("latency_seconds", 0) for c in calls), 3),
+        "tokens": dict(tokens),
+        "tool_calls": dict(Counter(t["tool"] for t in tools)),
+        "tool_errors": sum(1 for t in tools if t.get("is_error")),
+        "errors": [e.get("error") for e in events if e["event"] == "error"],
+        "simulation_runs": dict(Counter(e["status"] for e in events if e["event"] == "run_finished")),
+    }

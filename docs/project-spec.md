@@ -2,7 +2,7 @@
 
 ABC Harness turns a researcher's question into a reproducible blockchain simulation. From a local CLI, the researcher describes an idea, reviews the proposed experiment, and approves it. The agent then runs the experiment and returns a report linked to the underlying data.
 
-The first release supports idea-driven experiments with [SimBlock](https://github.com/dsg-titech/simblock) and [BlockSim](https://github.com/maher243/BlockSim). [architecture.md](architecture.md) describes the system and states which parts of the [architecture diagram](architecture.png) the first release implements. [AGENTS.md](../AGENTS.md) defines the rules for changing this repository, and the [development plan](development-plan.md) defines the milestone order.
+The first release supports idea-driven experiments with [SimBlock](https://github.com/dsg-titech/simblock) and [BlockSim](https://github.com/maher243/BlockSim). [architecture.md](architecture.md) describes the system as built and which parts of the original design sketch the first release implements. [AGENTS.md](../AGENTS.md) defines the rules for changing this repository, and the [development plan](development-plan.md) defines the milestone order.
 
 Terms such as task, plan version, and simulation run are defined in [AGENTS.md](../AGENTS.md#definitions).
 
@@ -15,7 +15,7 @@ Terms such as task, plan version, and simulation run are defined in [AGENTS.md](
 
 ## MVP boundaries
 
-- Use one agent loop and a local CLI. The first release supports one cloud model provider behind a thin client interface; the researcher supplies their own API key.
+- Use one agent loop and a local CLI. The first release supports one cloud model provider behind a thin client interface; the researcher supplies their own API key in `.env`, which also holds any other external service key.
 - Run the harness on the researcher's Mac. The initial target is an Apple M5 with 32 GB of memory. Simulators run in a local Docker container (see [Execution environment](#execution-environment)).
 - Apply two hard limits to each task: **30 minutes of active runtime** and **500 LLM calls**. Active runtime excludes time spent waiting for the researcher; the trace records that waiting time separately. Every model call counts toward the call limit, including calls made for summarization or by any future sub-agent. Stop when either limit is reached and preserve partial results.
 - Use the Human Interaction tool for clarification and plan approval. Bind approval to the displayed plan version.
@@ -52,7 +52,7 @@ Search arXiv, DBLP (filtered by venues such as FC, AFT, and IEEE ICBC), and Sema
 ## Run and task status
 
 - Each simulation run ends as `completed`, `failed`, `timeout`, or `missing`. A run is `completed` when the simulator exits with status 0 and its expected output parses. A planned run that never started is `missing`.
-- Each task ends as `completed`, `partial`, `stopped_by_limit`, `rejected`, or `failed`. A task is `completed` only when every planned simulation run completed and any validation check passed.
+- Each task ends as `completed`, `partial`, `stopped_by_limit`, `rejected`, `not_executed`, or `failed`. A task is `completed` only when every planned simulation run completed and any validation check passed. A task is `not_executed` when the agent ends without running a plan, for example because no simulator can represent the question.
 - The harness writes the report and manifest for every status, including partial and stopped tasks.
 
 ## What each task saves

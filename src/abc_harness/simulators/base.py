@@ -18,6 +18,10 @@ class Simulator(Protocol):
     revision_path_in_image: str
     supported_metrics: tuple[str, ...]
 
+    def describe(self) -> str:
+        """Return the capability card the agent reads before planning."""
+        ...
+
     def validate_params(self, params: dict[str, Any]) -> None: ...
 
     def validate_metrics(self, metrics: list[str]) -> None: ...

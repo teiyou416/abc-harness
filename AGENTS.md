@@ -59,8 +59,10 @@ caps it at 100 lines, so the detail lives in the files it points to.
    active runtime, excluding time spent waiting for the researcher, and 500 LLM
    calls. At either limit, stop active work, remove the task's containers, and
    preserve partial results.
-5. **Keep credentials private.** Pass the model API key only to the model
-   client. Keep it out of containers, traces, artifacts, and version control.
+5. **Keep credentials private.** Every API key lives in `.env` (gitignored;
+   `.env.example` lists the names). Pass each key only to the client that needs
+   it, never through `os.environ`. Keep keys out of containers, traces,
+   artifacts, and version control.
 6. **Report what actually ran.** Keep the approved plan, simulator revision,
    configuration, code changes, raw output, and `trace.jsonl` for each task.
    Every reported measurement links to its source. Label missing runs, test
@@ -91,5 +93,6 @@ model client.
 
 ## Commands
 
-`make check` (lint + offline tests) · `make test` · `make test-docker` · `make lint` · `make fmt`
+`make check` (lint + offline tests) · `make test` · `make test-docker` · `make test-live` · `make lint` · `make fmt`
 `make image` (build the execution image) · `make example` (review and run `examples/simblock-baseline.toml`)
+`uv run abc-harness ask "<question>"` (agent drafts a plan) · `uv run abc-harness trace summary runs/<task_id>`

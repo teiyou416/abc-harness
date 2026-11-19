@@ -7,7 +7,9 @@ authors = [
     { name = "teiyou", email = "teiyou416@gmail.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "anthropic>=2.10.0",
+]
 
 [project.scripts]
 abc-harness = "abc_harness:main"

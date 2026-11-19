@@ -7,15 +7,20 @@ append to it. Git already records the history.
 
 ## What works
 
-- M1 is done. `abc-harness run examples/simblock-baseline.toml` shows a
-  hand-written plan, records the researcher's decision, and after approval runs
-  10 SimBlock simulation runs in Docker in about 30 seconds. Rejection starts no
-  container.
-- Each task writes a report, results, manifest, trace, raw output, and source
-  diffs to `runs/<task_id>/`. `scripts/recompute_metric.py` reproduces a run's
-  `t90_ms` and `orphan_rate` from raw output.
-- `make check` runs ruff, 32 offline tests, and the rulebook test.
-  `make test-docker` runs 4 integration tests against the execution image.
+- M1: `abc-harness run <plan>` reviews a hand-written plan and, after
+  approval, runs SimBlock in Docker. Reports link every metric to raw output,
+  and `scripts/recompute_metric.py` reproduces them.
+- M2: `abc-harness ask "<question>"` runs the agent loop against the Claude
+  API. The agent reads the SimBlock capability card, asks clarification
+  questions, proposes plans for approval or revision, runs the approved
+  version, and writes a summary into the report. A real run took 4 model
+  calls and 70 seconds for 20 SimBlock runs.
+- M2.5: the agent keeps each window under the soft limit by compressing it,
+  starts the next window from harness-written task state plus a model summary,
+  and archives every message in `history.md`. Prompt caching works.
+- `make check` runs ruff and 58 offline tests. `make test-docker` runs 4
+  integration tests against the execution image, and `make test-live` runs 2
+  tests against the Claude API.
 
 ## Known broken
 
@@ -29,11 +34,11 @@ Nothing is known broken.
 
 ## Deliberately not built
 
-- The agent loop, the model client, and the LLM call limit in use (M2).
-- Retrying a failed simulation run; M1 reports the run as failed instead.
+- Literature search (M4), BlockSim (M3), and agent-written code (M5).
+- Retrying a failed simulation run; the report shows it as failed instead.
+- Memory across tasks (Hermes-style `MEMORY.md` / `USER.md`) and `SKILL.md`.
 - No PRs and no hosted CI: this is a personal project, and checks run locally.
-- The diagram parts marked "Later" in `docs/architecture.md`.
 
 ## Next
 
-M2 in `docs/development-plan.md`: the agent loop drafts a SimBlock plan.
+M3 in `docs/development-plan.md`: BlockSim and simulator selection.

@@ -113,10 +113,14 @@ def canonical_json(data: Any) -> str:
 
 
 def load_plan(path: Path) -> Plan:
+    """Load a plan from TOML (hand-written) or JSON (plan.json in an artifact directory)."""
+    text = path.read_text(encoding="utf-8")
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except tomllib.TOMLDecodeError as e:
-        raise PlanError(f"{path}: invalid TOML: {e}") from e
+        data = json.loads(text) if path.suffix == ".json" else tomllib.loads(text)
+    except (tomllib.TOMLDecodeError, json.JSONDecodeError) as e:
+        raise PlanError(f"{path}: invalid {path.suffix.lstrip('.').upper() or 'TOML'}: {e}") from e
+    if not isinstance(data, dict):
+        raise PlanError(f"{path}: a plan must be an object")
     return validate_plan(data)
 
 

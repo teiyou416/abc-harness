@@ -24,7 +24,16 @@ def _fmt(value: float) -> str:
     return f"{value:.4f}" if abs(value) < 1 else f"{value:.1f}"
 
 
-def write_report(artifact_dir: Path, plan: Plan, records: list[RunRecord], manifest: dict[str, Any]) -> None:
+def write_report(
+    artifact_dir: Path,
+    plan: Plan | None,
+    records: list[RunRecord],
+    manifest: dict[str, Any],
+    summary: str | None = None,
+) -> None:
+    if plan is None:
+        _write_planless_report(artifact_dir, manifest, summary)
+        return
     lines = [
         f"# {plan.data['title']}",
         "",
@@ -40,7 +49,19 @@ def write_report(artifact_dir: Path, plan: Plan, records: list[RunRecord], manif
     ]
     if manifest.get("test_double"):
         lines.append("- **These results come from a test double, not from a real simulator.**")
+    if manifest.get("question"):
+        lines.append(f"- Researcher's request: {manifest['question']}")
     lines += ["", f"Question: {plan.data['question']}", ""]
+    if summary:
+        lines += [
+            "## Agent summary",
+            "",
+            "The agent wrote this summary. Every number in it must match the Results table below,",
+            "which is computed from `results.json` and the raw output.",
+            "",
+            summary.strip(),
+            "",
+        ]
 
     lines += ["## Planned versus completed runs", "", "| Configuration | Planned | Completed | Not completed |", "|---|---|---|---|"]
     by_config: dict[str, list[RunRecord]] = {}
@@ -88,7 +109,7 @@ def write_report(artifact_dir: Path, plan: Plan, records: list[RunRecord], manif
         "Rerun the approved plan:",
         "",
         "```bash",
-        f"uv run abc-harness run {manifest['plan_file']}",
+        f"uv run abc-harness run {manifest.get('plan_file') or artifact_dir / 'plan.json'}",
         "```",
         "",
         "Recalculate a run's metrics from its raw output without the harness:",
@@ -99,3 +120,20 @@ def write_report(artifact_dir: Path, plan: Plan, records: list[RunRecord], manif
         "",
     ]
     (artifact_dir / "report.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def _write_planless_report(artifact_dir: Path, manifest: dict[str, Any], summary: str | None) -> None:
+    """Report for a task that never executed a plan: rejected, stopped, or ended by the agent."""
+    lines = [
+        "# Task without an executed plan",
+        "",
+        f"- Task: `{manifest['task_id']}`",
+        f"- Status: **{manifest['status']}** ({manifest['stop_reason']})",
+        f"- Plan versions proposed: {len(manifest.get('plan_versions', []))} (see `plans/` and `approvals.jsonl`)",
+        "- No simulator was started.",
+    ]
+    if manifest.get("question"):
+        lines.append(f"- Researcher's request: {manifest['question']}")
+    if summary:
+        lines += ["", "## Agent summary", "", summary.strip()]
+    (artifact_dir / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

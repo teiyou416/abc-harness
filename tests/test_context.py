@@ -10,10 +10,11 @@ from doubles.fake_runner import FakeRunner
 from doubles.scripted_model import ScriptedModel, text_turn, tool_turn
 
 from abc_harness import agent as agent_module
+from abc_harness import model as model_module
 from abc_harness.agent import TOOLS, prompt_hashes, run_agent_task, system_prompt
 from abc_harness.context import ContextLimits, estimate_tokens, task_state
 from abc_harness.limits import Budget
-from abc_harness.model import AnthropicModel
+from abc_harness.model import AnthropicModel, ModelDeadlineExceeded
 from abc_harness.plan import validate_plan
 from abc_harness.task import Task
 from abc_harness.tools import ToolContext, read_file
@@ -164,3 +165,49 @@ def test_anthropic_request_enables_caching_and_omits_empty_tools():
 @pytest.mark.parametrize("text", ["short", "x" * 10_000])
 def test_estimate_errs_high(text):
     assert estimate_tokens(text) >= len(text) / 4
+
+
+class _FlakyMessages:
+    def __init__(self, failures, error):
+        self.failures, self.error, self.timeouts = failures, error, []
+
+    def create(self, **kwargs):
+        if self.failures:
+            self.failures -= 1
+            raise self.error
+        block = SimpleNamespace(to_dict=lambda: {"type": "text", "text": "hi"})
+        usage = SimpleNamespace(to_dict=lambda: {"input_tokens": 1})
+        return SimpleNamespace(content=[block], stop_reason="end_turn", model="m", usage=usage)
+
+
+def _flaky_model(failures, monkeypatch):
+    import anthropic
+
+    # Only the type matters to the retry rule; skip the constructor's HTTP request object.
+    error = anthropic.APIConnectionError.__new__(anthropic.APIConnectionError)
+    messages = _FlakyMessages(failures, error)
+    model = AnthropicModel("sk-test-not-used")
+
+    def with_options(timeout):
+        messages.timeouts.append(timeout)
+        return SimpleNamespace(beta=SimpleNamespace(messages=messages))
+
+    model._client = SimpleNamespace(with_options=with_options)
+    monkeypatch.setattr(model_module.time, "sleep", lambda s: None)
+    return model, messages
+
+
+def test_retries_happen_inside_the_deadline(monkeypatch):
+    model, messages = _flaky_model(2, monkeypatch)
+    assert model.create("s", [{"role": "user", "content": "q"}], [], timeout_seconds=30).text() == "hi"
+    assert len(messages.timeouts) == 3
+    assert all(0 < t <= 30 for t in messages.timeouts)
+
+
+def test_a_call_that_outlives_the_deadline_raises(monkeypatch):
+    model, messages = _flaky_model(10, monkeypatch)
+    clock = iter(range(0, 1000, 20))
+    monkeypatch.setattr(model_module.time, "monotonic", lambda: next(clock))
+    with pytest.raises(ModelDeadlineExceeded):
+        model.create("s", [{"role": "user", "content": "q"}], [], timeout_seconds=30)
+    assert len(messages.timeouts) == 1

@@ -25,7 +25,7 @@ from abc_harness.context import (
     task_state,
 )
 from abc_harness.limits import Budget, LimitReached
-from abc_harness.model import ModelClient
+from abc_harness.model import ModelClient, ModelDeadlineExceeded, ModelTurn
 from abc_harness.runner import Runner
 from abc_harness.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
 from abc_harness.tools import HANDLERS, TOOLS, EndTask, ToolContext, ToolError
@@ -74,9 +74,7 @@ class Agent:
                 next_input = self._estimate(system, messages)
             if next_input > self.limits.max_input_tokens:
                 raise LimitReached("context", f"about {next_input} input tokens exceed {self.limits.max_input_tokens}")
-            self.task.budget.check_time()
-            self.task.budget.count_llm_call()
-            turn = self.model.create(system, messages, TOOLS, max_tokens=self.limits.max_output_tokens)
+            turn = self._call_model(system, messages, TOOLS, self.limits.max_output_tokens)
             actual_input = sum(turn.usage.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens",
                                                                "cache_creation_input_tokens"))  # fmt: skip
             self.task.trace.event(
@@ -94,6 +92,8 @@ class Agent:
             )
             messages.append({"role": "assistant", "content": turn.content})
             self.history.assistant(turn.content)
+            # A turn that arrives after the limit, even a final answer, does not end the task normally.
+            self.task.budget.check_time()
             if actual_input > self.limits.max_input_tokens:
                 raise LimitReached("context", f"{actual_input} input tokens exceed {self.limits.max_input_tokens}")
 
@@ -118,6 +118,19 @@ class Agent:
             else:
                 next_input = self._estimate(system, messages)
 
+    def _call_model(
+        self, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]], max_tokens: int
+    ) -> ModelTurn:
+        """Make one counted model call that may use at most the task's remaining active time."""
+        budget = self.task.budget
+        budget.check_time()
+        budget.count_llm_call()
+        try:
+            return self.model.create(system, messages, tools, max_tokens=max_tokens,
+                                     timeout_seconds=budget.remaining_seconds)  # fmt: skip
+        except ModelDeadlineExceeded as e:
+            raise LimitReached("time", f"{e} (call {budget.llm_calls})") from e
+
     def _estimate(self, system: str, messages: list[dict[str, Any]]) -> int:
         return estimate_tokens(system) + estimate_tokens(TOOLS) + estimate_tokens(messages)
 
@@ -139,18 +152,16 @@ class Agent:
 
     def _compress(self, messages: list[dict[str, Any]], estimated: int) -> list[dict[str, Any]]:
         """Summarize the window and start a new one (docs/development-plan.md, M2.5)."""
-        self.task.budget.check_time()
-        self.task.budget.count_llm_call()
         budget = self.limits.hard_limit - self.limits.compact_max_tokens - estimate_tokens(_prompt("compact.md"))
         transcript = render_transcript(messages)
         if estimate_tokens(transcript) > budget:
             keep = budget * 3 - 200
             transcript = f"[the start of this window is cut; it is in task/history.md]\n\n{transcript[-keep:]}"
-        turn = self.model.create(
+        turn = self._call_model(
             _prompt("compact.md"),
             [{"role": "user", "content": f"Summarize this conversation window.\n\n{transcript}"}],
             [],
-            max_tokens=self.limits.compact_max_tokens,
+            self.limits.compact_max_tokens,
         )
         if turn.stop_reason == "refusal":
             raise EndTask(FAILED, "the model declined to summarize the context window (refusal)")
@@ -161,6 +172,7 @@ class Agent:
         )
         self.task.trace.event("compaction", call=self.task.budget.llm_calls, from_window=old_window,
                               estimated_input_tokens=estimated, usage=turn.usage, summary=summary)  # fmt: skip
+        self.task.budget.check_time()
         self.history.start_window(f"Started after window {old_window} reached the soft limit "
                                   f"(about {estimated} input tokens).")  # fmt: skip
         self.history.user_text(message, label="user (new window, written by the harness)")

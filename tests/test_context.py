@@ -10,12 +10,13 @@ from doubles.fake_runner import FakeRunner
 from doubles.scripted_model import ScriptedModel, text_turn, tool_turn
 
 from abc_harness import agent as agent_module
-from abc_harness.agent import TOOLS, Agent, prompt_hashes, run_agent_task, system_prompt
+from abc_harness.agent import TOOLS, prompt_hashes, run_agent_task, system_prompt
 from abc_harness.context import ContextLimits, estimate_tokens, task_state
 from abc_harness.limits import Budget
 from abc_harness.model import AnthropicModel
 from abc_harness.plan import validate_plan
 from abc_harness.task import Task
+from abc_harness.tools import ToolContext, read_file
 from abc_harness.trace import read_trace
 
 QUESTION = "Compare intervals."
@@ -120,8 +121,8 @@ def test_summary_calls_count_toward_the_call_limit(tmp_path):
 def test_read_file_pages_through_lines(tmp_path):
     task = Task(FakeRunner(), tmp_path / "runs", Budget())
     (task.artifact_dir / "notes.txt").write_text("\n".join(f"line {i}" for i in range(1, 11)))
-    agent = Agent(task, ScriptedModel([]), lambda q: "", lambda p: ("reject", ""))
-    page = agent.tool_read_file({"path": "task/notes.txt", "offset": 3, "limit": 2})
+    ctx = ToolContext(task, lambda q: "", lambda p: ("reject", ""))
+    page = read_file.run(ctx, {"path": "task/notes.txt", "offset": 3, "limit": 2})
     assert page.splitlines() == ["[task/notes.txt: lines 3-4 of 10] [more: use offset 5]", "line 3", "line 4"]
     task.close("not_executed", "test")
 

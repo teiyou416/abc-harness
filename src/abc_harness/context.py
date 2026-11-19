@@ -130,7 +130,7 @@ def task_state(task: Task, clarifications: list[tuple[str, str]]) -> str:
         lines += ["", "Clarification questions and the researcher's answers:"]
         lines += [f"- Q: {q}\n  A: {a}" for q, a in clarifications]
     if task.executed is not None:
-        from abc_harness.agent import run_summary
+        from abc_harness.tools.run_plan import run_summary
 
         status = "completed" if all(r.status == "completed" for r in task.records) else "not fully completed"
         summary = run_summary(task, status, "see report")

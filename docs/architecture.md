@@ -17,7 +17,7 @@ flowchart TB
     subgraph LOOP["Agent loop: agent.py"]
         CTX["Context window: context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 131,072"]
         LLM["Model client: model.py<br/>only holder of the API key"]
-        TOOLS["Tools<br/>describe_simulator, read_file,<br/>ask_researcher, propose_plan, run_plan"]
+        TOOLS["Tools: tools/<br/>describe_simulator, read_file,<br/>ask_researcher, propose_plan, run_plan"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
     end
 
@@ -69,9 +69,11 @@ both in the plan's rationale.
 
 ## Agent tools
 
-The agent has five tools, all defined in `agent.py` as `tool_<name>` methods
-with their schemas in `TOOLS`: `describe_simulator`, `read_file`,
-`ask_researcher`, `propose_plan`, and `run_plan`. The harness validates every
+The agent has five tools, one module each in `tools/`: `describe_simulator`,
+`read_file`, `ask_researcher`, `propose_plan`, and `run_plan`. Each module
+holds the definition sent to the model and the harness code that runs it;
+`agent.py` keeps only the loop, context compression, and the dispatch by tool
+name. The harness validates every
 proposed plan in code before the researcher sees it, records each decision
 itself, and refuses `run_plan` for any plan version without a recorded
 approval. A rejection ends the task without another model call.
@@ -101,10 +103,10 @@ to what the first release builds.
 | Diagram element | First release | Module |
 |---|---|---|
 | Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `agent.py`, `model.py`, `limits.py` |
-| Tools: Files | Yes. Reads anywhere in the repository and task; writes only inside the task workspace and permitted files. | `agent.py` (`read_file`, read-only in M2); write tools _planned_ for M5 |
+| Tools: Files | Yes. Reads anywhere in the repository and task; writes only inside the task workspace and permitted files. | `tools/read_file.py` (read-only); write tools _planned_ for M5 |
 | Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `runner.py`; sandbox exec _planned_ for M5 |
 | Tools: Web Retrieval | Yes. Sources are listed in the project specification. | _planned_ for M4 |
-| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `agent.py` (`ask_researcher`, `propose_plan`), `approval.py`, `cli.py` (terminal prompts) |
+| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `approval.py`, `cli.py` (terminal prompts) |
 | Tools: Custom Tools | Later | |
 | Simulators: SimBlock, BlockSim | Yes. BlockSim runs its Bitcoin model only. | `simulators/simblock.py`, `simulators/blocksim.py` |
 | Simulators: Blockemulator | Later | |

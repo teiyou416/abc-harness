@@ -26,12 +26,15 @@ uv run abc-harness image build
 uv run abc-harness run examples/simblock-baseline.toml
 ```
 
-`image build` creates two images:
+`image build` creates three images (about 4 GB in all; build one with `--only`):
 
 - `abc-harness-sim:simblock-8a1285a`: SimBlock at commit
   `8a1285aa37b832385b0be2ae6f804885a4a7031f` with JDK 21.
 - `abc-harness-sim:blocksim-603361d`: BlockSim at commit
   `603361dab49101cdd820dbfd86e19536d841cbae` with Python 3.11 and pandas 1.5.3.
+- `abc-harness-pdf:mineru-4.2.3`: the PDF parser, MinerU 4.2.3 with its CPU
+  models, used to read papers given as PDF. Parsing needs 6 GB of memory, so
+  give Docker Desktop at least 8 GB (12 GB to parse beside a simulation).
 
 `uv run abc-harness run examples/blocksim-baseline.toml` runs the BlockSim
 example the same way.
@@ -58,6 +61,15 @@ The agent may ask clarification questions, then shows a plan and asks
 `Approve this plan? [approve/revise/reject]:`. Choose `revise` to send it
 back with a comment; every new version needs a fresh approval. After the run,
 the command prints the agent's summary and the artifact directory.
+
+To have the agent read a paper you choose, pass the PDF; repeat `--paper` for
+several. The harness parses each one before the agent starts (1 to 6 minutes
+for a 20-page paper, not counted toward the 30-minute limit, and cached for
+the next task), and the agent can cite them:
+
+```bash
+uv run abc-harness ask "Reproduce Figure 2 of this paper." --paper ~/papers/selfish-mining.pdf
+```
 
 `uv run abc-harness trace summary runs/<task_id>` counts the task's model
 calls, tokens, tool calls, and errors.
@@ -89,7 +101,8 @@ entry in `runs/<task_id>/results.json`. For a BlockSim run, leave out
 | `approvals.jsonl` | every decision, bound to a plan version |
 | `trace.jsonl` | every event, with active and waiting time and the stop reason |
 | `history.md` | (`ask` only) every message of every context window, with full tool results |
-| `manifest.json` | simulator commit, image ID, command, limits, and task status |
+| `literature.json`, `papers/` | (`ask` only) searches, found and supplied papers, full texts, PDFs and their parser output, viewed figures |
+| `manifest.json` | simulator commit, image ID, command, limits, PDF parses, and task status |
 | `results.json`, `report.md` | per-run status and metrics, and the readable report |
 | `raw/<run_id>/` | the simulator's own output: `stdout.txt`, `blockList.txt`, `static.json` from SimBlock; `result.xlsx` and one CSV per sheet from BlockSim |
 | `changes/<run_id>.diff` | the parameter and seed edits applied to the simulator source |

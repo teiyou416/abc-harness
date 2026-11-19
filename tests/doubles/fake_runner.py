@@ -6,6 +6,9 @@ advances an optional fake clock by a fixed number of seconds. Each image tag
 points to a fake image ID; `rebuild` points the tag at a new ID, as
 `abc-harness image build` would. The tag behind an ID selects the fixture set:
 a tag containing "blocksim" gets BlockSim files.
+
+`convert_pdf` stands in for the PDF parser image: it copies a trimmed, recorded
+MinerU output (tests/fixtures/pdf/) whatever the PDF says.
 """
 
 from __future__ import annotations
@@ -54,6 +57,11 @@ class FakeRunner:
     sandbox_handler: Callable[[str, Path, Path], RunOutcome] | None = None
     # called with (run_id, workdir) before a run writes its output, so a test can see which source it got
     inspect: Callable[[str, Path], None] | None = None
+    # the PDF parser: "complete" (default), "fail", "timeout", or "garbage"; and the parser run time per PDF
+    pdf_behaviour: str = "complete"
+    seconds_per_pdf: float = 120.0
+    pdf_calls: list[str] = field(default_factory=list)
+    missing_images: set[str] = field(default_factory=set)  # tags that are not built
     tags: dict[str, str] = field(default_factory=dict)  # tag -> current image ID
     built: dict[str, str] = field(default_factory=dict)  # every image ID that exists -> its tag
 
@@ -76,6 +84,8 @@ class FakeRunner:
         return self.built.get(image, image)
 
     def image_info(self, image: str) -> dict[str, str]:
+        if image in self.missing_images:
+            raise RunnerError(f"execution image {image} not found")
         if image.startswith("sha256:"):
             if image not in self.built:
                 raise RunnerError(f"execution image {image} not found")
@@ -119,6 +129,22 @@ class FakeRunner:
         if self.sandbox_handler:
             return self.sandbox_handler(command, source_dir, scratch_dir)
         return RunOutcome(0, False, self.seconds_per_run, f"ran: {command}\n")
+
+    def convert_pdf(
+        self, image: str, task_id: str, name: str, pdf: Path, out_dir: Path, timeout_seconds: float
+    ) -> RunOutcome:
+        self.pdf_calls.append(pdf.name)
+        if self.clock:
+            self.clock.advance(min(self.seconds_per_pdf, timeout_seconds))
+        if self.pdf_behaviour == "timeout" or self.seconds_per_pdf > timeout_seconds:
+            return RunOutcome(None, True, timeout_seconds, "parsing...\n")
+        if self.pdf_behaviour == "fail":
+            return RunOutcome(1, False, self.seconds_per_pdf, "Traceback: the parser crashed\n")
+        if self.pdf_behaviour == "garbage":
+            (out_dir / "structured_content.json").write_text("not json")
+        else:
+            shutil.copytree(FIXTURES / "pdf" / "2007.05614", out_dir, dirs_exist_ok=True)
+        return RunOutcome(0, False, self.seconds_per_pdf, "Parsed 1 input(s).\nmineru 4.2.3; models fixture\n")
 
     def cleanup(self, task_id: str) -> None:
         self.cleanups.append(task_id)

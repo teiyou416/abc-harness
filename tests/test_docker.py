@@ -158,3 +158,47 @@ def test_sandbox_timeout_removes_the_container(runner, tmp_path):
     outcome = runner.sandbox(IMAGE, task_id, "sandbox-1", tmp_path / "s", tmp_path, "echo started; sleep 120", 3)
     assert outcome.timed_out
     assert running_containers(task_id) == []
+
+
+@pytest.fixture(scope="module")
+def pdf_runner() -> DockerRunner:
+    from abc_harness.literature.pdf import PARSER_IMAGE
+
+    runner = DockerRunner()
+    try:
+        runner.image_info(PARSER_IMAGE)
+    except (RuntimeError, FileNotFoundError):
+        pytest.skip("PDF parser image missing; run `uv run abc-harness image build --only pdf-parser`")
+    return runner
+
+
+def test_real_pdf_parser_reads_a_pdf_offline_and_is_cached(pdf_runner, tmp_path, monkeypatch):
+    from abc_harness.execution.task import Task
+    from abc_harness.literature import Library
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", SECRET)
+    task = Task(pdf_runner, tmp_path / "runs")
+    library = Library(task.artifact_dir, None, task.convert_pdf)
+    paper = library.add_local(ROOT / "tests" / "fixtures" / "pdf" / "handwritten.pdf")
+    assert paper.title == "A Tiny Paper About Selfish Mining"
+    assert library.locate(paper.id, "Selfish mining lets a pool earn more than its fair share of the blocks.")
+    assert task.pdf_parses[0]["revision"].startswith("mineru 4.2.3; models MinerU-4_models_onnx@")
+    assert running_containers(task.task_id) == []
+    log = (task.artifact_dir / "papers" / "local-handwritten" / "pdf" / "parser.log").read_text()
+    assert SECRET not in log
+    again = Task(pdf_runner, tmp_path / "runs")
+    Library(again.artifact_dir, None, again.convert_pdf).add_local(ROOT / "tests" / "fixtures" / "pdf" / "handwritten.pdf")
+    assert again.pdf_parses[0]["cached"] is True
+
+
+def test_pdf_parser_timeout_removes_the_container(pdf_runner, tmp_path):
+    from abc_harness.literature.pdf import PARSER_IMAGE
+
+    task_id = new_task_id()
+    image = pdf_runner.image_info(PARSER_IMAGE)["image_id"]
+    out = tmp_path / "out"
+    out.mkdir()
+    outcome = pdf_runner.convert_pdf(image, task_id, "pdf-1", ROOT / "tests" / "fixtures" / "pdf" / "handwritten.pdf",
+                                     out, timeout_seconds=1)  # fmt: skip
+    assert outcome.timed_out
+    assert running_containers(task_id) == []

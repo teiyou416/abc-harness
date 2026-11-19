@@ -27,7 +27,8 @@ caps it at 100 lines, so the detail lives in the files it points to.
 
 The terms used here (task, plan version, simulation run, task workspace,
 execution image, runner, sandbox exec, test double, permitted edit, validation
-check, edited source, citation, quote, figure reading) are defined in [docs/glossary.md](docs/glossary.md).
+check, edited source, citation, quote, figure reading, supplied paper,
+PDF parser image, machine-recognized text) are defined in [docs/glossary.md](docs/glossary.md).
 
 ## Hard rules
 
@@ -45,7 +46,8 @@ check, edited source, citation, quote, figure reading) are defined in [docs/glos
    check, or execution image requires a new plan version and fresh approval.
 4. **Enforce limits in code.** Restrict writes to the task workspace and the
    files the approved plan permits. Enforce two limits per task: 30 minutes of
-   active runtime, excluding time spent waiting for the researcher, and 500 LLM
+   active runtime, excluding time spent waiting for the researcher or parsing
+   PDFs (the PDF parser has its own 15-minute timeout), and 500 LLM
    calls. At either limit, stop active work, remove the task's containers, and
    preserve partial results.
 5. **Keep credentials private.** Every API key lives in `.env` (gitignored;
@@ -84,4 +86,4 @@ model client.
 
 `make check` (lint + offline tests) · `make test` · `make test-docker` · `make test-live` · `make lint` · `make fmt`
 `make image` (build both execution images) · `make example` / `make example-blocksim` (review and run an example plan)
-`uv run abc-harness ask "<question>"` (agent drafts a plan) · `uv run abc-harness trace summary runs/<task_id>` · `uv run abc-harness export runs/<task_id>`
+`uv run abc-harness ask "<question>" [--paper paper.pdf]` (agent drafts a plan) · `uv run abc-harness trace summary runs/<task_id>` · `uv run abc-harness export runs/<task_id>`

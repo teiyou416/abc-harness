@@ -58,5 +58,7 @@ def summarize_trace(path: Path) -> dict[str, Any]:
         "tool_calls": dict(Counter(t["tool"] for t in tools)),
         "tool_errors": sum(1 for t in tools if t.get("is_error")),
         "errors": [e.get("error") for e in events if e["event"] == "error"],
+        "pdf_parses": [{k: e.get(k) for k in ("pdf", "seconds", "cached")} for e in events
+                       if e["event"] == "pdf_parse_finished"],
         "simulation_runs": dict(Counter(e["status"] for e in events if e["event"] == "run_finished")),
     }

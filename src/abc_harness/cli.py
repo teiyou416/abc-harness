@@ -1,4 +1,4 @@
-"""Command-line interface: `image build`, `run`, `ask`, and `trace summary`."""
+"""Command-line interface: `image build`, `run`, `ask`, `trace summary`, and `export`."""
 
 from __future__ import annotations
 
@@ -12,9 +12,10 @@ from abc_harness.agent.model import DEFAULT_EFFORT, DEFAULT_MODEL
 from abc_harness.agent.secrets import DEFAULT_ENV_FILE, MissingSecret, Secrets
 from abc_harness.execution.export import ExportError, export_task
 from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LIMIT_SECONDS, Budget
-from abc_harness.execution.runner import DockerRunner, build_image
+from abc_harness.execution.runner import DockerRunner, RunnerError, build_image
 from abc_harness.execution.task import TaskResult, run_task
 from abc_harness.execution.trace import summarize_trace
+from abc_harness.literature.pdf import PARSER_IMAGE
 from abc_harness.planning.plan import Plan, PlanError, load_plan
 from abc_harness.simulators import SIMULATORS, SimulatorError, get_simulator
 
@@ -23,6 +24,8 @@ Write = Callable[[str], None]
 
 
 S2_KEY = "SEMANTIC_SCHOLAR_API_KEY"  # optional; without it literature search uses OpenAlex only
+PDF_PARSER = "pdf-parser"
+PDF_PARSER_CONTEXT = Path(__file__).resolve().parents[2] / "docker" / "mineru"
 
 def prompt_decision(
     plan: Plan, read: Read | None = None, write: Write = print, allow_revise: bool = False
@@ -73,8 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     image = sub.add_parser("image", help="manage execution images")
     image_sub = image.add_subparsers(dest="image_command", required=True)
-    build = image_sub.add_parser("build", help="build the execution image of each simulator")
-    build.add_argument("--simulator", default="all", choices=["all", *sorted(SIMULATORS)])
+    build = image_sub.add_parser("build", help="build the execution image of each simulator and the PDF parser image")
+    build.add_argument("--only", default="all", choices=["all", *sorted(SIMULATORS), PDF_PARSER],
+                       help="build one image instead of all")  # fmt: skip
 
     def task_options(p: argparse.ArgumentParser) -> None:
         p.add_argument("--runs-dir", type=Path, default=Path("runs"), help="where artifact directories go")
@@ -91,6 +95,8 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("--effort", default=DEFAULT_EFFORT, choices=["low", "medium", "high", "xhigh", "max"])
     ask.add_argument("--llm-call-limit", type=int, default=DEFAULT_LLM_CALL_LIMIT)
     ask.add_argument("--env-file", type=Path, default=DEFAULT_ENV_FILE, help="file holding API keys")
+    ask.add_argument("--paper", type=Path, action="append", default=[], metavar="PDF",
+                     help="a paper the agent should read, as a PDF file; repeat for several")  # fmt: skip
     task_options(ask)
 
     trace = sub.add_parser("trace", help="inspect task traces")
@@ -101,6 +107,22 @@ def build_parser() -> argparse.ArgumentParser:
     summary = trace_sub.add_parser("summary", help="summarize model calls, tokens, tools, and errors")
     summary.add_argument("task_dir", type=Path, help="runs/<task_id>")
     return parser
+
+
+def _check_papers(papers: list[Path]) -> str | None:
+    """Why the --paper files cannot be used, or None. Checked before a task starts."""
+    for path in papers:
+        if not path.is_file():
+            return f"--paper {path}: no such file"
+        with path.open("rb") as f:
+            if f.read(5) != b"%PDF-":
+                return f"--paper {path}: not a PDF file"
+    if papers:
+        try:
+            DockerRunner().image_info(PARSER_IMAGE)
+        except RunnerError:
+            return f"--paper needs the PDF parser image {PARSER_IMAGE}; run `abc-harness image build --only {PDF_PARSER}`"
+    return None
 
 
 def _announce(artifact_dir: Path) -> None:
@@ -119,11 +141,13 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     if args.command == "image":
-        names = sorted(SIMULATORS) if args.simulator == "all" else [args.simulator]
+        names = [*sorted(SIMULATORS), PDF_PARSER] if args.only == "all" else [args.only]
         for name in names:
-            simulator = get_simulator(name)
-            image_id = build_image(simulator.docker_context, simulator.image_tag)
-            print(f"Built {simulator.image_tag} ({image_id})")
+            if name == PDF_PARSER:
+                context, tag = PDF_PARSER_CONTEXT, PARSER_IMAGE
+            else:
+                context, tag = get_simulator(name).docker_context, get_simulator(name).image_tag
+            print(f"Built {tag} ({build_image(context, tag)})")
         return 0
 
     if args.command == "export":
@@ -145,6 +169,10 @@ def main(argv: list[str] | None = None) -> int:
         from abc_harness.agent.model import AnthropicModel
         from abc_harness.literature import HttpFetcher, Literature
 
+        problem = _check_papers(args.paper)
+        if problem:
+            print(f"error: {problem}", file=sys.stderr)
+            return 2
         secrets = Secrets.load(args.env_file, names=("ANTHROPIC_API_KEY", S2_KEY))
         try:
             model = AnthropicModel(secrets.get("ANTHROPIC_API_KEY"), model=args.model, effort=args.effort)
@@ -163,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             redact=secrets.redact,
             literature=literature,
             on_start=_announce,
+            papers=args.paper,
         )
         summary = (result.artifact_dir / "report.md").read_text(encoding="utf-8")
         if "## Agent summary" in summary:

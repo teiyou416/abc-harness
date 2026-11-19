@@ -28,12 +28,17 @@ append to it. Git already records the history.
   for papers, reads arXiv full texts and tables, and views figures. A plan
   cites a quote the harness checks verbatim, or a figure reading from a figure
   viewed in the task, marked as approximate.
+- M4.2: `ask --paper paper.pdf` hands the agent a PDF, parsed by MinerU in
+  the PDF parser image before the agent starts. arXiv papers without HTML are
+  read from their PDF. Parse time is recorded but not counted toward the
+  30-minute limit; the parser has a 15-minute timeout and a cache. Table
+  values from a PDF are cited only as figure readings.
 - M5: after approving a plan with permitted edits, the agent changes only
   those files, builds and tests them in the sandbox, and must pass the plan's
   validation check before any configuration runs. `abc-harness export`
   packages the edited source.
-- `make check` runs ruff and 141 offline tests. `make test-docker` runs 7
-  integration tests against both execution images, and `make test-live` runs 7
+- `make check` runs ruff and 156 offline tests. `make test-docker` runs 9
+  integration tests against both execution images and the PDF parser image, and `make test-live` runs 7
   tests against the Claude API and the literature services.
 
 ## Known broken
@@ -43,6 +48,10 @@ Nothing is known broken.
 ## Not verified yet
 
 - The harness has run only on macOS with Apple silicon and Docker Desktop.
+- The real model has not read a supplied PDF yet; `make test-live` has no
+  PDF test. MinerU quality was measured on two arXiv papers only.
+- Docker Desktop's default memory (8 GB here) fits one parse (6 GB) but not a
+  parse beside a simulation run (4 GB); raise it to 12 GB.
 - The real model has proposed a code-changing plan, but has not yet written,
   tested, and validated code end to end; M6 does that.
 - Semantic Scholar search has run only against a hand-written response; no

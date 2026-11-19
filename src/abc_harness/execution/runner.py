@@ -1,5 +1,9 @@
 """Executes simulation runs inside the execution image (AGENTS.md hard rules 4, 5, 7).
 
+It also runs the PDF parser image, one container per PDF, under the same
+rules; the parser gets more CPU and memory than a simulation because MinerU
+needs about 5 GB for a 20-page paper.
+
 Every container runs with no network, CPU and memory limits, no environment
 variables from the host, and a label that names its task. Cleanup removes
 every container carrying that label, so a timeout or a limit never leaves a
@@ -38,6 +42,16 @@ class RunOutcome:
 SANDBOX_SOURCE = "/work/src"  # the edited source, read-only
 SANDBOX_SCRATCH = "/work/scratch"  # writable; the working directory
 MAX_SANDBOX_OUTPUT = 200_000
+PDF_INPUT = "/in/paper.pdf"  # read-only
+PDF_OUTPUT = "/out"  # writable; receives structured_content.json and images/
+# Parse to a zip, unpack it inside the container (zipfile drops absolute and ".." paths), and keep only what
+# the harness reads plus the Markdown for people.
+PDF_COMMAND = (
+    f"mineru-kit parse {PDF_INPUT} -o {PDF_OUTPUT}/paper.zip --format zip --tier basic"
+    f" && python -c \"import zipfile; zipfile.ZipFile('{PDF_OUTPUT}/paper.zip').extractall('{PDF_OUTPUT}')\""
+    f" && rm -f {PDF_OUTPUT}/paper.zip {PDF_OUTPUT}/middle_json.json"
+    " && cat /opt/mineru/REVISION"
+)
 
 
 class Runner(Protocol):
@@ -56,6 +70,9 @@ class Runner(Protocol):
         timeout_seconds: float,
     ) -> RunOutcome: ...
 
+    def convert_pdf(self, image: str, task_id: str, name: str, pdf: Path, out_dir: Path,
+                    timeout_seconds: float) -> RunOutcome: ...
+
     def cleanup(self, task_id: str) -> None: ...
 
 
@@ -70,9 +87,11 @@ def _docker(*args: str, check: bool = True, timeout: float | None = None) -> sub
 
 
 class DockerRunner:
-    def __init__(self, cpus: str = "2", memory: str = "4g") -> None:
+    def __init__(self, cpus: str = "2", memory: str = "4g", pdf_cpus: str = "6", pdf_memory: str = "6g") -> None:
         self.cpus = cpus
         self.memory = memory
+        self.pdf_cpus = pdf_cpus
+        self.pdf_memory = pdf_memory
 
     def image_info(self, image: str) -> dict[str, str]:
         result = _docker("image", "inspect", image, "--format", "{{.Id}}", check=False)
@@ -125,6 +144,24 @@ class DockerRunner:
             "-w", SANDBOX_SCRATCH,
             image, "sh", "-c", command,
         ]  # fmt: skip
+        return self._run_capturing(args, container, timeout_seconds)
+
+    def convert_pdf(self, image: str, task_id: str, name: str, pdf: Path, out_dir: Path,
+                    timeout_seconds: float) -> RunOutcome:
+        """Parse one PDF with the PDF parser image: the PDF read-only, the output directory writable."""
+        container = f"abc-{task_id}-{name}"
+        args = [
+            "run", "--rm", "--name", container,
+            "--label", f"{TASK_LABEL}={task_id}",
+            "--network", "none",
+            "--cpus", self.pdf_cpus, "--memory", self.pdf_memory,
+            "-v", f"{pdf.resolve()}:{PDF_INPUT}:ro",
+            "-v", f"{out_dir.resolve()}:{PDF_OUTPUT}",
+            image, "sh", "-c", PDF_COMMAND,
+        ]  # fmt: skip
+        return self._run_capturing(args, container, timeout_seconds)
+
+    def _run_capturing(self, args: list[str], container: str, timeout_seconds: float) -> RunOutcome:
         started = time.monotonic()
         try:
             result = subprocess.run(["docker", *args], env=docker_cli_env(), stdout=subprocess.PIPE,

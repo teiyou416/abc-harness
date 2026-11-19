@@ -1,16 +1,28 @@
-"""The model client: the only code that receives the model API key (AGENTS.md hard rule 5)."""
+"""The model client: the only code that receives a model API key (AGENTS.md hard rule 5).
+
+Two providers serve the same Messages API: Anthropic, and DeepSeek through its
+Anthropic-compatible endpoint. `MODELS` is the whole list of models the
+harness may use, with each one's provider, list price, and whether it can see
+images; `make_model` builds the client for one of them with that provider's key.
+"""
 
 from __future__ import annotations
 
-import copy
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
 # Thinking counts toward this cap, so it leaves room for long reasoning plus a large tool input such as a plan.
 MAX_OUTPUT_TOKENS = 65_536
+# On a safety decline the Anthropic API reruns the request on a fallback model chosen
+# by refusal category, inside the same call.
+FALLBACK_BETA = "server-side-fallback-2026-07-01"
+MAX_RETRIES = 3
+RETRY_STATUS = {408, 409, 429}  # plus every 5xx, as the SDK's own retry rule
 
 
 @dataclass(frozen=True)
@@ -18,7 +30,8 @@ class Price:
     """List prices in USD per million tokens. `cache_write` is the 5-minute TTL, the one the client uses.
 
     A model priced by prompt length (Claude Haiku 5.5) has `above`: a request whose prompt (input, cache reads,
-    and cache writes together) exceeds `above_tokens` pays those prices for all of its tokens.
+    and cache writes together) exceeds `above_tokens` pays those prices for all of its tokens. A model priced by
+    time of day (DeepSeek) has `off_peak`, used for a request made outside the provider's peak hours.
     """
 
     input: float
@@ -27,50 +40,73 @@ class Price:
     cache_write: float
     above: Price | None = None
     above_tokens: int = 0
+    off_peak: Price | None = None
 
-    def cost(self, usage: dict[str, int]) -> float:
+    def cost(self, usage: dict[str, int], when: datetime | None = None) -> float:
+        price = self.off_peak if self.off_peak and when is not None and not deepseek_peak(when) else self
         prompt = sum(usage.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
-        price = self.above if self.above and prompt > self.above_tokens else self
+        price = price.above if price.above and prompt > price.above_tokens else price
         return (usage.get("input_tokens", 0) * price.input + usage.get("output_tokens", 0) * price.output
                 + usage.get("cache_read_input_tokens", 0) * price.cache_read
                 + usage.get("cache_creation_input_tokens", 0) * price.cache_write) / 1_000_000  # fmt: skip
 
 
-# From https://platform.claude.com/docs/en/about-claude/pricing, read 2026-11-19. Only for the cost estimate in
-# the run statistics; update the table when the published prices change.
-PRICES: dict[str, Price] = {
-    "claude-fable-5-2": Price(8.0, 40.0, 0.20, 10.0),
-    "claude-fable-5-1": Price(10.0, 50.0, 0.25, 12.50),
-    "claude-fable-5": Price(10.0, 50.0, 1.0, 12.50),
-    "claude-opus-5-5": Price(4.0, 20.0, 0.20, 5.0),
-    "claude-opus-5": Price(5.0, 25.0, 0.50, 6.25),
-    "claude-opus-4-8": Price(5.0, 25.0, 0.50, 6.25),
-    "claude-opus-4-7": Price(5.0, 25.0, 0.50, 6.25),
-    "claude-opus-4-6": Price(5.0, 25.0, 0.50, 6.25),
-    "claude-opus-4-5": Price(5.0, 25.0, 0.50, 6.25),
-    "claude-sonnet-5-5": Price(2.0, 10.0, 0.10, 2.50),
-    "claude-sonnet-5": Price(2.0, 10.0, 0.20, 2.50),
-    "claude-sonnet-4-6": Price(3.0, 15.0, 0.30, 3.75),
-    "claude-sonnet-4-5": Price(3.0, 15.0, 0.30, 3.75),
-    "claude-haiku-5-5": Price(0.10, 0.50, 0.01, 0.125, above=Price(0.50, 2.50, 0.05, 0.625), above_tokens=100_000),
-    "claude-haiku-4-5": Price(1.0, 5.0, 0.10, 1.25),
+def deepseek_peak(when: datetime) -> bool:
+    """DeepSeek's peak hours: 01:00-04:00 and 06:00-10:00 UTC, Monday to Friday. Chinese public holidays are
+    off-peak too, which this check does not know, so an estimate on such a day is high."""
+    when = when.astimezone(UTC)
+    return when.weekday() < 5 and (1 <= when.hour < 4 or 6 <= when.hour < 10)
+
+
+@dataclass(frozen=True)
+class Provider:
+    name: str
+    key_name: str  # the .env entry holding its API key
+    base_url: str | None
+    anthropic_extras: bool  # the beta endpoint with server-side fallback and summarized thinking
+
+
+ANTHROPIC = Provider("Anthropic", "ANTHROPIC_API_KEY", None, True)
+DEEPSEEK = Provider("DeepSeek", "DEEPSEEK_API_KEY", "https://api.deepseek.com/anthropic", False)
+API_KEY_NAMES = (ANTHROPIC.key_name, DEEPSEEK.key_name)
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    provider: Provider
+    price: Price
+    sees_images: bool = True
+
+
+def _deepseek(hit: float, miss: float, output: float) -> Price:
+    """Peak prices, with off-peak at half. A cache miss is billed as plain input; there is no write charge."""
+    off = Price(miss / 2, output / 2, hit / 2, miss / 2)
+    return Price(miss, output, hit, miss, off_peak=off)
+
+
+# The models the harness may use. Claude prices from https://platform.claude.com/docs/en/about-claude/pricing and
+# DeepSeek prices from https://api-docs.deepseek.com/quick_start/pricing, both read 2026-11-19. Update them when
+# the published prices change; they feed only the cost estimate in the run statistics.
+MODELS: dict[str, ModelSpec] = {
+    "claude-opus-5-5": ModelSpec(ANTHROPIC, Price(4.0, 20.0, 0.20, 5.0)),
+    "claude-sonnet-5-5": ModelSpec(ANTHROPIC, Price(2.0, 10.0, 0.10, 2.50)),
+    "claude-haiku-5-5": ModelSpec(ANTHROPIC, Price(0.10, 0.50, 0.01, 0.125, above=Price(0.50, 2.50, 0.05, 0.625),
+                                                   above_tokens=100_000)),
+    "claude-fable-5-2": ModelSpec(ANTHROPIC, Price(8.0, 40.0, 0.20, 10.0)),
+    # deepseek-v4-pro replaces images with "[Unsupported Image]", so it cannot read figures.
+    "deepseek-v4-pro": ModelSpec(DEEPSEEK, _deepseek(0.044, 1.32, 3.96), sees_images=False),
+    "deepseek-flash": ModelSpec(DEEPSEEK, _deepseek(0.006, 0.30, 1.20)),
 }
 
 
 def price_for(model: str) -> Price | None:
-    """The price of a model id, matching the longest known name, so claude-opus-5-5 is not priced as claude-opus-5
-    and a dated id such as claude-haiku-4-5-20251001 finds its model."""
-    name = next((n for n in sorted(PRICES, key=len, reverse=True) if model.startswith(n)), None)
-    return PRICES[name] if name else None
-# On a safety decline the API reruns the request on a fallback model chosen
-# by refusal category, inside the same call.
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
-MAX_RETRIES = 3
-RETRY_STATUS = {408, 409, 429}  # plus every 5xx, as the SDK's own retry rule
+    """The price of a model id, matching the longest known name, so a dated id finds its model."""
+    name = next((n for n in sorted(MODELS, key=len, reverse=True) if model.startswith(n)), None)
+    return MODELS[name].price if name else None
 
 
 class ModelUnavailable(Exception):
-    """The model cannot serve the harness's requests: unknown, or without adaptive thinking or the effort level."""
+    """The model is not on the list, or its provider's API key is missing."""
 
 
 class ModelDeadlineExceeded(Exception):
@@ -115,21 +151,37 @@ class ModelClient(Protocol):
         ...
 
 
+def make_model(name: str, effort: str, key: Callable[[str], str | None]) -> AnthropicModel:
+    """The client for a listed model, with its provider's key from `key(name_of_env_entry)`."""
+    spec = MODELS.get(name)
+    if spec is None:
+        raise ModelUnavailable(f"{name!r} is not one of the models the harness supports: {', '.join(MODELS)}")
+    api_key = key(spec.provider.key_name)
+    if not api_key:
+        raise ModelUnavailable(f"{name} needs {spec.provider.key_name} in .env")
+    return AnthropicModel(api_key, model=name, effort=effort, provider=spec.provider)
+
+
 class AnthropicModel:
-    """Calls the Claude Messages API.
+    """Calls a Messages API: Anthropic's, or DeepSeek's Anthropic-compatible one.
 
     The harness retries 408, 409, 429, 5xx and connection errors itself, up to
     MAX_RETRIES times, so that every attempt and every pause between attempts
     fits inside the deadline the caller passes.
     """
 
-    def __init__(self, api_key: str, model: str = DEFAULT_MODEL, effort: str = DEFAULT_EFFORT) -> None:
+    def __init__(
+        self, api_key: str, model: str = DEFAULT_MODEL, effort: str = DEFAULT_EFFORT, provider: Provider = ANTHROPIC
+    ) -> None:
         import anthropic
 
         self._anthropic = anthropic
-        self._client = anthropic.Anthropic(api_key=api_key, max_retries=0)
+        self._client = anthropic.Anthropic(api_key=api_key, base_url=provider.base_url, max_retries=0)
         self.name = model
         self.effort = effort
+        self.provider = provider
+        spec = MODELS.get(model)
+        self.sees_images = spec.sees_images if spec else True
 
     def create(
         self,
@@ -141,24 +193,25 @@ class AnthropicModel:
     ) -> ModelTurn:
         started = time.monotonic()
         deadline = None if timeout_seconds is None else started + timeout_seconds
-        optional: dict[str, Any] = {"tools": tools} if tools else {}
-        request = dict(
-            model=self.name,
-            max_tokens=max_tokens,
+        request: dict[str, Any] = {
+            "model": self.name,
+            "max_tokens": max_tokens,
             # An explicit breakpoint after the fixed system prompt (and the
             # tools before it), plus automatic caching of the growing
-            # conversation tail.
-            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            cache_control={"type": "ephemeral"},
-            messages=messages,
-            output_config={"effort": self.effort},
+            # conversation tail. DeepSeek ignores both and caches by itself.
+            "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            "cache_control": {"type": "ephemeral"},
+            "messages": messages,
+            "output_config": {"effort": self.effort},
+            "thinking": {"type": "adaptive"},
+        }
+        if tools:
+            request["tools"] = tools
+        if self.provider.anthropic_extras:
             # Summaries of the model's reasoning, so the researcher can follow it in the terminal and the
-            # trace. Thinking is always on for this model; this only makes its text visible.
-            thinking={"type": "adaptive", "display": "summarized"},
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
-            **optional,
-        )
+            # trace. Thinking is always on for these models; this only makes its text visible.
+            request.update(thinking={"type": "adaptive", "display": "summarized"}, betas=[FALLBACK_BETA],
+                           fallbacks="default")  # fmt: skip
         response = self._send(request, deadline)
         usage = {k: v for k, v in response.usage.to_dict().items() if isinstance(v, int)}
         return ModelTurn(
@@ -170,30 +223,6 @@ class AnthropicModel:
             request_id=getattr(response, "_request_id", None),
         )
 
-    def check(self, name: str) -> None:
-        """Raise ModelUnavailable unless `name` exists and supports what every request uses: adaptive thinking
-        and this client's effort level. Uses the Models API, which costs no tokens."""
-        try:
-            info = self._client.models.retrieve(name).to_dict()
-        except self._anthropic.NotFoundError as e:
-            raise ModelUnavailable(f"no model named {name!r}; /model lists the available ones") from e
-        caps = info.get("capabilities") or {}
-        thinking = ((caps.get("thinking") or {}).get("types") or {}).get("adaptive") or {}
-        if not thinking.get("supported"):
-            raise ModelUnavailable(f"{name} has no adaptive thinking, which the harness's requests use")
-        if not ((caps.get("effort") or {}).get(self.effort) or {}).get("supported"):
-            raise ModelUnavailable(f"{name} does not support effort {self.effort!r}")
-
-    def model_ids(self) -> list[str]:
-        """The models this API key can use, newest first."""
-        return [m.id for m in self._client.models.list(limit=50)]
-
-    def switched(self, name: str) -> AnthropicModel:
-        """The same client (and key) calling another model."""
-        other = copy.copy(self)
-        other.name = name
-        return other
-
     def _send(self, request: dict[str, Any], deadline: float | None) -> Any:
         errors = self._anthropic
         for attempt in range(MAX_RETRIES + 1):
@@ -202,7 +231,8 @@ class AnthropicModel:
                 raise ModelDeadlineExceeded("the task's active time ran out before the model answered")
             try:
                 client = self._client if left is None else self._client.with_options(timeout=left)
-                return client.beta.messages.create(**request)
+                messages = client.beta.messages if self.provider.anthropic_extras else client.messages
+                return messages.create(**request)
             except (errors.APIConnectionError, errors.APIStatusError) as e:
                 status = getattr(e, "status_code", None)
                 retryable = status is None or status in RETRY_STATUS or status >= 500

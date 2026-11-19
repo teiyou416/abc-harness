@@ -54,6 +54,11 @@ def run(ctx: ToolContext, args: dict[str, Any]) -> ToolOutput:
     text = [f"[figure {name}: saved {files}; script task/{drawn.script}]", f"Caption: {caption}"]
     if drawn.output.strip():
         text.append(f"Script output:\n{drawn.output.strip()}")
+    if not ctx.sees_images:
+        text.append("The model running this task cannot see images, so the figure is saved and in the report but "
+                    "not shown to you. Check the script instead: every value read from the results, axis labels with "
+                    "units, error bars.")  # fmt: skip
+        return ToolOutput("\n".join(text))
     text.append("Check the image: axis labels with units, error bars, readable legend. "
                 "Call make_figure again with the same name to fix it.")  # fmt: skip
     return ToolOutput("\n".join(text), [(drawn.png, drawn.png_bytes)])

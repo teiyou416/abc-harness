@@ -213,45 +213,52 @@ def test_a_call_that_outlives_the_deadline_raises(monkeypatch):
     assert len(messages.timeouts) == 1
 
 
-class _FakeModels:
-    """Stands in for client.models: retrieve() with recorded capabilities, list() of ids."""
+def _capturing(model):
+    """Point the model's client at fake beta and plain endpoints; return what each received."""
+    sent = {"beta": [], "plain": []}
 
-    def __init__(self, anthropic):
-        self.anthropic = anthropic
+    def endpoint(kind):
+        def create(**kwargs):
+            sent[kind].append(kwargs)
+            block = SimpleNamespace(to_dict=lambda: {"type": "text", "text": "hi"})
+            usage = SimpleNamespace(to_dict=lambda: {"input_tokens": 3, "output_tokens": 1})
+            return SimpleNamespace(content=[block], stop_reason="end_turn", model=model.name, usage=usage)
 
-    def retrieve(self, name):
-        caps = {
-            "claude-opus-5-5": {"thinking": {"types": {"adaptive": {"supported": True}}},
-                                "effort": {"high": {"supported": True}, "xhigh": {"supported": True}}},
-            "claude-opus-4-5-20251101": {"thinking": {"types": {"adaptive": {"supported": False}}},
-                                         "effort": {"high": {"supported": True}}},
-            "claude-haiku-x": {"thinking": {"types": {"adaptive": {"supported": True}}},
-                               "effort": {"high": {"supported": True}}},
-        }  # fmt: skip
-        if name not in caps:
-            import httpx2
+        return SimpleNamespace(create=create)
 
-            response = httpx2.Response(404, request=httpx2.Request("GET", "https://api.anthropic.com/v1/models/x"))
-            raise self.anthropic.NotFoundError("not found", response=response, body=None)
-
-        class Info:
-            def to_dict(self):
-                return {"id": name, "capabilities": caps[name]}
-
-        return Info()
+    model._client = SimpleNamespace(beta=SimpleNamespace(messages=endpoint("beta")), messages=endpoint("plain"))
+    return sent
 
 
-def test_model_check_needs_the_model_adaptive_thinking_and_the_effort():
-    from abc_harness.agent.model import AnthropicModel, ModelUnavailable
+def test_make_model_takes_listed_models_with_their_provider_key():
+    from abc_harness.agent.model import DEEPSEEK, ModelUnavailable, make_model
 
-    model = AnthropicModel("sk-ant-test", effort="xhigh")
-    model._client.models = _FakeModels(model._anthropic)
-    model.check("claude-opus-5-5")
-    with pytest.raises(ModelUnavailable, match="no model named 'claude-nope'"):
-        model.check("claude-nope")
-    with pytest.raises(ModelUnavailable, match="no adaptive thinking"):
-        model.check("claude-opus-4-5-20251101")
-    with pytest.raises(ModelUnavailable, match="does not support effort 'xhigh'"):
-        model.check("claude-haiku-x")
-    other = model.switched("claude-opus-5-5")
-    assert other.name == "claude-opus-5-5" and other._client is model._client and model.name != "" and other is not model
+    keys = {"ANTHROPIC_API_KEY": "sk-ant-x", "DEEPSEEK_API_KEY": "sk-ds-x"}
+    opus = make_model("claude-opus-5-5", "high", keys.get)
+    assert opus.provider.name == "Anthropic" and opus.sees_images
+    pro = make_model("deepseek-v4-pro", "high", keys.get)
+    assert pro.provider is DEEPSEEK and not pro.sees_images
+    assert str(pro._client.base_url).startswith("https://api.deepseek.com/anthropic")
+    assert make_model("deepseek-flash", "high", keys.get).sees_images
+    with pytest.raises(ModelUnavailable, match="not one of the models the harness supports"):
+        make_model("claude-opus-4-5", "high", keys.get)
+    with pytest.raises(ModelUnavailable, match="needs DEEPSEEK_API_KEY in .env"):
+        make_model("deepseek-flash", "high", {"ANTHROPIC_API_KEY": "sk-ant-x"}.get)
+
+
+def test_deepseek_requests_leave_out_the_anthropic_only_extras():
+    from abc_harness.agent.model import make_model
+
+    keys = {"ANTHROPIC_API_KEY": "a", "DEEPSEEK_API_KEY": "d"}
+    claude, deepseek = make_model("claude-opus-5-5", "high", keys.get), make_model("deepseek-flash", "high", keys.get)
+    sent_claude, sent_deepseek = _capturing(claude), _capturing(deepseek)
+    claude.create("s", [{"role": "user", "content": "q"}], [])
+    deepseek.create("s", [{"role": "user", "content": "q"}], [])
+    (claude_request,), (deepseek_request,) = sent_claude["beta"], sent_deepseek["plain"]
+    assert sent_claude["plain"] == [] and sent_deepseek["beta"] == []
+    assert claude_request["thinking"] == {"type": "adaptive", "display": "summarized"}
+    assert claude_request["betas"] and claude_request["fallbacks"] == "default"
+    assert deepseek_request["thinking"] == {"type": "adaptive"}
+    assert "betas" not in deepseek_request and "fallbacks" not in deepseek_request
+    assert deepseek_request["output_config"] == {"effort": "high"} and deepseek_request["model"] == "deepseek-flash"
+

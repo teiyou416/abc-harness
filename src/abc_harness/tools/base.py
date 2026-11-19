@@ -40,6 +40,7 @@ class ToolContext:
     execution: tuple[str, str] | None = None  # (status, reason) once run_plan has executed a plan
     library: Library | None = None  # the papers this task has found; None when literature search is off
     previous_tasks: dict[str, Path] = field(default_factory=dict)  # earlier tasks of the chat session, read-only
+    sees_images: bool = True  # False for a model whose API drops images, such as deepseek-v4-pro
 
 
 @dataclass

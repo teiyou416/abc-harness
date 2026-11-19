@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from abc_harness.agent.model import price_for
+from abc_harness.agent.model import MODELS
 from abc_harness.agent.session import ChatSession, Turn
 from abc_harness.execution.runner import DockerRunner, RunnerError
 from abc_harness.interfaces.console import Write, task_summary
@@ -131,15 +131,13 @@ def _model_command(models: ModelControl | None, name: str) -> str:
     if models is None:
         return "! this chat cannot switch models"
     if not name:
-        try:
-            listed = ", ".join(models.available())
-        except Exception as e:  # noqa: BLE001 - the listing is a convenience; the API may be unreachable
-            listed = f"(could not list: {type(e).__name__})"
-        return f"Model: {models.current()}\nAvailable: {listed}\nSwitch with /model <name>; it applies to the following tasks."
+        listed = "\n".join(f"  {m}" for m in models.available())
+        return f"Model: {models.current()}\nModels:\n{listed}\nSwitch with /model <name>; it applies to the following tasks."
     problem = models.switch(name)
     if problem:
         return f"! {problem}"
-    note = "" if price_for(name) else " (no list price known: cost estimates will say unknown)"
+    spec = MODELS.get(name)
+    note = " It cannot see images: figures in papers and its own figures are not shown to it." if spec and not spec.sees_images else ""
     return f"The following tasks use {name}.{note} Earlier tasks keep the model they ran with."
 
 

@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -185,7 +186,8 @@ def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[float, se
             unknown.add(model or "unknown")
             continue
         priced.add(model)
-        total += price.cost(e.get("usage") or {})
+        when = datetime.fromisoformat(e["ts"]) if e.get("ts") else None  # DeepSeek prices by time of day
+        total += price.cost(e.get("usage") or {}, when)
     return total, priced, unknown
 
 

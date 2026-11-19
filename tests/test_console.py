@@ -107,14 +107,24 @@ def test_unknown_models_are_named_not_guessed(tmp_path):
     assert "Estimated cost: unknown (no list price for scripted)" in summary
 
 
-def test_prices_match_the_longest_name_and_haiku_is_tiered():
-    from abc_harness.agent.model import price_for
+def test_prices_cover_the_listed_models_haiku_tiers_and_deepseek_hours():
+    from datetime import UTC, datetime
 
-    assert price_for("claude-opus-5-5").input == 4.0 and price_for("claude-opus-5").input == 5.0
-    assert price_for("claude-sonnet-5-5").cache_read == 0.10 and price_for("claude-sonnet-5").cache_read == 0.20
-    assert price_for("claude-haiku-4-5-20251001").output == 5.0 and price_for("claude-unknown") is None
+    from abc_harness.agent.model import MODELS, price_for
+
+    assert all(price_for(name) for name in MODELS) and price_for("claude-opus-4-5") is None
+    assert price_for("claude-opus-5-5").input == 4.0 and price_for("claude-sonnet-5-5").cache_read == 0.10
     haiku = price_for("claude-haiku-5-5")
     small = {"input_tokens": 1_000, "cache_read_input_tokens": 99_000, "output_tokens": 1_000}
     large = {**small, "cache_read_input_tokens": 99_001}  # one token over 100,000 in the prompt
     assert round(haiku.cost(small), 6) == round((1_000 * 0.10 + 99_000 * 0.01 + 1_000 * 0.50) / 1e6, 6)
     assert round(haiku.cost(large), 6) == round((1_000 * 0.50 + 99_001 * 0.05 + 1_000 * 2.50) / 1e6, 6)
+
+    flash = price_for("deepseek-flash")
+    usage = {"input_tokens": 1_000_000, "cache_read_input_tokens": 1_000_000, "output_tokens": 1_000_000}
+    peak = datetime(2026, 11, 19, 7, 0, tzinfo=UTC)  # Thursday 07:00 UTC
+    night = datetime(2026, 11, 19, 15, 0, tzinfo=UTC)
+    saturday = datetime(2026, 11, 21, 7, 0, tzinfo=UTC)
+    assert round(flash.cost(usage, peak), 6) == round(0.30 + 0.006 + 1.20, 6)
+    assert round(flash.cost(usage, night), 6) == round((0.30 + 0.006 + 1.20) / 2, 6)
+    assert flash.cost(usage, saturday) == flash.cost(usage, night)

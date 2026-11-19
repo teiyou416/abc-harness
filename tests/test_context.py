@@ -211,3 +211,47 @@ def test_a_call_that_outlives_the_deadline_raises(monkeypatch):
     with pytest.raises(ModelDeadlineExceeded):
         model.create("s", [{"role": "user", "content": "q"}], [], timeout_seconds=30)
     assert len(messages.timeouts) == 1
+
+
+class _FakeModels:
+    """Stands in for client.models: retrieve() with recorded capabilities, list() of ids."""
+
+    def __init__(self, anthropic):
+        self.anthropic = anthropic
+
+    def retrieve(self, name):
+        caps = {
+            "claude-opus-5-5": {"thinking": {"types": {"adaptive": {"supported": True}}},
+                                "effort": {"high": {"supported": True}, "xhigh": {"supported": True}}},
+            "claude-opus-4-5-20251101": {"thinking": {"types": {"adaptive": {"supported": False}}},
+                                         "effort": {"high": {"supported": True}}},
+            "claude-haiku-x": {"thinking": {"types": {"adaptive": {"supported": True}}},
+                               "effort": {"high": {"supported": True}}},
+        }  # fmt: skip
+        if name not in caps:
+            import httpx2
+
+            response = httpx2.Response(404, request=httpx2.Request("GET", "https://api.anthropic.com/v1/models/x"))
+            raise self.anthropic.NotFoundError("not found", response=response, body=None)
+
+        class Info:
+            def to_dict(self):
+                return {"id": name, "capabilities": caps[name]}
+
+        return Info()
+
+
+def test_model_check_needs_the_model_adaptive_thinking_and_the_effort():
+    from abc_harness.agent.model import AnthropicModel, ModelUnavailable
+
+    model = AnthropicModel("sk-ant-test", effort="xhigh")
+    model._client.models = _FakeModels(model._anthropic)
+    model.check("claude-opus-5-5")
+    with pytest.raises(ModelUnavailable, match="no model named 'claude-nope'"):
+        model.check("claude-nope")
+    with pytest.raises(ModelUnavailable, match="no adaptive thinking"):
+        model.check("claude-opus-4-5-20251101")
+    with pytest.raises(ModelUnavailable, match="does not support effort 'xhigh'"):
+        model.check("claude-haiku-x")
+    other = model.switched("claude-opus-5-5")
+    assert other.name == "claude-opus-5-5" and other._client is model._client and model.name != "" and other is not model

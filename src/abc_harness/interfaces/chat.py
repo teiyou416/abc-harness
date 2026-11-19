@@ -11,8 +11,10 @@ passes a prompt_toolkit session with history.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
+from abc_harness.agent.model import PRICES_PER_MTOK
 from abc_harness.agent.session import ChatSession, Turn
 from abc_harness.execution.runner import DockerRunner, RunnerError
 from abc_harness.interfaces.console import Write, task_summary
@@ -23,10 +25,20 @@ PROMPT = "› "
 HELP = """Type a research request and press Enter (Alt+Enter for a new line). Each request runs as its own task.
   /tasks          list this conversation's tasks
   /paper <pdf>    add a paper for the agent to read in every following task
+  /model [name]   show the model, or switch the following tasks to another one
   /new            start a new conversation; the agent forgets the earlier tasks
   /help           show this help
   /quit           leave (or Ctrl-D)
 Ctrl-C while a task runs stops that task and returns here."""
+
+
+@dataclass
+class ModelControl:
+    """How the chat shows and switches the model. `switch` returns why it refused, or None."""
+
+    current: Callable[[], str]
+    switch: Callable[[str], str | None]
+    available: Callable[[], list[str]]
 
 
 def check_papers(papers: list[Path], parser_check: Callable[[], None] | None = None) -> str | None:
@@ -52,6 +64,7 @@ def run_chat(
     write: Write = print,
     parser_check: Callable[[], None] | None = None,
     show_answers: bool = False,
+    models: ModelControl | None = None,
 ) -> int:
     """Run the conversation until the researcher leaves. Returns the exit status.
 
@@ -79,6 +92,8 @@ def run_chat(
             elif command == "/new":
                 session = new_session()
                 write(f"New conversation {session.session_id}; earlier tasks are forgotten. Papers are cleared too.")
+            elif command == "/model":
+                write(_model_command(models, argument.strip()))
             elif command == "/paper":
                 path = Path(argument.strip()).expanduser()
                 problem = check_papers([path], parser_check) if argument.strip() else "usage: /paper <file.pdf>"
@@ -106,9 +121,26 @@ def run_chat(
 def _task_list(session: ChatSession) -> str:
     if not session.turns:
         return "No task yet in this conversation."
-    rows = [f"{i}. {t.task_id}  {t.status}  {' '.join(t.question.split())[:70]}" for i, t in enumerate(session.turns, 1)]
+    rows = [f"{i}. {t.task_id}  {t.status}  {t.model}  {' '.join(t.question.split())[:60]}"
+            for i, t in enumerate(session.turns, 1)]  # fmt: skip
     papers = f"\nPapers: {', '.join(p.name for p in session.papers)}" if session.papers else ""
     return "\n".join(rows) + papers
+
+
+def _model_command(models: ModelControl | None, name: str) -> str:
+    if models is None:
+        return "! this chat cannot switch models"
+    if not name:
+        try:
+            listed = ", ".join(models.available())
+        except Exception as e:  # noqa: BLE001 - the listing is a convenience; the API may be unreachable
+            listed = f"(could not list: {type(e).__name__})"
+        return f"Model: {models.current()}\nAvailable: {listed}\nSwitch with /model <name>; it applies to the following tasks."
+    problem = models.switch(name)
+    if problem:
+        return f"! {problem}"
+    note = "" if any(name.startswith(p) for p in PRICES_PER_MTOK) else " (no list price known: cost estimates will say unknown)"
+    return f"The following tasks use {name}.{note} Earlier tasks keep the model they ran with."
 
 
 def terminal_reader(history_file: Path) -> Read:

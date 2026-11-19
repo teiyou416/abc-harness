@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -21,6 +22,10 @@ PRICES_PER_MTOK: dict[str, tuple[float, float, float, float]] = {
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_RETRIES = 3
 RETRY_STATUS = {408, 409, 429}  # plus every 5xx, as the SDK's own retry rule
+
+
+class ModelUnavailable(Exception):
+    """The model cannot serve the harness's requests: unknown, or without adaptive thinking or the effort level."""
 
 
 class ModelDeadlineExceeded(Exception):
@@ -119,6 +124,30 @@ class AnthropicModel:
             latency_seconds=round(time.monotonic() - started, 3),
             request_id=getattr(response, "_request_id", None),
         )
+
+    def check(self, name: str) -> None:
+        """Raise ModelUnavailable unless `name` exists and supports what every request uses: adaptive thinking
+        and this client's effort level. Uses the Models API, which costs no tokens."""
+        try:
+            info = self._client.models.retrieve(name).to_dict()
+        except self._anthropic.NotFoundError as e:
+            raise ModelUnavailable(f"no model named {name!r}; /model lists the available ones") from e
+        caps = info.get("capabilities") or {}
+        thinking = ((caps.get("thinking") or {}).get("types") or {}).get("adaptive") or {}
+        if not thinking.get("supported"):
+            raise ModelUnavailable(f"{name} has no adaptive thinking, which the harness's requests use")
+        if not ((caps.get("effort") or {}).get(self.effort) or {}).get("supported"):
+            raise ModelUnavailable(f"{name} does not support effort {self.effort!r}")
+
+    def model_ids(self) -> list[str]:
+        """The models this API key can use, newest first."""
+        return [m.id for m in self._client.models.list(limit=50)]
+
+    def switched(self, name: str) -> AnthropicModel:
+        """The same client (and key) calling another model."""
+        other = copy.copy(self)
+        other.name = name
+        return other
 
     def _send(self, request: dict[str, Any], deadline: float | None) -> Any:
         errors = self._anthropic

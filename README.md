@@ -99,6 +99,9 @@ one's question, plan, results, figures, and final answer, and it can read
 their files. Ctrl-C during a task stops that task and returns to the prompt;
 Ctrl-C or Ctrl-D at an empty prompt leaves. Commands: `/tasks` lists the
 conversation's tasks, `/paper <pdf>` adds a paper for every following task,
+`/model` shows the model and the available ones and `/model <name>` switches
+the following tasks to another (it must support adaptive thinking and the
+chosen `--effort`),
 `/new` starts over, `/help`, and `/quit`. The conversation's log is
 `runs/sessions/<session_id>/session.jsonl`.
 

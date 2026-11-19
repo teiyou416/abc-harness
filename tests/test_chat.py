@@ -11,7 +11,7 @@ from doubles.scripted_model import ScriptedModel, last_tool_result, run_last_pro
 from test_literature import blocksim_plan
 
 from abc_harness.agent.session import ChatSession
-from abc_harness.interfaces.chat import HELP, run_chat
+from abc_harness.interfaces.chat import HELP, ModelControl, run_chat
 
 
 class Inputs:
@@ -127,7 +127,7 @@ def test_slash_commands(tmp_path):
     assert HELP in out and "No task yet in this conversation." in out
     assert "Added paper.pdf; every following task in this conversation reads it." in out
     assert "not a PDF file" in joined and "usage: /paper <file.pdf>" in joined and "unknown command /bogus" in joined
-    assert "1. " in joined and "not_executed  hello" in joined and "Papers: paper.pdf" in joined
+    assert "1. " in joined and "not_executed  scripted-model  hello" in joined and "Papers: paper.pdf" in joined
     assert sessions[1].turns == [] and sessions[1].papers == []
     assert sessions[0].turns[0].artifact_dir.joinpath("papers", "local-paper.pdf").exists()
 
@@ -180,3 +180,31 @@ def test_with_live_output_the_answer_is_printed_once(tmp_path):
     run_chat(lambda: ChatSession(tmp_path / "runs"), turn, Inputs("Which simulators?", "/quit"), out.append)
     assert [line.strip() for line in out].count("BlockSim and SimBlock.") == 1
     assert "  says: Checking." in out  # text before a tool call stays a note
+
+
+def test_model_command_shows_and_switches_the_model_for_following_tasks(tmp_path):
+    current = {"name": "claude-opus-5-5"}
+
+    def switch(name):
+        if name == "claude-opus-4-5-20251101":
+            return "claude-opus-4-5-20251101 has no adaptive thinking, which the harness's requests use"
+        current["name"] = name
+        return None
+
+    models = ModelControl(lambda: current["name"], switch, lambda: ["claude-opus-5-5", "claude-sonnet-5-5"])
+    model = ScriptedModel([text_turn("Hi.")])
+    used = []
+
+    def turn(session, text):
+        model.name = current["name"]
+        used.append(model.name)
+        return session.run_turn(text, model, FakeRunner(), lambda q: "", lambda p: ("approve", ""))
+
+    out = []
+    inputs = Inputs("/model", "/model claude-opus-4-5-20251101", "/model claude-sonnet-5-5", "hello", "/tasks", "/quit")
+    run_chat(lambda: ChatSession(tmp_path / "runs"), turn, inputs, out.append, models=models)
+    joined = "\n".join(out)
+    assert "Model: claude-opus-5-5\nAvailable: claude-opus-5-5, claude-sonnet-5-5" in joined
+    assert "! claude-opus-4-5-20251101 has no adaptive thinking" in joined
+    assert "The following tasks use claude-sonnet-5-5. (no list price known" in joined
+    assert used == ["claude-sonnet-5-5"] and "not_executed  claude-sonnet-5-5  hello" in joined

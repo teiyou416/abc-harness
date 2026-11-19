@@ -66,10 +66,9 @@ call with its time and tokens, the model's thinking (a summary the API
 returns), what it says, each tool it calls and a preview of the result, plan
 decisions, and each simulation run with its metrics. `--quiet` turns this
 off; `trace.jsonl` and `history.md` keep the full text either way. At the
-end, `ask` and `run` print the agent's summary and the run's metrics: each
-configuration's results (mean ± standard deviation, n), the validation check,
-active and waiting time, model calls and tokens, tool calls, and completed
-simulation runs.
+end, `ask` and `run` print the agent's summary and the run statistics: active
+and waiting time, model calls and tokens, tool calls, and completed simulation
+runs. The experiment's results are in `report.md`.
 
 To have the agent read a paper you choose, pass the PDF; repeat `--paper` for
 several. The harness parses each one before the agent starts (1 to 6 minutes

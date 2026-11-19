@@ -87,7 +87,7 @@ checks that every module appears in this table.
 
 | Layer (high to low) | File | What it does |
 |---|---|---|
-| Entry | `cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `trace summary`, `export`; shows plans and questions, prints every trace event live (`Console`), and prints the run's metrics at the end (`task_summary`). Holds no task logic. |
+| Entry | `cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `trace summary`, `export`; shows plans and questions, prints every trace event live (`Console`), and prints the run statistics at the end (`task_summary`). Holds no task logic. |
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
 | Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
 | Agent | `agent/model.py` | The Claude API client; the only code that receives the API key. Bounds each call by the remaining time. |

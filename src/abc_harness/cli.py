@@ -14,9 +14,8 @@ from abc_harness.agent.model import DEFAULT_EFFORT, DEFAULT_MODEL
 from abc_harness.agent.secrets import DEFAULT_ENV_FILE, MissingSecret, Secrets
 from abc_harness.execution.export import ExportError, export_task
 from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LIMIT_SECONDS, Budget
-from abc_harness.execution.report import metric_rows
 from abc_harness.execution.runner import DockerRunner, RunnerError, build_image
-from abc_harness.execution.task import RunRecord, TaskResult, run_task
+from abc_harness.execution.task import TaskResult, run_task
 from abc_harness.execution.trace import summarize_trace
 from abc_harness.literature.pdf import PARSER_IMAGE
 from abc_harness.planning.plan import Plan, PlanError, load_plan
@@ -336,26 +335,14 @@ def describe_event(e: dict[str, Any]) -> list[str]:
 
 
 def task_summary(task_dir: Path) -> list[str]:
-    """The run's metrics for the terminal: results per configuration, then time, model, tool, and run counts."""
+    """Run statistics for the terminal: time, model calls and tokens, tool calls, and simulation runs.
+
+    Experiment results stay in report.md; this is about what the task used, not what it measured.
+    """
     manifest = _read_json(task_dir / "manifest.json") or {}
-    lines = ["", f"── Summary of task {manifest.get('task_id', task_dir.name)} ──",
+    lines = ["", f"── Run statistics of task {manifest.get('task_id', task_dir.name)} ──",
              f"Status: {manifest.get('status')} ({manifest.get('stop_reason')})"]  # fmt: skip
-    plan_data = _read_json(task_dir / "plan.json")
-    records = [RunRecord(**r) for r in _read_json(task_dir / "results.json") or []]
-    if plan_data and records:
-        metrics = Plan(plan_data).metrics
-        rows = [("configuration", metrics)] + metric_rows(records, metrics)
-        widths = [max(len(row[0]) for row in rows)] + [max(len(row[1][i]) for row in rows) for i in range(len(metrics))]
-        lines += ["", "Results (mean ± standard deviation over completed runs; n = runs):"]
-        for name, cells in rows:
-            lines.append("  " + "  ".join([name.ljust(widths[0])] + [c.ljust(w) for c, w in zip(cells, widths[1:], strict=True)]))
-        if manifest.get("test_double"):
-            lines.append("  (these numbers come from a test double, not a real simulator)")
-    validation = _read_json(task_dir / "validation.json")
-    if validation:
-        verdict = "passed" if validation["passed"] else "failed"
-        lines.append(f"Validation check {verdict}: mean {validation['metric']} {validation['mean']} "
-                     f"(required {validation['expected']} ± {validation['tolerance']})")  # fmt: skip
+    records = _read_json(task_dir / "results.json") or []
     trace = summarize_trace(task_dir / "trace.jsonl") if (task_dir / "trace.jsonl").exists() else {}
     tokens = trace.get("tokens", {})
     cached = tokens.get("cache_read_input_tokens", 0)
@@ -365,7 +352,7 @@ def task_summary(task_dir: Path) -> list[str]:
                  f"{manifest.get('waiting_seconds', 0):.1f}s waiting for you")  # fmt: skip
     if manifest.get("pdf_parse_seconds"):
         time_line += f", {manifest['pdf_parse_seconds']:.1f}s parsing PDFs (not counted)"
-    lines += ["", time_line]
+    lines.append(time_line)
     if trace.get("model_calls"):
         lines.append(f"Model: {trace['model_calls']} calls of {(manifest.get('limits') or {}).get('llm_call_limit')}, "
                      f"{trace.get('model_latency_seconds', 0):.1f}s waiting for answers; tokens {tokens_in:,} in "
@@ -374,7 +361,7 @@ def task_summary(task_dir: Path) -> list[str]:
         calls = ", ".join(f"{name} {n}" for name, n in sorted(trace["tool_calls"].items()))
         lines.append(f"Tools: {calls}; {trace.get('tool_errors', 0)} refused or failed")
     if records:
-        done = sum(r.status == "completed" for r in records)
+        done = sum(r.get("status") == "completed" for r in records)
         lines.append(f"Simulation runs: {done} of {len(records)} completed")
     lines.append(f"Report: {task_dir / 'report.md'}")
     return lines

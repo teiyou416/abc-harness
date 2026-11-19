@@ -142,7 +142,7 @@ class Task:
                 self._run_one(spec, record, plan, simulator, pristine)
         except LimitReached as e:
             self.trace.event("limit_reached", limit=e.limit, detail=str(e))
-            self.runner.cleanup(self.task_id)
+            self._cleanup()
             return STOPPED, str(e)
 
         completed = sum(r.status == "completed" for r in self.records)
@@ -190,9 +190,18 @@ class Task:
         if outcome.timed_out and limited_by_budget:
             raise LimitReached("time", f"active runtime ran out during {spec.run_id}")
 
+    def _cleanup(self) -> None:
+        """Remove the task's containers. A failure is recorded, never raised, so the results still get written."""
+        try:
+            self.runner.cleanup(self.task_id)
+        except Exception as e:  # noqa: BLE001 - partial results must survive a broken Docker daemon
+            error = f"{type(e).__name__}: {e}"
+            self.manifest["cleanup_error"] = error
+            self.trace.event("cleanup_failed", error=error)
+
     def close(self, status: str, stop_reason: str) -> TaskResult:
         if self.started_containers:
-            self.runner.cleanup(self.task_id)
+            self._cleanup()
         self.manifest.update(
             status=status,
             stop_reason=stop_reason,

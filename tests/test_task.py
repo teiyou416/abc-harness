@@ -9,9 +9,11 @@ import pytest
 from doubles.fake_runner import FakeClock, FakeRunner
 
 from abc_harness import cli
+from abc_harness import runner as runner_module
 from abc_harness.approval import NotApproved, read_decisions, require_approval
 from abc_harness.limits import Budget
 from abc_harness.plan import load_plan
+from abc_harness.runner import RunnerError
 from abc_harness.task import run_task
 from abc_harness.trace import read_trace
 
@@ -84,6 +86,32 @@ def test_time_limit_stops_the_task_and_reports_missing_runs(write_plan, tmp_path
     events = [e["event"] for e in read_trace(result.artifact_dir / "trace.jsonl")]
     assert "limit_reached" in events
     assert "fast__seed-2 (missing)" in (result.artifact_dir / "report.md").read_text()
+
+
+@pytest.mark.parametrize("limited", [False, True])
+def test_failed_cleanup_still_writes_results_and_report(write_plan, tmp_path, limited):
+    clock = FakeClock()
+    runner = FakeRunner(cleanup_error="Cannot connect to the Docker daemon", clock=clock, seconds_per_run=4)
+    budget = Budget(time_limit_seconds=10 if limited else 1800, clock=clock)
+    result = run_task(write_plan(), runner, approve, runs_root=tmp_path / "runs", budget=budget)
+    d = result.artifact_dir
+    assert result.status == ("stopped_by_limit" if limited else "completed")
+    manifest = json.loads((d / "manifest.json").read_text())
+    assert manifest["status"] == result.status
+    assert "Cannot connect to the Docker daemon" in manifest["cleanup_error"]
+    assert json.loads((d / "results.json").read_text())[0]["status"] == "completed"
+    assert "Container cleanup failed" in (d / "report.md").read_text()
+    events = [e["event"] for e in read_trace(d / "trace.jsonl")]
+    assert "cleanup_failed" in events and events[-1] == "task_finished"
+
+
+def test_docker_cleanup_raises_when_the_daemon_is_unreachable(monkeypatch):
+    def fake_docker(*args, check=True, timeout=None):
+        return subprocess.CompletedProcess(["docker", *args], 1, "", "Cannot connect to the Docker daemon")
+
+    monkeypatch.setattr(runner_module, "_docker", fake_docker)
+    with pytest.raises(RunnerError, match="could not list"):
+        runner_module.DockerRunner().cleanup("some-task")
 
 
 def test_time_spent_waiting_for_the_researcher_does_not_count(write_plan, tmp_path):

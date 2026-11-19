@@ -49,6 +49,8 @@ def write_report(
     ]
     if manifest.get("test_double"):
         lines.append("- **These results come from a test double, not from a real simulator.**")
+    if manifest.get("cleanup_error"):
+        lines.append(f"- **Container cleanup failed; check `docker ps` for leftovers:** {manifest['cleanup_error']}")
     if manifest.get("question"):
         lines.append(f"- Researcher's request: {manifest['question']}")
     lines += ["", f"Question: {plan.data['question']}", ""]

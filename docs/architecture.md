@@ -175,7 +175,9 @@ applies them.
   directory.
 - Containers run with `--network none`, CPU and memory limits, and a task label.
   On a timeout or limit, the harness stops and removes every container with that
-  label.
+  label. If removal fails (for example, the Docker daemon is unreachable), the
+  harness records the error in the trace, the manifest, and the report, and
+  still writes the results and the final status.
 - Nothing is installed at runtime. A new dependency means a new image, which
   requires a new plan version and fresh approval.
 

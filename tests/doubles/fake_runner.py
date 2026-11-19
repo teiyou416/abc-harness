@@ -12,7 +12,7 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from abc_harness.runner import RunOutcome
+from abc_harness.runner import RunnerError, RunOutcome
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -44,6 +44,7 @@ class FakeRunner:
     images: list[str] = field(default_factory=list)
     exports: list[str] = field(default_factory=list)
     cleanups: list[str] = field(default_factory=list)
+    cleanup_error: str | None = None  # set to make cleanup fail, as with an unreachable Docker daemon
 
     def image_info(self, image: str) -> dict[str, str]:
         return {"image": f"fake:{image}", "image_id": "sha256:fake"}
@@ -75,6 +76,8 @@ class FakeRunner:
 
     def cleanup(self, task_id: str) -> None:
         self.cleanups.append(task_id)
+        if self.cleanup_error:
+            raise RunnerError(self.cleanup_error)
 
     @staticmethod
     def _write_simblock(workdir: Path, behaviour: str) -> None:

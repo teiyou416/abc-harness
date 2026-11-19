@@ -40,6 +40,7 @@ class Turn:
     status: str
     stop_reason: str
     summary: str | None
+    model: str = ""
 
 
 class ChatSession:
@@ -79,12 +80,13 @@ class ChatSession:
                 preface=self.preface(), previous_tasks={t.task_id: t.artifact_dir for t in self.turns},
                 session_id=self.session_id,
             )  # fmt: skip
-            turn = Turn(question, result.task_id, result.artifact_dir, result.status, result.stop_reason, result.summary)
+            turn = Turn(question, result.task_id, result.artifact_dir, result.status, result.stop_reason, result.summary,
+                        model.name)  # fmt: skip
         except KeyboardInterrupt:
             if started:
                 manifest = _read_json(started[0] / "manifest.json") or {}
                 self._record(Turn(question, started[0].name, started[0], manifest.get("status", "failed"),
-                                  manifest.get("stop_reason", "interrupted by researcher"), None))  # fmt: skip
+                                  manifest.get("stop_reason", "interrupted by researcher"), None, model.name))  # fmt: skip
             raise
         self._record(turn)
         return turn
@@ -93,7 +95,7 @@ class ChatSession:
         self.turns.append(turn)
         line = {"ts": datetime.now().astimezone().isoformat(timespec="seconds"), "turn": len(self.turns),
                 "question": turn.question, "task_id": turn.task_id, "task_dir": str(turn.artifact_dir),
-                "status": turn.status, "stop_reason": turn.stop_reason}  # fmt: skip
+                "status": turn.status, "stop_reason": turn.stop_reason, "model": turn.model}  # fmt: skip
         with (self.dir / "session.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
 

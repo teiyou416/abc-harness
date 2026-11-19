@@ -9,7 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from abc_harness.agent.model import DEFAULT_EFFORT, DEFAULT_MODEL
+from abc_harness.agent.model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelUnavailable
 from abc_harness.agent.secrets import DEFAULT_ENV_FILE, MissingSecret, Secrets
 from abc_harness.execution.export import ExportError, export_task
 from abc_harness.execution.figures import PLOT_IMAGE
@@ -17,7 +17,7 @@ from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LI
 from abc_harness.execution.runner import DockerRunner, build_image
 from abc_harness.execution.task import TaskResult, run_task
 from abc_harness.execution.trace import summarize_trace
-from abc_harness.interfaces.chat import check_papers, run_chat, terminal_reader
+from abc_harness.interfaces.chat import ModelControl, check_papers, run_chat, terminal_reader
 from abc_harness.interfaces.console import Console, task_summary
 from abc_harness.literature.pdf import PARSER_IMAGE
 from abc_harness.planning.plan import Plan, PlanError, load_plan
@@ -131,10 +131,19 @@ def _chat(args: argparse.Namespace, model: Any, literature: Any, redact: Callabl
     read = terminal_reader(args.runs_dir / ".chat_history")
     runner = DockerRunner()
     console = None if args.quiet else Console()
+    current = {"model": model}
+
+    def switch(name: str) -> str | None:
+        try:
+            current["model"].check(name)
+        except ModelUnavailable as e:
+            return str(e)
+        current["model"] = current["model"].switched(name)
+        return None
 
     def turn(session: ChatSession, text: str) -> Any:
         return session.run_turn(
-            text, model, runner,
+            text, current["model"], runner,
             lambda question: prompt_answer(question, read=read),
             lambda plan: prompt_decision(plan, read=read, allow_revise=True),
             budget=lambda: Budget(time_limit_seconds=args.time_limit_seconds, llm_call_limit=args.llm_call_limit),
@@ -142,7 +151,9 @@ def _chat(args: argparse.Namespace, model: Any, literature: Any, redact: Callabl
         )  # fmt: skip
 
     print(f"ABC Harness chat with {model.name}.")
-    return run_chat(lambda: ChatSession(args.runs_dir, list(args.paper)), turn, read, show_answers=args.quiet)
+    models = ModelControl(lambda: current["model"].name, switch, current["model"].model_ids)
+    return run_chat(lambda: ChatSession(args.runs_dir, list(args.paper)), turn, read, show_answers=args.quiet,
+                    models=models)  # fmt: skip
 
 
 def _announce(artifact_dir: Path) -> None:

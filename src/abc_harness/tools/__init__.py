@@ -17,12 +17,15 @@ from abc_harness.tools import (
     read_paper,
     run_plan,
     search_papers,
+    view_figure,
 )
-from abc_harness.tools.base import EndTask, ToolContext, ToolError, ToolRun
+from abc_harness.tools.base import EndTask, ToolContext, ToolError, ToolOutput, ToolRun
 
-_MODULES = (describe_simulator, read_file, search_papers, read_paper, ask_researcher, propose_plan, run_plan)
+_MODULES = (
+    describe_simulator, read_file, search_papers, read_paper, view_figure, ask_researcher, propose_plan, run_plan,
+)  # fmt: skip
 
 TOOLS: list[dict[str, Any]] = [m.SPEC for m in _MODULES]
 HANDLERS: dict[str, ToolRun] = {m.SPEC["name"]: m.run for m in _MODULES}
 
-__all__ = ["HANDLERS", "TOOLS", "EndTask", "ToolContext", "ToolError"]
+__all__ = ["HANDLERS", "TOOLS", "EndTask", "ToolContext", "ToolError", "ToolOutput"]

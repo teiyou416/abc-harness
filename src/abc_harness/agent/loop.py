@@ -8,6 +8,7 @@ context compression, and the dispatch from tool name to tool.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 from collections.abc import Callable
 from importlib import resources
@@ -28,8 +29,9 @@ from abc_harness.agent.model import ModelClient, ModelDeadlineExceeded, ModelTur
 from abc_harness.execution.limits import Budget, LimitReached
 from abc_harness.execution.runner import Runner
 from abc_harness.execution.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
+from abc_harness.literature.figures import media_type
 from abc_harness.literature.library import Library, Literature
-from abc_harness.tools import HANDLERS, TOOLS, EndTask, ToolContext, ToolError
+from abc_harness.tools import HANDLERS, TOOLS, EndTask, ToolContext, ToolError, ToolOutput
 from abc_harness.tools.base import AskFn
 
 PROMPT_FILES = ("SOUL.md", "rules.md", "compact.md")
@@ -141,14 +143,24 @@ class Agent:
         try:
             if handler is None:
                 raise ToolError(f"unknown tool {name!r}")
-            full, is_error = handler(self.tools, args), False
+            output, is_error = handler(self.tools, args), False
         except ToolError as e:
-            full, is_error = str(e), True
-        self.history.tool_result(tool_use["id"], name, full, is_error)
+            output, is_error = str(e), True
+        images = output.images if isinstance(output, ToolOutput) else []
+        full = output.text if isinstance(output, ToolOutput) else output
+        record = full + "".join(f"\n[image shown to the model: task/{rel}]" for rel, _ in images)
+        self.history.tool_result(tool_use["id"], name, record, is_error)
         where = f"task/history.md (tool result id {tool_use['id']})"
-        content = cap_text(full, self.limits.tool_result_max_tokens, where)
-        self.task.trace.event("tool_call", tool=name, input=args, is_error=is_error, result=full[:2000],
-                              result_chars=len(full), cut=content != full)  # fmt: skip
+        text = cap_text(full, self.limits.tool_result_max_tokens, where)
+        self.task.trace.event("tool_call", tool=name, input=args, is_error=is_error, result=record[:2000],
+                              result_chars=len(full), cut=text != full, images=[rel for rel, _ in images])  # fmt: skip
+        content: str | list[dict[str, Any]] = text
+        if images:
+            content = [{"type": "text", "text": text}] + [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type(data),
+                                             "data": base64.b64encode(data).decode("ascii")}}
+                for _, data in images
+            ]  # fmt: skip
         return {"type": "tool_result", "tool_use_id": tool_use["id"], "content": content, "is_error": is_error}
 
     def _compress(self, messages: list[dict[str, Any]], estimated: int) -> list[dict[str, Any]]:
@@ -191,11 +203,14 @@ def run_agent_task(
     redact: Callable[[str], str] | None = None,
     limits: ContextLimits | None = None,
     literature: Literature | None = None,
+    on_start: Callable[[Path], None] | None = None,
 ) -> TaskResult:
     limits = limits or ContextLimits()
     task = Task(runner, runs_root, budget, redact=redact, mode="agent", question=question, model=model.name,
                 prompts=prompt_hashes(), context_limits=limits.__dict__,
                 literature_services=literature.services if literature else [])  # fmt: skip
+    if on_start:
+        on_start(task.artifact_dir)
     agent = Agent(task, model, ask, review, limits)
     if literature is not None:
         agent.tools.library = Library(task.artifact_dir, literature)

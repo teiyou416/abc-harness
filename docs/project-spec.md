@@ -4,7 +4,7 @@ ABC Harness turns a researcher's question into a reproducible blockchain simulat
 
 The first release supports idea-driven experiments with [SimBlock](https://github.com/dsg-titech/simblock) and the Bitcoin model of [BlockSim](https://github.com/maher243/BlockSim). [architecture.md](architecture.md) describes the system as built and which parts of the original design sketch the first release implements. [AGENTS.md](../AGENTS.md) defines the rules for changing this repository, and the [development plan](development-plan.md) defines the milestone order.
 
-Terms such as task, plan version, and simulation run are defined in [AGENTS.md](../AGENTS.md#definitions).
+Terms such as task, plan version, simulation run, and citation are defined in the [glossary](glossary.md).
 
 ## What a researcher can do
 
@@ -49,9 +49,9 @@ Simulators run in a prebuilt Docker image with pinned simulator revisions, no ne
 
 - The first search round covers the venues FC, AFT, and IEEE ICBC. It uses Semantic Scholar when the researcher configures its API key in `.env`, and OpenAlex otherwise. When those venues give nothing relevant, the agent broadens the search to all venues and preprints (OpenAlex, plus Semantic Scholar with a key). More venues are added to the first round over time.
 - DBLP is not used: it answers automated requests with a bot check (see [gotchas](context/gotchas.md)). IEEE Xplore may be added when the researcher configures an API key.
-- The agent can read the full text of papers that have an arXiv version, through arXiv's HTML rendering. Other papers are available by abstract only.
-- A plan cites a paper with the parameter, assumption, or metric it supports and a quote copied from the paper. The harness accepts a citation only if the paper came from a search in the same task and the quote appears verbatim in its abstract or saved full text. Citations are part of the plan, so the approval covers them.
-- The artifact directory keeps every search and every paper found in `sources.json`, and each full text read in `papers/`. The report lists each citation with the place the harness found its quote.
+- The agent can read the full text of papers that have an arXiv version, through arXiv's HTML rendering, with tables as text. It can view their figures as images; figures in SVG and papers without an arXiv version are not viewable. Other papers are available by abstract only.
+- A plan cites a paper with the parameter, assumption, or metric it supports and either a quote copied from the paper or a figure reading. The harness accepts a citation only if the paper came from a search in the same task, and its quote appears verbatim in the abstract or saved full text, or its figure reading names a figure the agent viewed in the task and states an uncertainty. Citations are part of the plan, so the approval covers them, and the review marks figure readings as approximate.
+- The artifact directory keeps every search, found paper, figure list, and viewed figure in `literature.json`, and each full text and viewed figure image in `papers/`. The report lists each citation with the place the harness found its quote, or, for a figure reading, the image it was read from and a note that it is approximate and not checked against text.
 
 ## Run and task status
 

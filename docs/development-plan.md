@@ -108,7 +108,7 @@ All four pass in `tests/test_context.py`. `make test-live` also forces one real 
 
 - `literature/`: OpenAlex search (no key) and Semantic Scholar search (optional key in `.env`); the first round covers FC, AFT, and ICBC, and a broadened search covers all venues and preprints. arXiv full text comes from arXiv's HTML rendering, with ar5iv as the fallback. Requests pause per host and retry within the task's remaining time.
 - `tools/search_papers.py` and `tools/read_paper.py`. Full texts are saved as `papers/<arxiv_id>.txt`, and the agent pages through them with `read_file`.
-- Plans carry `citations` (paper, what it supports, a verbatim quote). The harness refuses a citation unless the paper came from a search in the same task and the quote appears in its abstract or saved full text. The report lists each citation with the place its quote was found; `sources.json` keeps every search and paper.
+- Plans carry `citations` (paper, what it supports, a verbatim quote). The harness refuses a citation unless the paper came from a search in the same task and the quote appears in its abstract or saved full text. The report lists each citation with the place its quote was found; `sources.json` (renamed `literature.json` in M4.1) keeps every search and paper.
 - DBLP is dropped: it answers scripts with a bot check. The arXiv search API answered 429 throughout. Both are in `docs/context/gotchas.md`.
 
 **Test doubles:** recorded OpenAlex and arXiv responses in `tests/fixtures/literature/`. The Semantic Scholar response is hand-written from its documented format, because the API refused requests without a key.
@@ -118,6 +118,22 @@ All four pass in `tests/test_context.py`. `make test-live` also forces one real 
 - Literature retrieval, with the real model and services in `make test-live`: asked to use the published mean Bitcoin block propagation delay, the agent searched, broadened, read the full text of arXiv 1505.05343, and set `Bdelay` to 12.6 s with the quote "the mean was 12.6 seconds"; it also cited Decker and Wattenhofer (P2P 2013) for propagation delay causing forks. The harness found every quote.
 
 **Not verified yet.** The Semantic Scholar path, including its venue names for FC, AFT, and ICBC, has run only against the hand-written fixture. Check it once a key is in `.env`.
+
+## M4.1: Figures (done 2026-11-19)
+
+**What the researcher can do.** See a plan parameter justified by a value the agent read off a figure, clearly marked as approximate, with the figure image to check it against.
+
+**Delivered**
+
+- `read_paper` lists each figure with its caption; `tools/view_figure.py` shows one figure to the model as an image and saves it under `papers/<arxiv_id>/figures/`. SVG figures are skipped, because the API accepts PNG, JPEG, GIF, and WebP only.
+- Tables in the saved full text are Markdown rows, so their numbers can be quoted and checked exactly; display equations stay plain lines.
+- A citation is either a quote or a figure reading (`figure`, `reading` with `±`). The harness accepts a figure reading only for a figure viewed in the same task. The review and the report mark it as approximate, and the report links the image.
+- Images are estimated by pixel size (about width × height / 750 tokens) instead of base64 length, and a new context window carries no images, only the list of viewed figures.
+- `sources.json` is now `literature.json` and the report section is "Citations", following `docs/glossary.md`. The CLI prints the task directory when a task starts.
+
+**Acceptance (passed)**
+
+- With the real model in `make test-live`, the agent found the paper, viewed Figure 1 of arXiv 2007.05614, and read 0.954 ± 0.002 for a point at about 0.954. This is one sample; rerun it when the model or prompt changes.
 
 ## M5: Agent-written code in the task workspace
 

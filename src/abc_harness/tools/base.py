@@ -40,5 +40,14 @@ class ToolContext:
     library: Library | None = None  # the papers this task has found; None when literature search is off
 
 
+@dataclass
+class ToolOutput:
+    """A tool result with images. `text` goes to the model, the history, and the trace; each image is sent
+    to the model and recorded in the history and trace by its saved path only."""
+
+    text: str
+    images: list[tuple[str, bytes]] = field(default_factory=list)  # (path in the task, image bytes)
+
+
 class ToolRun(Protocol):
-    def __call__(self, ctx: ToolContext, args: dict[str, Any]) -> str: ...
+    def __call__(self, ctx: ToolContext, args: dict[str, Any]) -> str | ToolOutput: ...

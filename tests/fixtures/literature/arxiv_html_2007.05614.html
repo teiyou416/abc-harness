@@ -560,5 +560,298 @@ In addition, the chain is called positive recurrent and/or aperiodic.</span></p>
 </section>
 </section>
 
-<!-- abc-harness test fixture: trimmed here; the recorded page continues with sections 4 to 8. -->
+<!-- abc-harness test fixture: sections 4 and 5 removed here. -->
+<section id="S6" class="ltx_section">
+<h2 class="ltx_title ltx_title_section"><span class="ltx_tag ltx_tag_section">6. </span>Performance</h2>
+
+<div id="S6.p1" class="ltx_para">
+<p id="S6.p1.1" class="ltx_p">Having proven the theoretical approximation error, we proceed to evaluate the practical performance of PTO by comparing it against OSM.
+In order to do so we evaluate the running time of both methods for Bitcoin by using existing code of OSM for Bitcoin <cite class="ltx_cite ltx_citemacro_citep">(<a href="#bib.bib26" title="" class="ltx_ref">Zhang, 2017</a>)</cite>.
+We begin with an overview of the MDP model for Bitcoin (§<a href="#S6.SS1" title="6.1. Bitcoin Model ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">6.1</span></a>).
+We validate the results of our implementation (§<a href="#S6.SS2" title="6.2. Optimal Strategies ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">6.2</span></a>), slightly improving the known threshold for Bitcoin.
+We investigate the effects of different hyperparameters on the optimal revenue obtained by PTO (§<a href="#S6.SS3" title="6.3. Hyperparameters ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">6.3</span></a>).
+Finally, we compare the running times of PTO and OSM and show PTO to be about 10 times faster (§<a href="#S6.SS4" title="6.4. Running Time ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">6.4</span></a>).</p>
+</div>
+<section id="S6.SS1" class="ltx_subsection">
+<h3 class="ltx_title ltx_title_subsection"><span class="ltx_tag ltx_tag_subsection">6.1. </span>Bitcoin Model</h3>
+
+<div id="S6.SS1.p1" class="ltx_para">
+<p id="S6.SS1.p1.1" class="ltx_p">The ARR-MDP for bitcoin is similar to the model of Sapirshtein et al. <cite class="ltx_cite ltx_citemacro_citep">(<a href="#bib.bib20" title="" class="ltx_ref">Sapirshtein et al., 2016</a>)</cite>. We first describe 3 important parameters for the model, then describe the action space, the state space and the transitions.</p>
+</div>
+<div id="S6.SS1.p2" class="ltx_para">
+<p id="S6.SS1.p2.1" class="ltx_p">As in a general blockchain protocol, there is a rational miner who wants to maximize her revenue.
+The rest of the network is represented by honest miners who follow the prescribed protocol.</p>
+</div>
+<div id="S6.SS1.p3" class="ltx_para">
+<p id="S6.SS1.p3.1" class="ltx_p">We assume the objective function is the ratio between the number of blocks of the rational miner and the total number of blocks of the entire network.
+Because Bitcoin is a PoW blockchain, the <em id="S6.SS1.p3.1.1" class="ltx_emph ltx_font_italic">relative mining power</em> determines the probability of the miner to mine a new block.
+We denote this parameter <math id="S6.SS1.p3.m1" class="ltx_Math" alttext="\alpha\in[0,\frac{1}{2})" display="inline" intent=":literal"><semantics><mrow><mi>α</mi><mo>∈</mo><mrow><mo stretchy="false">[</mo><mn>0</mn><mo>,</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo stretchy="false">)</mo></mrow></mrow><annotation encoding="application/x-tex">\alpha\in[0,\frac{1}{2})</annotation></semantics></math>.</p>
+</div>
+<div id="S6.SS1.p4" class="ltx_para">
+<p id="S6.SS1.p4.1" class="ltx_p">The Bitcoin protocol specifies that in the case of a tie in the longest chain rule, the tie is decided in favor of the first chain the miner saw.
+In case of a tie between the rational miner’s chain and some other chain, we assume the rational miner’s block is received first by a fraction <math id="S6.SS1.p4.m1" class="ltx_Math" alttext="\gamma\in[0,1]" display="inline" intent=":literal"><semantics><mrow><mi>γ</mi><mo>∈</mo><mrow><mo stretchy="false">[</mo><mrow><mn>0</mn><mo>,</mo><mn>1</mn></mrow><mo stretchy="false">]</mo></mrow></mrow><annotation encoding="application/x-tex">\gamma\in[0,1]</annotation></semantics></math> of the network.
+This is called the <em id="S6.SS1.p4.1.1" class="ltx_emph ltx_font_italic">rushing level</em> of the miner and determines what fraction of the honest miners will keep mining on top of the rational miner’s chain.
+This determines the probability that the next block will be mined on top of the miner’s chain and then her chain will be chosen by all.</p>
+</div>
+<div id="S6.SS1.p5" class="ltx_para">
+<p id="S6.SS1.p5.1" class="ltx_p">We assume that the miner mines on a single secret chain and that the miner will not choose to challenge blocks before the <em id="S6.SS1.p5.1.1" class="ltx_emph ltx_font_italic">last fork</em> – the blocks following the last block common to both the miner’s chain and the current public chain, as in <cite class="ltx_cite ltx_citemacro_citep">(<a href="#bib.bib20" title="" class="ltx_ref">Sapirshtein et al., 2016</a>)</cite>.
+We also assume forks between honest miners never occur as in <cite class="ltx_cite ltx_citemacro_citep">(<a href="#bib.bib20" title="" class="ltx_ref">Sapirshtein et al., 2016</a>; <a href="#bib.bib8" title="" class="ltx_ref">Eyal and Sirer, 2013</a>; <a href="#bib.bib17" title="" class="ltx_ref">Nayak
+et al., 2016</a>)</cite>.</p>
+</div>
+<div id="S6.SS1.p6" class="ltx_para">
+<p id="S6.SS1.p6.1" class="ltx_p">Denote by <math id="S6.SS1.p6.m1" class="ltx_Math" alttext="a" display="inline" intent=":literal"><semantics><mi>a</mi><annotation encoding="application/x-tex">a</annotation></semantics></math> the length of the miner’s secret chain.
+Denote by <math id="S6.SS1.p6.m2" class="ltx_Math" alttext="h" display="inline" intent=":literal"><semantics><mi>h</mi><annotation encoding="application/x-tex">h</annotation></semantics></math> the number of blocks in the public chain since the last fork.
+In order to obtain a finite state space MDP, we cannot consider all possible strategies of the rational miner.
+We assume there is a maximum possible length for both <math id="S6.SS1.p6.m3" class="ltx_Math" alttext="a" display="inline" intent=":literal"><semantics><mi>a</mi><annotation encoding="application/x-tex">a</annotation></semantics></math> and <math id="S6.SS1.p6.m4" class="ltx_Math" alttext="h" display="inline" intent=":literal"><semantics><mi>h</mi><annotation encoding="application/x-tex">h</annotation></semantics></math> as in <cite class="ltx_cite ltx_citemacro_citep">(<a href="#bib.bib20" title="" class="ltx_ref">Sapirshtein et al., 2016</a>)</cite>.
+We call this bound the <em id="S6.SS1.p6.1.1" class="ltx_emph ltx_font_italic">maximum fork length</em>.</p>
+</div>
+<section id="S6.SS1.SSS1" class="ltx_subsubsection">
+<h4 class="ltx_title ltx_title_subsubsection"><span class="ltx_tag ltx_tag_subsubsection">6.1.1. </span>Action Space</h4>
+
+<div id="S6.SS1.SSS1.p1" class="ltx_para">
+<p id="S6.SS1.SSS1.p1.1" class="ltx_p">We now describe the possible actions the miner can choose.</p>
+<ol id="S6.I1" class="ltx_enumerate">
+<li id="S6.I1.i1" class="ltx_item" style="list-style-type:none;"><span class="ltx_tag ltx_tag_item">(1)</span> 
+<div id="S6.I1.i1.p1" class="ltx_para">
+<p id="S6.I1.i1.p1.1" class="ltx_p"><span id="S6.I1.i1.p1.1.1" class="ltx_text ltx_font_sansserif">Adopt</span> – The miner chooses to abandon her private chain and accept the current public chain.</p>
+</div></li>
+<li id="S6.I1.i2" class="ltx_item" style="list-style-type:none;"><span class="ltx_tag ltx_tag_item">(2)</span> 
+<div id="S6.I1.i2.p1" class="ltx_para">
+<p id="S6.I1.i2.p1.1" class="ltx_p"><span id="S6.I1.i2.p1.1.1" class="ltx_text ltx_font_sansserif">Override</span> – The miner reveals the first <math id="S6.I1.i2.p1.m1" class="ltx_Math" alttext="h+1" display="inline" intent=":literal"><semantics><mrow><mi>h</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">h+1</annotation></semantics></math> blocks from her private chain and overtakes the public chain.
+This action is possible only when <math id="S6.I1.i2.p1.m2" class="ltx_Math" alttext="a&gt;h" display="inline" intent=":literal"><semantics><mrow><mi>a</mi><mo>&gt;</mo><mi>h</mi></mrow><annotation encoding="application/x-tex">a&gt;h</annotation></semantics></math>.</p>
+</div></li>
+<li id="S6.I1.i3" class="ltx_item" style="list-style-type:none;"><span class="ltx_tag ltx_tag_item">(3)</span> 
+<div id="S6.I1.i3.p1" class="ltx_para">
+<p id="S6.I1.i3.p1.1" class="ltx_p"><span id="S6.I1.i3.p1.1.1" class="ltx_text ltx_font_sansserif">Match</span> – The miner reveals the first <math id="S6.I1.i3.p1.m1" class="ltx_Math" alttext="h" display="inline" intent=":literal"><semantics><mi>h</mi><annotation encoding="application/x-tex">h</annotation></semantics></math> blocks of her private chain and matches the public chain.
+This action is possible only when <math id="S6.I1.i3.p1.m2" class="ltx_Math" alttext="a=h" display="inline" intent=":literal"><semantics><mrow><mi>a</mi><mo>=</mo><mi>h</mi></mrow><annotation encoding="application/x-tex">a=h</annotation></semantics></math> and when the last block mined was by someone other than the miner.
+This symbolizes the case where the miner hears about a newly mined block and then quickly reveals a block of the same height mined in advance.
+This triggers a split in the network determined by the miner’s rushing level.
+Each honest miner chooses to mine on the first chain she sees.</p>
+</div></li>
+<li id="S6.I1.i4" class="ltx_item" style="list-style-type:none;"><span class="ltx_tag ltx_tag_item">(4)</span> 
+<div id="S6.I1.i4.p1" class="ltx_para">
+<p id="S6.I1.i4.p1.1" class="ltx_p"><span id="S6.I1.i4.p1.1.1" class="ltx_text ltx_font_sansserif">Wait</span> – The miner does not reveal blocks and keeps mining on her private chain.</p>
+</div></li>
+</ol>
+</div>
+</section>
+<section id="S6.SS1.SSS2" class="ltx_subsubsection">
+<h4 class="ltx_title ltx_title_subsubsection"><span class="ltx_tag ltx_tag_subsubsection">6.1.2. </span>State Space</h4>
+
+<div id="S6.SS1.SSS2.p1" class="ltx_para">
+<p id="S6.SS1.SSS2.p1.1" class="ltx_p">The <span id="S6.SS1.SSS2.p1.1.1" class="ltx_text ltx_font_sansserif">match</span> action gives 3 cases for the current state, which need to be differentiated.</p>
+</div>
+<div id="S6.SS1.SSS2.p2" class="ltx_para">
+<ol id="S6.I2" class="ltx_enumerate">
+<li id="S6.I2.i1" class="ltx_item" style="list-style-type:none;"><span class="ltx_tag ltx_tag_item">(1)</span> 
+<div id="S6.I2.i1.p1" class="ltx_para">
+<p id="S6.I2.i1.p1.1" class="ltx_p"><span id="S6.I2.i1.p1.1.1" class="ltx_text ltx_font_sansserif">Irrelevant</span> – The last block was mined by the rational miner. <span id="S6.I2.i1.p1.1.2" class="ltx_text ltx_font_sansserif">Match</span> cannot be performed because the miner just mined a block so she does not have a block prepared in advance.</p>
+</div></li>
+<li id="S6.I2.i2" class="ltx_item" style="list-style-type:none;"><span class="ltx_tag ltx_tag_item">(2)</span> 
+<div id="S6.I2.i2.p1" class="ltx_para">
+<p id="S6.I2.i2.p1.1" class="ltx_p"><span id="S6.I2.i2.p1.1.1" class="ltx_text ltx_font_sansserif">Relevant</span> – The last block was mined by an honest miner. <span id="S6.I2.i2.p1.1.2" class="ltx_text ltx_font_sansserif">Match</span> can be performed if <math id="S6.I2.i2.p1.m1" class="ltx_Math" alttext="a\geq h" display="inline" intent=":literal"><semantics><mrow><mi>a</mi><mo>≥</mo><mi>h</mi></mrow><annotation encoding="application/x-tex">a\geq h</annotation></semantics></math>.</p>
+</div></li>
+<li id="S6.I2.i3" class="ltx_item" style="list-style-type:none;"><span class="ltx_tag ltx_tag_item">(3)</span> 
+<div id="S6.I2.i3.p1" class="ltx_para">
+<p id="S6.I2.i3.p1.1" class="ltx_p"><span id="S6.I2.i3.p1.1.1" class="ltx_text ltx_font_sansserif">Active</span> – <span id="S6.I2.i3.p1.1.2" class="ltx_text ltx_font_sansserif">Match</span> was already performed and the network is split so <span id="S6.I2.i3.p1.1.3" class="ltx_text ltx_font_sansserif">match</span> cannot be performed again.</p>
+</div></li>
+</ol>
+<p id="S6.SS1.SSS2.p2.1" class="ltx_p">Denote by <span id="S6.SS1.SSS2.p2.1.1" class="ltx_text ltx_markedasmath ltx_font_italic">fork</span> the state of the system from this list.
+Then, the states in the MDP are represented by a vector with 3 elements: <math id="S6.SS1.SSS2.p2.m2" class="ltx_Math" alttext="(a,h,\textit{fork})" display="inline" intent=":literal"><semantics><mrow><mo stretchy="false">(</mo><mi>a</mi><mo>,</mo><mi>h</mi><mo>,</mo><mtext class="ltx_mathvariant_italic">fork</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(a,h,\textit{fork})</annotation></semantics></math>.</p>
+</div>
+</section>
+<section id="S6.SS1.SSS3" class="ltx_subsubsection">
+<h4 class="ltx_title ltx_title_subsubsection"><span class="ltx_tag ltx_tag_subsubsection">6.1.3. </span>Transitions</h4>
+
+<div id="S6.SS1.SSS3.p1" class="ltx_para">
+<p id="S6.SS1.SSS3.p1.1" class="ltx_p">If the miner chooses to <span id="S6.SS1.SSS3.p1.1.1" class="ltx_text ltx_font_sansserif">wait</span> when <span id="S6.SS1.SSS3.p1.1.2" class="ltx_text ltx_font_italic">fork</span> is not <span id="S6.SS1.SSS3.p1.1.3" class="ltx_text ltx_font_sansserif">active</span>, either <math id="S6.SS1.SSS3.p1.m1" class="ltx_Math" alttext="a" display="inline" intent=":literal"><semantics><mi>a</mi><annotation encoding="application/x-tex">a</annotation></semantics></math> increases by 1 w.p <math id="S6.SS1.SSS3.p1.m2" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math> or <math id="S6.SS1.SSS3.p1.m3" class="ltx_Math" alttext="h" display="inline" intent=":literal"><semantics><mi>h</mi><annotation encoding="application/x-tex">h</annotation></semantics></math> increases by 1 w.p <math id="S6.SS1.SSS3.p1.m4" class="ltx_Math" alttext="1-\alpha" display="inline" intent=":literal"><semantics><mrow><mn>1</mn><mo>−</mo><mi>α</mi></mrow><annotation encoding="application/x-tex">1-\alpha</annotation></semantics></math> and <span id="S6.SS1.SSS3.p1.1.4" class="ltx_text ltx_font_italic">fork</span> is updated to <span id="S6.SS1.SSS3.p1.1.5" class="ltx_text ltx_font_sansserif">irrelevant</span> or <span id="S6.SS1.SSS3.p1.1.6" class="ltx_text ltx_font_sansserif">relevant</span> respectively.</p>
+</div>
+<div id="S6.SS1.SSS3.p2" class="ltx_para">
+<p id="S6.SS1.SSS3.p2.1" class="ltx_p">If the miner chooses to <span id="S6.SS1.SSS3.p2.1.1" class="ltx_text ltx_font_sansserif">adopt</span>, both <math id="S6.SS1.SSS3.p2.m1" class="ltx_Math" alttext="a" display="inline" intent=":literal"><semantics><mi>a</mi><annotation encoding="application/x-tex">a</annotation></semantics></math> and <math id="S6.SS1.SSS3.p2.m2" class="ltx_Math" alttext="h" display="inline" intent=":literal"><semantics><mi>h</mi><annotation encoding="application/x-tex">h</annotation></semantics></math> become 0 and <math id="S6.SS1.SSS3.p2.m3" class="ltx_Math" alttext="D_{t}=h" display="inline" intent=":literal"><semantics><mrow><msub><mi>D</mi><mi>t</mi></msub><mo>=</mo><mi>h</mi></mrow><annotation encoding="application/x-tex">D_{t}=h</annotation></semantics></math> as the miner chooses to accept <math id="S6.SS1.SSS3.p2.m4" class="ltx_Math" alttext="h" display="inline" intent=":literal"><semantics><mi>h</mi><annotation encoding="application/x-tex">h</annotation></semantics></math> blocks.
+Otherwise, if the miner chooses to <span id="S6.SS1.SSS3.p2.1.2" class="ltx_text ltx_font_sansserif">override</span>, <math id="S6.SS1.SSS3.p2.m5" class="ltx_Math" alttext="a\leftarrow a-h-1" display="inline" intent=":literal"><semantics><mrow><mi>a</mi><mo stretchy="false">←</mo><mrow><mi>a</mi><mo>−</mo><mi>h</mi><mo>−</mo><mn>1</mn></mrow></mrow><annotation encoding="application/x-tex">a\leftarrow a-h-1</annotation></semantics></math>, <math id="S6.SS1.SSS3.p2.m6" class="ltx_Math" alttext="h\leftarrow 0" display="inline" intent=":literal"><semantics><mrow><mi>h</mi><mo stretchy="false">←</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">h\leftarrow 0</annotation></semantics></math> and <math id="S6.SS1.SSS3.p2.m7" class="ltx_Math" alttext="R_{t}=D_{t}=h+1" display="inline" intent=":literal"><semantics><mrow><msub><mi>R</mi><mi>t</mi></msub><mo>=</mo><msub><mi>D</mi><mi>t</mi></msub><mo>=</mo><mrow><mi>h</mi><mo>+</mo><mn>1</mn></mrow></mrow><annotation encoding="application/x-tex">R_{t}=D_{t}=h+1</annotation></semantics></math> as the miner appends <math id="S6.SS1.SSS3.p2.m8" class="ltx_Math" alttext="h+1" display="inline" intent=":literal"><semantics><mrow><mi>h</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">h+1</annotation></semantics></math> blocks to the blockchain.</p>
+</div>
+<div id="S6.SS1.SSS3.p3" class="ltx_para">
+<p id="S6.SS1.SSS3.p3.1" class="ltx_p">If the miner chooses to <span id="S6.SS1.SSS3.p3.1.1" class="ltx_text ltx_font_sansserif">match</span>, <math id="S6.SS1.SSS3.p3.m1" class="ltx_Math" alttext="\textit{fork}\leftarrow\textsf{active}" display="inline" intent=":literal"><semantics><mrow><mtext class="ltx_mathvariant_italic">fork</mtext><mo stretchy="false">←</mo><mtext class="ltx_mathvariant_sans-serif">active</mtext></mrow><annotation encoding="application/x-tex">\textit{fork}\leftarrow\textsf{active}</annotation></semantics></math> as the miner causes a fork in the network.
+If the miner chooses to <span id="S6.SS1.SSS3.p3.1.2" class="ltx_text ltx_font_sansserif">wait</span> when <span id="S6.SS1.SSS3.p3.1.3" class="ltx_text ltx_markedasmath ltx_font_italic">fork</span> is <span id="S6.SS1.SSS3.p3.1.4" class="ltx_text ltx_font_sansserif">active</span> either:</p>
+<ol id="S6.I3" class="ltx_enumerate">
+<li id="S6.I3.i1" class="ltx_item" style="list-style-type:none;"><span class="ltx_tag ltx_tag_item">(1)</span> 
+<div id="S6.I3.i1.p1" class="ltx_para">
+<p id="S6.I3.i1.p1.1" class="ltx_p"><math id="S6.I3.i1.p1.m1" class="ltx_Math" alttext="a" display="inline" intent=":literal"><semantics><mi>a</mi><annotation encoding="application/x-tex">a</annotation></semantics></math> increases by 1 w.p <math id="S6.I3.i1.p1.m2" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math> as the rational miner mines a new secret block,</p>
+</div></li>
+<li id="S6.I3.i2" class="ltx_item" style="list-style-type:none;"><span class="ltx_tag ltx_tag_item">(2)</span> 
+<div id="S6.I3.i2.p1" class="ltx_para">
+<p id="S6.I3.i2.p1.1" class="ltx_p"><math id="S6.I3.i2.p1.m1" class="ltx_Math" alttext="a\leftarrow a-h" display="inline" intent=":literal"><semantics><mrow><mi>a</mi><mo stretchy="false">←</mo><mrow><mi>a</mi><mo>−</mo><mi>h</mi></mrow></mrow><annotation encoding="application/x-tex">a\leftarrow a-h</annotation></semantics></math>, <math id="S6.I3.i2.p1.m2" class="ltx_Math" alttext="h\leftarrow 1" display="inline" intent=":literal"><semantics><mrow><mi>h</mi><mo stretchy="false">←</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">h\leftarrow 1</annotation></semantics></math> and <math id="S6.I3.i2.p1.m3" class="ltx_Math" alttext="\textit{fork}\leftarrow\textsf{relevant}" display="inline" intent=":literal"><semantics><mrow><mtext class="ltx_mathvariant_italic">fork</mtext><mo stretchy="false">←</mo><mtext class="ltx_mathvariant_sans-serif">relevant</mtext></mrow><annotation encoding="application/x-tex">\textit{fork}\leftarrow\textsf{relevant}</annotation></semantics></math> w.p <math id="S6.I3.i2.p1.m4" class="ltx_Math" alttext="\alpha\gamma" display="inline" intent=":literal"><semantics><mrow><mi>α</mi><mo lspace="0em" rspace="0em">​</mo><mi>γ</mi></mrow><annotation encoding="application/x-tex">\alpha\gamma</annotation></semantics></math> as an honest miner mines on top of the rational miner’s chain, thus solving the fork and providing <math id="S6.I3.i2.p1.m5" class="ltx_Math" alttext="R_{t}=D_{t}=h" display="inline" intent=":literal"><semantics><mrow><msub><mi>R</mi><mi>t</mi></msub><mo>=</mo><msub><mi>D</mi><mi>t</mi></msub><mo>=</mo><mi>h</mi></mrow><annotation encoding="application/x-tex">R_{t}=D_{t}=h</annotation></semantics></math>, or,</p>
+</div></li>
+<li id="S6.I3.i3" class="ltx_item" style="list-style-type:none;"><span class="ltx_tag ltx_tag_item">(3)</span> 
+<div id="S6.I3.i3.p1" class="ltx_para">
+<p id="S6.I3.i3.p1.1" class="ltx_p"><math id="S6.I3.i3.p1.m1" class="ltx_Math" alttext="h\leftarrow h+1" display="inline" intent=":literal"><semantics><mrow><mi>h</mi><mo stretchy="false">←</mo><mrow><mi>h</mi><mo>+</mo><mn>1</mn></mrow></mrow><annotation encoding="application/x-tex">h\leftarrow h+1</annotation></semantics></math> and <math id="S6.I3.i3.p1.m2" class="ltx_Math" alttext="\textit{fork}\leftarrow\textsf{relevant}" display="inline" intent=":literal"><semantics><mrow><mtext class="ltx_mathvariant_italic">fork</mtext><mo stretchy="false">←</mo><mtext class="ltx_mathvariant_sans-serif">relevant</mtext></mrow><annotation encoding="application/x-tex">\textit{fork}\leftarrow\textsf{relevant}</annotation></semantics></math> w.p <math id="S6.I3.i3.p1.m3" class="ltx_Math" alttext="\alpha(1-\gamma)" display="inline" intent=":literal"><semantics><mrow><mi>α</mi><mo>⁡</mo><mrow><mo stretchy="false">(</mo><mrow><mn>1</mn><mo>−</mo><mi>γ</mi></mrow><mo stretchy="false">)</mo></mrow></mrow><annotation encoding="application/x-tex">\alpha(1-\gamma)</annotation></semantics></math> as an honest miner mines on top of the public chain.</p>
+</div></li>
+</ol>
+</div>
+<div id="S6.SS1.SSS3.p4" class="ltx_para">
+<p id="S6.SS1.SSS3.p4.1" class="ltx_p">In order to enforce the maximum fork length, for certain states we forbid actions which may lead to <math id="S6.SS1.SSS3.p4.m1" class="ltx_Math" alttext="a" display="inline" intent=":literal"><semantics><mi>a</mi><annotation encoding="application/x-tex">a</annotation></semantics></math> or  <math id="S6.SS1.SSS3.p4.m2" class="ltx_Math" alttext="h" display="inline" intent=":literal"><semantics><mi>h</mi><annotation encoding="application/x-tex">h</annotation></semantics></math> increasing too much.
+Note that, blocks mined are counted towards the reward and the difficulty contribution if and when both the rational miner and the rest of the network accept them.</p>
+</div>
+</section>
+</section>
+<section id="S6.SS2" class="ltx_subsection">
+<h3 class="ltx_title ltx_title_subsection"><span class="ltx_tag ltx_tag_subsection">6.2. </span>Optimal Strategies</h3>
+
+<div id="S6.SS2.p1" class="ltx_para">
+<p id="S6.SS2.p1.1" class="ltx_p">To validate PTO, we compare the revenue of the optimal strategy found by PTO against the state of the art OSM <cite class="ltx_cite ltx_citemacro_citep">(<a href="#bib.bib20" title="" class="ltx_ref">Sapirshtein et al., 2016</a>)</cite>.
+We compare for different <math id="S6.SS2.p1.m1" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>’s and <math id="S6.SS2.p1.m2" class="ltx_Math" alttext="\gamma=0" display="inline" intent=":literal"><semantics><mrow><mi>γ</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\gamma=0</annotation></semantics></math>, with a maximum fork length of 95, similar to OSM.
+We choose expected horizon to be <math id="S6.SS2.p1.m3" class="ltx_Math" alttext="H=10^{6}" display="inline" intent=":literal"><semantics><mrow><mi>H</mi><mo>=</mo><msup><mn>10</mn><mn>6</mn></msup></mrow><annotation encoding="application/x-tex">H=10^{6}</annotation></semantics></math> and we use policy iteration (for SSP) with a stopping threshold of <math id="S6.SS2.p1.m4" class="ltx_Math" alttext="10^{-5}" display="inline" intent=":literal"><semantics><msup><mn>10</mn><mrow><mo>−</mo><mn>5</mn></mrow></msup><annotation encoding="application/x-tex">10^{-5}</annotation></semantics></math>.
+The stopping threshold is a parameter for policy iteration which specifies the desired approximation error for the algorithm <cite class="ltx_cite ltx_citemacro_citep">(<a href="#bib.bib2" title="" class="ltx_ref">Bertsekas, 1995</a>)</cite>.</p>
+</div>
+<figure id="S6.T1" class="ltx_table">
+<table id="S6.T1.3" class="ltx_tabular ltx_centering ltx_guessed_headers ltx_align_middle">
+<thead class="ltx_thead">
+<tr id="S6.T1.3.1" class="ltx_tr">
+<th id="S6.T1.3.1.1" class="ltx_td ltx_align_left ltx_th ltx_th_column ltx_border_tt">Power (<math id="S6.T1.m1" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>)</th>
+<th id="S6.T1.3.1.2" class="ltx_td ltx_align_left ltx_th ltx_th_column ltx_border_tt">PTO Revenue (<math id="S6.T1.m2" class="ltx_Math" alttext="\text{REV}_{\text{ARR}}" display="inline" intent=":literal"><semantics><msub><mtext>REV</mtext><mtext>ARR</mtext></msub><annotation encoding="application/x-tex">\text{REV}_{\text{ARR}}</annotation></semantics></math>)</th>
+<th id="S6.T1.3.1.3" class="ltx_td ltx_align_left ltx_th ltx_th_column ltx_border_tt">OSM Revenue</th></tr>
+</thead>
+<tbody class="ltx_tbody">
+<tr id="S6.T1.3.2" class="ltx_tr">
+<td id="S6.T1.3.2.1" class="ltx_td ltx_align_left ltx_border_t">1/3</td>
+<td id="S6.T1.3.2.2" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m3" class="ltx_Math" alttext="0.337\,05" display="inline" intent=":literal"><semantics><mn>0.337 05</mn><annotation encoding="application/x-tex">0.337\,05</annotation></semantics></math></td>
+<td id="S6.T1.3.2.3" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m4" class="ltx_Math" alttext="0.337\,05" display="inline" intent=":literal"><semantics><mn>0.337 05</mn><annotation encoding="application/x-tex">0.337\,05</annotation></semantics></math></td></tr>
+<tr id="S6.T1.3.3" class="ltx_tr">
+<td id="S6.T1.3.3.1" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m5" class="ltx_Math" alttext="0.35" display="inline" intent=":literal"><semantics><mn>0.35</mn><annotation encoding="application/x-tex">0.35</annotation></semantics></math></td>
+<td id="S6.T1.3.3.2" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m6" class="ltx_Math" alttext="0.370\,77" display="inline" intent=":literal"><semantics><mn>0.370 77</mn><annotation encoding="application/x-tex">0.370\,77</annotation></semantics></math></td>
+<td id="S6.T1.3.3.3" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m7" class="ltx_Math" alttext="0.370\,77" display="inline" intent=":literal"><semantics><mn>0.370 77</mn><annotation encoding="application/x-tex">0.370\,77</annotation></semantics></math></td></tr>
+<tr id="S6.T1.3.4" class="ltx_tr">
+<td id="S6.T1.3.4.1" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m8" class="ltx_Math" alttext="0.375" display="inline" intent=":literal"><semantics><mn>0.375</mn><annotation encoding="application/x-tex">0.375</annotation></semantics></math></td>
+<td id="S6.T1.3.4.2" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m9" class="ltx_Math" alttext="0.426\,00" display="inline" intent=":literal"><semantics><mn>0.426 00</mn><annotation encoding="application/x-tex">0.426\,00</annotation></semantics></math></td>
+<td id="S6.T1.3.4.3" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m10" class="ltx_Math" alttext="0.426\,00" display="inline" intent=":literal"><semantics><mn>0.426 00</mn><annotation encoding="application/x-tex">0.426\,00</annotation></semantics></math></td></tr>
+<tr id="S6.T1.3.5" class="ltx_tr">
+<td id="S6.T1.3.5.1" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m11" class="ltx_Math" alttext="0.4" display="inline" intent=":literal"><semantics><mn>0.4</mn><annotation encoding="application/x-tex">0.4</annotation></semantics></math></td>
+<td id="S6.T1.3.5.2" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m12" class="ltx_Math" alttext="0.488\,66" display="inline" intent=":literal"><semantics><mn>0.488 66</mn><annotation encoding="application/x-tex">0.488\,66</annotation></semantics></math></td>
+<td id="S6.T1.3.5.3" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m13" class="ltx_Math" alttext="0.488\,66" display="inline" intent=":literal"><semantics><mn>0.488 66</mn><annotation encoding="application/x-tex">0.488\,66</annotation></semantics></math></td></tr>
+<tr id="S6.T1.3.6" class="ltx_tr">
+<td id="S6.T1.3.6.1" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m14" class="ltx_Math" alttext="0.425" display="inline" intent=":literal"><semantics><mn>0.425</mn><annotation encoding="application/x-tex">0.425</annotation></semantics></math></td>
+<td id="S6.T1.3.6.2" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m15" class="ltx_Math" alttext="0.568\,09" display="inline" intent=":literal"><semantics><mn>0.568 09</mn><annotation encoding="application/x-tex">0.568\,09</annotation></semantics></math></td>
+<td id="S6.T1.3.6.3" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m16" class="ltx_Math" alttext="0.568\,08" display="inline" intent=":literal"><semantics><mn>0.568 08</mn><annotation encoding="application/x-tex">0.568\,08</annotation></semantics></math></td></tr>
+<tr id="S6.T1.3.7" class="ltx_tr">
+<td id="S6.T1.3.7.1" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m17" class="ltx_Math" alttext="0.45" display="inline" intent=":literal"><semantics><mn>0.45</mn><annotation encoding="application/x-tex">0.45</annotation></semantics></math></td>
+<td id="S6.T1.3.7.2" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m18" class="ltx_Math" alttext="0.668\,94" display="inline" intent=":literal"><semantics><mn>0.668 94</mn><annotation encoding="application/x-tex">0.668\,94</annotation></semantics></math></td>
+<td id="S6.T1.3.7.3" class="ltx_td ltx_align_left ltx_border_t"><math id="S6.T1.m19" class="ltx_Math" alttext="0.668\,91" display="inline" intent=":literal"><semantics><mn>0.668 91</mn><annotation encoding="application/x-tex">0.668\,91</annotation></semantics></math></td></tr>
+<tr id="S6.T1.3.8" class="ltx_tr">
+<td id="S6.T1.3.8.1" class="ltx_td ltx_align_left ltx_border_bb ltx_border_t"><math id="S6.T1.m20" class="ltx_Math" alttext="0.475" display="inline" intent=":literal"><semantics><mn>0.475</mn><annotation encoding="application/x-tex">0.475</annotation></semantics></math></td>
+<td id="S6.T1.3.8.2" class="ltx_td ltx_align_left ltx_border_bb ltx_border_t"><math id="S6.T1.m21" class="ltx_Math" alttext="0.801\,84" display="inline" intent=":literal"><semantics><mn>0.801 84</mn><annotation encoding="application/x-tex">0.801\,84</annotation></semantics></math></td>
+<td id="S6.T1.3.8.3" class="ltx_td ltx_align_left ltx_border_bb ltx_border_t"><math id="S6.T1.m22" class="ltx_Math" alttext="0.801\,72" display="inline" intent=":literal"><semantics><mn>0.801 72</mn><annotation encoding="application/x-tex">0.801\,72</annotation></semantics></math></td></tr>
+</tbody>
+</table>
+<figcaption class="ltx_caption ltx_centering"><span class="ltx_tag ltx_tag_table"><span id="S6.T1.4" class="ltx_text" style="font-size:90%;">Table 1</span>. </span><span id="S6.T1.5" class="ltx_text" style="font-size:90%;">Comparison between PTO with policy iteration and OSM <cite class="ltx_cite ltx_citemacro_citep">(<a href="#bib.bib20" title="" class="ltx_ref">Sapirshtein et al., 2016</a>)</cite> for Bitcoin when limiting the maximum fork length to 95 and using <math id="S6.T1.m24" class="ltx_Math" alttext="\gamma=0" display="inline" intent=":literal"><semantics><mrow><mi>γ</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\gamma=0</annotation></semantics></math>.</span></figcaption>
+</figure>
+<div id="S6.SS2.p2" class="ltx_para">
+<p id="S6.SS2.p2.1" class="ltx_p">Table <a href="#S6.T1" title="Table 1 ‣ 6.2. Optimal Strategies ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">1</span></a> summarizes the results.
+As expected, PTO reproduces the results of OSM.
+Furthermore, some results for PTO are higher than the results for OSM by more than the <math id="S6.SS2.p2.m1" class="ltx_Math" alttext="10^{-5}" display="inline" intent=":literal"><semantics><msup><mn>10</mn><mrow><mo>−</mo><mn>5</mn></mrow></msup><annotation encoding="application/x-tex">10^{-5}</annotation></semantics></math> approximation error.
+This is due to a bug in the original OSM code.
+For these values, OSM stopped by mistake after hitting a hard-coded maximal number of iterations.
+We removed the redundant stopping condition before comparing the running times.</p>
+</div>
+</section>
+<section id="S6.SS3" class="ltx_subsection">
+<h3 class="ltx_title ltx_title_subsection"><span class="ltx_tag ltx_tag_subsection">6.3. </span>Hyperparameters</h3>
+
+<div id="S6.SS3.p1" class="ltx_para">
+<p id="S6.SS3.p1.1" class="ltx_p">We empirically analyze the effect PTO’s hyperparameters.</p>
+</div>
+<section id="S6.SS3.SSS1" class="ltx_subsubsection">
+<h4 class="ltx_title ltx_title_subsubsection"><span class="ltx_tag ltx_tag_subsubsection">6.3.1. </span>Expected Horizon</h4>
+
+<div id="S6.SS3.SSS1.p1" class="ltx_para">
+<p id="S6.SS3.SSS1.p1.1" class="ltx_p">We first consider the expected horizon.
+In order to do so, we experiment with Bitcoin for several values of <math id="S6.SS3.SSS1.p1.m1" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>, with <math id="S6.SS3.SSS1.p1.m2" class="ltx_Math" alttext="\gamma=0.5" display="inline" intent=":literal"><semantics><mrow><mi>γ</mi><mo>=</mo><mn>0.5</mn></mrow><annotation encoding="application/x-tex">\gamma=0.5</annotation></semantics></math>, with a fixed maximum fork length of 50 and using policy iteration with a stopping threshold of <math id="S6.SS3.SSS1.p1.m3" class="ltx_Math" alttext="10^{-5}" display="inline" intent=":literal"><semantics><msup><mn>10</mn><mrow><mo>−</mo><mn>5</mn></mrow></msup><annotation encoding="application/x-tex">10^{-5}</annotation></semantics></math>.</p>
+</div>
+<div id="S6.SS3.SSS1.p2" class="ltx_para">
+<p id="S6.SS3.SSS1.p2.1" class="ltx_p">Figure <a href="#S6.F1" title="Figure 1 ‣ 6.3.1. Expected Horizon ‣ 6.3. Hyperparameters ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">1</span></a> plots the revenue of the policy found against the horizon length <math id="S6.SS3.SSS1.p2.m1" class="ltx_Math" alttext="H" display="inline" intent=":literal"><semantics><mi>H</mi><annotation encoding="application/x-tex">H</annotation></semantics></math>.
+The figure shows that as the expected horizon increases, the revenue converges to the revenue of the optimal policy.
+Since different <math id="S6.SS3.SSS1.p2.m2" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>’s were considered, all the revenues for each <math id="S6.SS3.SSS1.p2.m3" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math> were normalized by the best revenue achieved by PTO for said <math id="S6.SS3.SSS1.p2.m4" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>.</p>
+</div>
+<div id="S6.SS3.SSS1.p3" class="ltx_para">
+<p id="S6.SS3.SSS1.p3.1" class="ltx_p">The graph shows that as the expected horizon is increased, the approximate revenue converges quickly to its optimal value,
+as supported by Theorem <a href="#S5.Thmtheorem1" title="Theorem 1. ‣ 5. Proof of Optimality ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">1</span></a>.</p>
+</div>
+<div id="S6.SS3.SSS1.p4" class="ltx_para">
+<p id="S6.SS3.SSS1.p4.1" class="ltx_p">Intuitively, one might expect that for higher values of <math id="S6.SS3.SSS1.p4.m1" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>, our method would require higher values of <math id="S6.SS3.SSS1.p4.m2" class="ltx_Math" alttext="H" display="inline" intent=":literal"><semantics><mi>H</mi><annotation encoding="application/x-tex">H</annotation></semantics></math> to converge,
+since more powerful miners are more capable of creating longer forks, and thus should require more consideration towards future blocks by looking into a further expected horizon.</p>
+</div>
+<figure id="S6.F1" class="ltx_figure"><img src="2007.05614v2/expected_horizon.png" id="S6.F1.g1" class="ltx_graphics ltx_img_landscape" style="aspect-ratio:476/280;" width="476" height="280" alt="Refer to caption">
+<figcaption class="ltx_caption"><span class="ltx_tag ltx_tag_figure"><span id="S6.F1.3" class="ltx_text" style="font-size:90%;">Figure 1</span>. </span><span id="S6.F1.4" class="ltx_text" style="font-size:90%;">The effect of the expected horizon <math id="S6.F1.m5" class="ltx_Math" alttext="H" display="inline" intent=":literal"><semantics><mi>H</mi><annotation encoding="application/x-tex">H</annotation></semantics></math>. We plot results for Bitcoin with different <math id="S6.F1.m6" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>’s, <math id="S6.F1.m7" class="ltx_Math" alttext="\gamma=0.5" display="inline" intent=":literal"><semantics><mrow><mi>γ</mi><mo>=</mo><mn>0.5</mn></mrow><annotation encoding="application/x-tex">\gamma=0.5</annotation></semantics></math>, and maximum fork of 50, normalized by the maximum revenue achieved for each <math id="S6.F1.m8" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>.</span></figcaption>
+</figure>
+<div id="S6.SS3.SSS1.p5" class="ltx_para">
+<p id="S6.SS3.SSS1.p5.1" class="ltx_p">Our results in Figure <a href="#S6.F1" title="Figure 1 ‣ 6.3.1. Expected Horizon ‣ 6.3. Hyperparameters ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">1</span></a> indicate that this is not necessarily the case.
+We attribute this find to the fact that different values of <math id="S6.SS3.SSS1.p5.m1" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math> have different optimal policies, and thus are affected differently by the expected horizon.</p>
+</div>
+<section id="S6.SS3.SSS1.Px1" class="ltx_paragraph">
+<h5 class="ltx_title ltx_title_paragraph">Note</h5>
+
+<div id="S6.SS3.SSS1.Px1.p1" class="ltx_para">
+<p id="S6.SS3.SSS1.Px1.p1.1" class="ltx_p">A drawback of PTO when compared to OSM is that although the approximation error in PTO is tight and decreases linearly with the expected horizon, it is not known in advance.
+OSM, on the other hand, takes the approximation error as a parameter and outputs an <math id="S6.SS3.SSS1.Px1.p1.m1" class="ltx_Math" alttext="\varepsilon" display="inline" intent=":literal"><semantics><mi>ε</mi><annotation encoding="application/x-tex">\varepsilon</annotation></semantics></math>-optimal policy.
+However, as we see in Figure <a href="#S6.F1" title="Figure 1 ‣ 6.3.1. Expected Horizon ‣ 6.3. Hyperparameters ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">1</span></a>, choosing a reasonable expected horizon such as <math id="S6.SS3.SSS1.Px1.p1.m2" class="ltx_Math" alttext="10^{6}" display="inline" intent=":literal"><semantics><msup><mn>10</mn><mn>6</mn></msup><annotation encoding="application/x-tex">10^{6}</annotation></semantics></math> ensures a negligible approximation error.</p>
+</div>
+</section>
+</section>
+<section id="S6.SS3.SSS2" class="ltx_subsubsection">
+<h4 class="ltx_title ltx_title_subsubsection"><span class="ltx_tag ltx_tag_subsubsection">6.3.2. </span>Maximum Fork Length</h4>
+
+<figure id="S6.F2" class="ltx_figure"><img src="2007.05614v2/max_fork.png" id="S6.F2.g1" class="ltx_graphics ltx_img_landscape" style="aspect-ratio:476/354;" width="476" height="354" alt="Refer to caption">
+<figcaption class="ltx_caption"><span class="ltx_tag ltx_tag_figure"><span id="S6.F2.3" class="ltx_text" style="font-size:90%;">Figure 2</span>. </span><span id="S6.F2.4" class="ltx_text" style="font-size:90%;">The effect of the maximum fork length. We plot results for Bitcoin with different <math id="S6.F2.m5" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>’s, <math id="S6.F2.m6" class="ltx_Math" alttext="\gamma=0.5" display="inline" intent=":literal"><semantics><mrow><mi>γ</mi><mo>=</mo><mn>0.5</mn></mrow><annotation encoding="application/x-tex">\gamma=0.5</annotation></semantics></math> and <math id="S6.F2.m7" class="ltx_Math" alttext="H=10^{4}" display="inline" intent=":literal"><semantics><mrow><mi>H</mi><mo>=</mo><msup><mn>10</mn><mn>4</mn></msup></mrow><annotation encoding="application/x-tex">H=10^{4}</annotation></semantics></math>, normalized by the maximum revenue achieved for each <math id="S6.F2.m8" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>.</span></figcaption>
+</figure>
+<div id="S6.SS3.SSS2.p1" class="ltx_para">
+<p id="S6.SS3.SSS2.p1.1" class="ltx_p">We next investigate the effect of the maximum fork length.
+We experiment with Bitcoin for several values of <math id="S6.SS3.SSS2.p1.m1" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>, with a fixed expected horizon of <math id="S6.SS3.SSS2.p1.m2" class="ltx_Math" alttext="10^{4}" display="inline" intent=":literal"><semantics><msup><mn>10</mn><mn>4</mn></msup><annotation encoding="application/x-tex">10^{4}</annotation></semantics></math>, and using policy iteration with a stopping threshold of <math id="S6.SS3.SSS2.p1.m3" class="ltx_Math" alttext="10^{-5}" display="inline" intent=":literal"><semantics><msup><mn>10</mn><mrow><mo>−</mo><mn>5</mn></mrow></msup><annotation encoding="application/x-tex">10^{-5}</annotation></semantics></math>.
+The revenues obtained are presented in Figure <a href="#S6.F2" title="Figure 2 ‣ 6.3.2. Maximum Fork Length ‣ 6.3. Hyperparameters ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">2</span></a>, normalized for different <math id="S6.SS3.SSS2.p1.m4" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math> as above.
+As the maximum fork is increased, the agent has more possible actions in the game, and thus the revenue is non decreasing, as clearly evident in the figure.
+In addition, the higher <math id="S6.SS3.SSS2.p1.m5" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math> is, the higher the maximum fork length needed to achieve the same approximation, as evident in the figure by the dependence of the fork length required to reach optimal performance on <math id="S6.SS3.SSS2.p1.m6" class="ltx_Math" alttext="\alpha" display="inline" intent=":literal"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>.</p>
+</div>
+<div id="S6.SS3.SSS2.p2" class="ltx_para">
+<p id="S6.SS3.SSS2.p2.1" class="ltx_p">The maximum fork length enables the model to disregard possible policies which allow forks longer than some threshold.
+This ensures the state space is finite and enables us to use PTO.
+Ignoring feasible policies seemingly hurts the optimality of our results.
+However, we ignore longer forks because the probability of the miner to obtain such a fork declines exponentially with the fork length.
+Therefore, considering a large enough maximum fork length such as 100 is more than enough to obtain a good approximation; increasing it further yields negligible improvement, as shown empirically in Figure <a href="#S6.F2" title="Figure 2 ‣ 6.3.2. Maximum Fork Length ‣ 6.3. Hyperparameters ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">2</span></a>.</p>
+</div>
+</section>
+</section>
+<section id="S6.SS4" class="ltx_subsection">
+<h3 class="ltx_title ltx_title_subsection"><span class="ltx_tag ltx_tag_subsection">6.4. </span>Running Time</h3>
+
+<div id="S6.SS4.p1" class="ltx_para">
+<p id="S6.SS4.p1.1" class="ltx_p">We show that PTO with policy iteration is faster than OSM.
+We compare the methods for different maximum allowed fork lengths in order to compare the methods for different sizes of the state space.
+This allows us to conjecture about the efficiency of generalizing the methods to other blockchains with larger state spaces (e.g., Ethereum).
+In order to perform the comparison, we use the OSM code generously shared by Ren Zhang <cite class="ltx_cite ltx_citemacro_citep">(<a href="#bib.bib26" title="" class="ltx_ref">Zhang, 2017</a>)</cite>.</p>
+</div>
+<div id="S6.SS4.p2" class="ltx_para">
+<p id="S6.SS4.p2.1" class="ltx_p">Running time heavily depends on the low level implementation and platform.
+Instead, we compare the number of linear system that each method solves. However, this comparison too depends on the dynamic programming algorithm used to solve the (standard) MDPs. We found that in contrast to the relative value iteration used in the original OSM work, the policy iteration algorithm works significantly better both for OSM and PTO.</p>
+</div>
+<figure id="S6.F3" class="ltx_figure"><img src="2007.05614v2/max_fork_timings.png" id="S6.F3.g1" class="ltx_graphics ltx_img_square" style="aspect-ratio:476/425;" width="476" height="425" alt="Refer to caption">
+<figcaption class="ltx_caption"><span class="ltx_tag ltx_tag_figure"><span id="S6.F3.3" class="ltx_text" style="font-size:90%;">Figure 3</span>. </span><span id="S6.F3.4" class="ltx_text" style="font-size:90%;">(a): Comparison of the running time of the 3 methods for different maximum fork lengths.
+The maximum fork length determines the number of states in the model.
+(b): Comparison of the number of times a linear system was solved.
+This enables comparison of the 2 methods even though they run on different environments.
+(c): Comparison of the revenues obtained by the 3 methods.
+PTO achieves similar results to both other methods.</span></figcaption>
+</figure>
+<div id="S6.SS4.p3" class="ltx_para">
+<p id="S6.SS4.p3.1" class="ltx_p">We therefore improved OSM to use policy iteration (for the average reward criterion) instead of relative value iteration, and we call this implementation <em id="S6.SS4.p3.1.1" class="ltx_emph ltx_font_italic">Policy-Iteration OSM</em> (<em id="S6.SS4.p3.1.2" class="ltx_emph ltx_font_italic">PI-OSM</em>).
+Figure <a href="#S6.F3" title="Figure 3 ‣ 6.4. Running Time ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">3</span></a>(a) shows PI-OSM has a shorter running time than OSM when run in the same environment.
+Next, we compare the number of linear systems solved for PTO and for PI-OSM.
+Figure <a href="#S6.F3" title="Figure 3 ‣ 6.4. Running Time ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">3</span></a>(b) shows that the number of linear systems solved for PTO is about one order of magnitude smaller than PI-OSM.</p>
+</div>
+<div id="S6.SS4.p4" class="ltx_para">
+<p id="S6.SS4.p4.1" class="ltx_p">When solving MDPs there is a trade off between accuracy and running time.
+For a fair comparison, we made sure that PTO was at least as accurate as OSM and PI-OSM.
+Figure <a href="#S6.F3" title="Figure 3 ‣ 6.4. Running Time ‣ 6. Performance ‣ Efficient MDP Analysis for Selfish-Mining in Blockchains" class="ltx_ref"><span class="ltx_text ltx_ref_tag">3</span></a>(c) shows that the results obtained by all methods were of similar accuracy (up to about <math id="S6.SS4.p4.m1" class="ltx_Math" alttext="10^{-6}" display="inline" intent=":literal"><semantics><msup><mn>10</mn><mrow><mo>−</mo><mn>6</mn></mrow></msup><annotation encoding="application/x-tex">10^{-6}</annotation></semantics></math>).</p>
+</div>
+</section>
+</section>
+
+<!-- abc-harness test fixture: trimmed here; the recorded page continues with sections 7 and 8. -->
 </div></div></body></html>

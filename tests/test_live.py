@@ -155,3 +155,33 @@ def test_real_model_finds_and_cites_a_source(tmp_path):
     library = Library.load(result.artifact_dir)
     for c in citations:
         assert library.locate(c["paper"], c["quote"]) is not None
+
+
+def test_real_model_reads_a_value_off_a_figure(tmp_path):
+    """How far a figure reading can be trusted: Figure 1 of arXiv 2007.05614 puts the alpha = 0.45 curve at
+    about 0.954 for expected horizon 10 (log x axis, gridlines every 0.01)."""
+    import re
+
+    from abc_harness.execution.trace import read_trace
+    from abc_harness.literature import HttpFetcher, Literature
+
+    secrets = Secrets.load(ROOT / ".env")
+    if not secrets.has("ANTHROPIC_API_KEY"):
+        pytest.skip("ANTHROPIC_API_KEY is not set in .env")
+    result = run_agent_task(
+        "Find the paper 'Efficient MDP Analysis for Selfish-Mining in Blockchains' (AFT 2020). In its Figure 1, "
+        "what normalized revenue does the alpha = 0.45 curve show at an expected horizon of 10? Do not propose a "
+        "plan. End your answer with one line 'READING: <value> ± <uncertainty>'.",
+        AnthropicModel(secrets.get("ANTHROPIC_API_KEY")), FakeRunner(), lambda q: "Use your defaults.",
+        lambda plan: ("reject", "live test"), runs_root=tmp_path / "runs", budget=Budget(llm_call_limit=20),
+        redact=secrets.redact, literature=Literature(HttpFetcher()),
+    )  # fmt: skip
+    events = read_trace(result.artifact_dir / "trace.jsonl")
+    assert any(e.get("tool") == "view_figure" and e.get("images") for e in events), "the model must view the figure"
+    report = (result.artifact_dir / "report.md").read_text()
+    match = re.search(r"READING:\s*([0-9.]+)\s*±\s*([0-9.]+)", report)
+    print(f"\n[figure] {match.group(0) if match else report[-500:]}")
+    assert match, "the answer must end with a READING line"
+    value, uncertainty = float(match.group(1)), float(match.group(2))
+    assert abs(value - 0.954) <= 0.01
+    assert value - uncertainty <= 0.954 <= value + uncertainty

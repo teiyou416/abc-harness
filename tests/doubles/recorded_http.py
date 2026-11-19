@@ -20,6 +20,9 @@ RECORDED = {
     openalex.search_url("bitcoin block propagation delay", 3, None): "openalex_broad_propagation_delay.json",
     semantic_scholar.search_url("selfish mining", 3, VENUES): "semantic_scholar_selfish_mining.json",
     "https://arxiv.org/html/2007.05614": "arxiv_html_2007.05614.html",
+    "https://arxiv.org/html/2007.05614v2/expected_horizon.png": "arxiv_2007.05614v2_expected_horizon.png",
+    # Figure 3 is served as SVG here, to test that formats the model cannot view are skipped.
+    "https://arxiv.org/html/2007.05614v2/max_fork_timings.png": "handwritten_figure.svg",
 }
 
 

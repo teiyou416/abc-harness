@@ -51,8 +51,12 @@ def run_chat(
     read: Read,
     write: Write = print,
     parser_check: Callable[[], None] | None = None,
+    show_answers: bool = False,
 ) -> int:
-    """Run the conversation until the researcher leaves. Returns the exit status."""
+    """Run the conversation until the researcher leaves. Returns the exit status.
+
+    `show_answers` prints each final answer after its task; leave it off when the live output already shows it.
+    """
     session = new_session()
     write(f"Conversation {session.session_id} (log: {session.dir / 'session.jsonl'}). /help lists the commands.")
     while True:
@@ -93,7 +97,7 @@ def run_chat(
             where = f" Its report: {last.artifact_dir / 'report.md'}" if last else ""
             write(f"\n! Stopped the task; its containers were removed.{where}")
             continue
-        if turn.summary:
+        if show_answers and turn.summary:
             write(f"\n{turn.summary.strip()}")
         for out in task_summary(turn.artifact_dir):
             write(out)

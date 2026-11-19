@@ -142,7 +142,7 @@ def _chat(args: argparse.Namespace, model: Any, literature: Any, redact: Callabl
         )  # fmt: skip
 
     print(f"ABC Harness chat with {model.name}.")
-    return run_chat(lambda: ChatSession(args.runs_dir, list(args.paper)), turn, read)
+    return run_chat(lambda: ChatSession(args.runs_dir, list(args.paper)), turn, read, show_answers=args.quiet)
 
 
 def _announce(artifact_dir: Path) -> None:
@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
             on_event=None if args.quiet else Console(),
         )
         summary = (result.artifact_dir / "report.md").read_text(encoding="utf-8")
-        if "## Agent summary" in summary:
+        if args.quiet and "## Agent summary" in summary:  # otherwise the live output showed it already
             print("\n" + summary.split("## Agent summary", 1)[1].split("\n## ", 1)[0].strip())
         return _print_result(result)
 

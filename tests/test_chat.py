@@ -33,7 +33,7 @@ def experiment(answer="The 60 s delay raised the stale rate."):
     return [tool_turn("propose_plan", blocksim_plan()), run_last_proposed, text_turn(answer)]
 
 
-def chat(tmp_path, model, inputs, runner=None):
+def chat(tmp_path, model, inputs, runner=None, show_answers=True):
     runner = runner or FakeRunner()
     out = []
     sessions = []
@@ -48,7 +48,7 @@ def chat(tmp_path, model, inputs, runner=None):
     def turn(session, text):
         return session.run_turn(text, model, runner, lambda q: inputs(f"Q: {q} "), review)
 
-    status = run_chat(new_session, turn, inputs, out.append, parser_check=lambda: None)
+    status = run_chat(new_session, turn, inputs, out.append, parser_check=lambda: None, show_answers=show_answers)
     return status, out, sessions
 
 
@@ -164,3 +164,19 @@ def test_plan_review_and_questions_use_the_chat_input(tmp_path):
     _, out, _ = chat(tmp_path, model, inputs)
     assert "Q: Which delay? " in inputs.prompts
     assert any("60 seconds" in line for line in out)
+
+
+def test_with_live_output_the_answer_is_printed_once(tmp_path):
+    from abc_harness.interfaces.console import Console
+
+    out = []
+    model = ScriptedModel([tool_turn("describe_simulator", {"simulator": "blocksim"}, text="Checking."),
+                           text_turn("BlockSim and SimBlock.")])  # fmt: skip
+
+    def turn(session, text):
+        return session.run_turn(text, model, FakeRunner(), lambda q: "", lambda p: ("approve", ""),
+                                on_event=Console(out.append, color=False))  # fmt: skip
+
+    run_chat(lambda: ChatSession(tmp_path / "runs"), turn, Inputs("Which simulators?", "/quit"), out.append)
+    assert [line.strip() for line in out].count("BlockSim and SimBlock.") == 1
+    assert "  says: Checking." in out  # text before a tool call stays a note

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from abc_harness.plan import PlanError, load_plan, validate_plan
+from abc_harness.planning.plan import PlanError, load_plan, validate_plan
 from abc_harness.simulators import SimulatorError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,7 +52,7 @@ def _plan_data(**overrides):
         ({"seeds": [1, 1]}, PlanError),
         ({"configurations": [{"name": "a b"}]}, PlanError),
         ({"permitted_edits": ["src/x.java"]}, PlanError),
-        ({"simulator": "blocksim"}, SimulatorError),
+        ({"simulator": "ethereum"}, SimulatorError),
         ({"metrics": ["throughput"]}, SimulatorError),
         ({"baseline": {"NUM_OF_NODES": 10}}, SimulatorError),
         ({"baseline": {"NUM_OF_NODES": 10, "END_BLOCK_HEIGHT": 3, "ALGO": "x"}}, SimulatorError),
@@ -67,3 +67,10 @@ def test_invalid_plans_are_refused(overrides, error):
 
 def test_valid_plan_data_is_accepted():
     assert validate_plan(_plan_data()).runs()[0].run_id == "base__seed-1"
+
+
+@pytest.mark.parametrize("image", ["abc-harness-sim:simblock-8a1285a", "sha256:short", "sha256:" + "G" * 64])
+def test_execution_image_must_be_a_full_image_id(image, write_plan):
+    data = load_plan(write_plan()).data
+    with pytest.raises(PlanError, match="execution_image"):
+        validate_plan({**data, "execution_image": image})

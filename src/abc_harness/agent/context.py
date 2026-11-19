@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from abc_harness.task import Task
+    from abc_harness.execution.task import Task
 
 # A deliberately pessimistic ratio: real text averages closer to 4 characters
 # per token, so estimates err towards compressing early, never late.
@@ -112,7 +112,7 @@ def render_transcript(messages: list[dict[str, Any]]) -> str:
 
 def task_state(task: Task, clarifications: list[tuple[str, str]]) -> str:
     """The facts the next window must have exactly, written from the harness's own records."""
-    from abc_harness.approval import read_decisions
+    from abc_harness.planning.approval import read_decisions
 
     lines = ["## Task state (written by the harness from its records; trust this over the summary)", ""]
     if task.plans:
@@ -130,7 +130,7 @@ def task_state(task: Task, clarifications: list[tuple[str, str]]) -> str:
         lines += ["", "Clarification questions and the researcher's answers:"]
         lines += [f"- Q: {q}\n  A: {a}" for q, a in clarifications]
     if task.executed is not None:
-        from abc_harness.agent import run_summary
+        from abc_harness.tools.run_plan import run_summary
 
         status = "completed" if all(r.status == "completed" for r in task.records) else "not fully completed"
         summary = run_summary(task, status, "see report")

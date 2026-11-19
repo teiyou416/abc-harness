@@ -55,3 +55,45 @@ def test_gotchas_are_dated_and_retirable():
     assert len(entries) <= 40, f"gotchas.md has {len(entries)} entries; retire some"
     malformed = [line[:60] for line in entries if not GOTCHA.match(line)]
     assert not malformed, "each gotcha needs a [YYYY-MM-DD] date and a _Retire when: ..._:\n" + "\n".join(malformed)
+
+
+PACKAGE = ROOT / "src" / "abc_harness"
+# Higher layers may import lower ones, never the reverse (docs/architecture.md, "Module map").
+LAYERS = {"cli": 5, "agent": 4, "tools": 3, "execution": 2, "planning": 1, "simulators": 0}
+
+
+def _modules() -> list[Path]:
+    return sorted(p for p in PACKAGE.rglob("*.py") if p.name != "__init__.py" or p.parent != PACKAGE)
+
+
+def _layer(rel_parts: tuple[str, ...]) -> str | None:
+    return rel_parts[0].removesuffix(".py") if rel_parts else None
+
+
+def test_modules_import_only_their_own_or_lower_layers():
+    import ast
+
+    upward = []
+    for path in _modules():
+        own = _layer(path.relative_to(PACKAGE).parts)
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("abc_harness"):
+                targets = [node.module] if node.module != "abc_harness" else [f"abc_harness.{a.name}" for a in node.names]
+            elif isinstance(node, ast.Import):
+                targets = [a.name for a in node.names if a.name.startswith("abc_harness")]
+            else:
+                continue
+            for target in targets:
+                layer = _layer(tuple(target.split(".")[1:2]))
+                if layer in LAYERS and LAYERS[layer] > LAYERS.get(own, 99):
+                    upward.append(f"{path.relative_to(PACKAGE)} imports {target}")
+    assert not upward, "a lower layer imports a higher one: " + "; ".join(upward)
+
+
+def test_every_module_is_in_the_module_map():
+    text = (DOCS / "architecture.md").read_text(encoding="utf-8")
+    section = text.split("## Module map", 1)[1].split("\n## ", 1)[0]
+    # Empty __init__.py files only mark a folder as a package; they need no row.
+    missing = [str(p.relative_to(PACKAGE)) for p in _modules()
+               if p.stat().st_size and f"`{p.relative_to(PACKAGE)}`" not in section]  # fmt: skip
+    assert not missing, f"add these modules to the module map in docs/architecture.md: {missing}"

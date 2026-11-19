@@ -8,14 +8,14 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from abc_harness.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LIMIT_SECONDS, Budget
-from abc_harness.model import DEFAULT_EFFORT, DEFAULT_MODEL
-from abc_harness.plan import Plan, PlanError, load_plan
-from abc_harness.runner import DockerRunner, build_image
-from abc_harness.secrets import DEFAULT_ENV_FILE, MissingSecret, Secrets
+from abc_harness.agent.model import DEFAULT_EFFORT, DEFAULT_MODEL
+from abc_harness.agent.secrets import DEFAULT_ENV_FILE, MissingSecret, Secrets
+from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LIMIT_SECONDS, Budget
+from abc_harness.execution.runner import DockerRunner, build_image
+from abc_harness.execution.task import TaskResult, run_task
+from abc_harness.execution.trace import summarize_trace
+from abc_harness.planning.plan import Plan, PlanError, load_plan
 from abc_harness.simulators import SIMULATORS, SimulatorError, get_simulator
-from abc_harness.task import TaskResult, run_task
-from abc_harness.trace import summarize_trace
 
 Read = Callable[[str], str]
 Write = Callable[[str], None]
@@ -70,8 +70,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     image = sub.add_parser("image", help="manage execution images")
     image_sub = image.add_subparsers(dest="image_command", required=True)
-    build = image_sub.add_parser("build", help="build the execution image for a simulator")
-    build.add_argument("--simulator", default="simblock", choices=sorted(SIMULATORS))
+    build = image_sub.add_parser("build", help="build the execution image of each simulator")
+    build.add_argument("--simulator", default="all", choices=["all", *sorted(SIMULATORS)])
 
     def task_options(p: argparse.ArgumentParser) -> None:
         p.add_argument("--runs-dir", type=Path, default=Path("runs"), help="where artifact directories go")
@@ -109,9 +109,11 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     if args.command == "image":
-        simulator = get_simulator(args.simulator)
-        image_id = build_image(simulator.docker_context, simulator.image_tag)
-        print(f"Built {simulator.image_tag} ({image_id})")
+        names = sorted(SIMULATORS) if args.simulator == "all" else [args.simulator]
+        for name in names:
+            simulator = get_simulator(name)
+            image_id = build_image(simulator.docker_context, simulator.image_tag)
+            print(f"Built {simulator.image_tag} ({image_id})")
         return 0
 
     if args.command == "trace":
@@ -119,8 +121,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "ask":
-        from abc_harness.agent import run_agent_task
-        from abc_harness.model import AnthropicModel
+        from abc_harness.agent.loop import run_agent_task
+        from abc_harness.agent.model import AnthropicModel
 
         secrets = Secrets.load(args.env_file)
         try:
@@ -131,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         result = run_agent_task(
             args.question,
             model,
-            DockerRunner(get_simulator("simblock").image_tag),
+            DockerRunner(),
             prompt_answer,
             lambda plan: prompt_decision(plan, allow_revise=True),
             runs_root=args.runs_dir,
@@ -144,13 +146,13 @@ def main(argv: list[str] | None = None) -> int:
         return _print_result(result)
 
     try:
-        simulator = get_simulator(load_plan(args.plan).simulator)
+        load_plan(args.plan)
     except (PlanError, SimulatorError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     result = run_task(
         args.plan,
-        DockerRunner(simulator.image_tag),
+        DockerRunner(),
         prompt_decision,
         runs_root=args.runs_dir,
         budget=Budget(time_limit_seconds=args.time_limit_seconds),

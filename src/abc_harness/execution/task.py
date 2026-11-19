@@ -19,13 +19,13 @@ from pathlib import Path
 from typing import Any
 
 from abc_harness import __version__
-from abc_harness.approval import record_decision, require_approval
-from abc_harness.limits import Budget, LimitReached
-from abc_harness.plan import Plan, SimulationRunSpec, canonical_json, load_plan
-from abc_harness.report import write_json, write_report
-from abc_harness.runner import Runner
+from abc_harness.execution.limits import Budget, LimitReached
+from abc_harness.execution.report import write_json, write_report
+from abc_harness.execution.runner import Runner, RunnerError
+from abc_harness.execution.trace import Trace
+from abc_harness.planning.approval import NotApproved, record_decision, require_approval
+from abc_harness.planning.plan import Plan, SimulationRunSpec, canonical_json, load_plan
 from abc_harness.simulators import SimulatorError, get_simulator
-from abc_harness.trace import Trace
 
 # A decision function shows the plan to the researcher and returns
 # ("approve" | "revise" | "reject", comment).
@@ -97,12 +97,24 @@ class Task:
         }
         self.trace.event("task_started", task_id=self.task_id, **manifest_fields)
 
+    def pin_image(self, plan: Plan) -> Plan:
+        """Fix the execution image by ID, so the plan version, and with it the approval, covers the image.
+
+        A plan without `execution_image` gets the ID the simulator's image tag points to now. A plan that
+        already names one (for example a plan.json from an earlier task) keeps it if that image still exists.
+        Raises RunnerError when the image is missing.
+        """
+        image = plan.execution_image or get_simulator(plan.simulator).image_tag
+        image_id = self.runner.image_info(image)["image_id"]
+        return Plan({**plan.data, "execution_image": image_id})
+
     def add_plan(self, plan: Plan) -> None:
         """Store a proposed plan version under plans/ so every version stays inspectable."""
         self.plans[plan.version] = plan
         path = self.artifact_dir / "plans" / f"{plan.short_version}.json"
         path.write_text(canonical_json(plan.data) + "\n", encoding="utf-8")
-        self.trace.event("plan_proposed", plan_version=plan.version, runs=len(plan.runs()))
+        self.trace.event("plan_proposed", plan_version=plan.version, runs=len(plan.runs()),
+                         execution_image=plan.execution_image)  # fmt: skip
 
     def review(self, plan: Plan, decide: DecideFn) -> tuple[str, str]:
         """Show a plan to the researcher, outside the active-runtime budget, and record the decision."""
@@ -119,19 +131,27 @@ class Task:
         if self.executed is not None:
             raise RuntimeError(f"this task already executed plan {self.executed.short_version}")
         simulator = get_simulator(plan.simulator)
+        image = plan.execution_image
+        if image is None:
+            raise NotApproved("the plan names no execution image; the harness pins one before review")
+        try:
+            self.runner.image_info(image)
+        except RunnerError as e:
+            raise NotApproved(f"the approved execution image {image} is no longer available; "
+                              "propose a new plan version for the current image") from e  # fmt: skip
         self.executed = plan
         self.records = [RunRecord(s.run_id, s.configuration, s.seed, s.params) for s in plan.runs()]
         (self.artifact_dir / "plan.json").write_text(canonical_json(plan.data) + "\n", encoding="utf-8")
-        self.manifest.update(self.runner.image_info())
+        self.manifest.update(image=simulator.image_tag, image_id=image)
         self.manifest.update(plan_version=plan.version, simulator=plan.simulator, command=simulator.command())
 
         workspace = self.artifact_dir / "workspace"
         workspace.mkdir()
         pristine = workspace / "source"
         self.started_containers = True
-        self.runner.export(simulator.source_path_in_image, pristine)
+        self.runner.export(image, simulator.source_path_in_image, pristine)
         revision_file = self.artifact_dir / "simulator_revision.txt"
-        self.runner.export(simulator.revision_path_in_image, revision_file)
+        self.runner.export(image, simulator.revision_path_in_image, revision_file)
         self.manifest["simulator_revision"] = revision_file.read_text(encoding="utf-8").strip()
         self.trace.event("workspace_prepared", simulator_revision=self.manifest["simulator_revision"])
 
@@ -142,7 +162,7 @@ class Task:
                 self._run_one(spec, record, plan, simulator, pristine)
         except LimitReached as e:
             self.trace.event("limit_reached", limit=e.limit, detail=str(e))
-            self.runner.cleanup(self.task_id)
+            self._cleanup()
             return STOPPED, str(e)
 
         completed = sum(r.status == "completed" for r in self.records)
@@ -162,7 +182,9 @@ class Task:
         timeout = min(plan.run_timeout_seconds, self.budget.remaining_seconds)
         limited_by_budget = timeout < plan.run_timeout_seconds
         self.trace.event("run_started", run_id=spec.run_id, seed=spec.seed, params=spec.params, timeout_seconds=timeout)
-        outcome = self.runner.run(self.task_id, spec.run_id, run_dir, simulator.command(), timeout)
+        image = plan.execution_image
+        assert image is not None
+        outcome = self.runner.run(image, self.task_id, spec.run_id, run_dir, simulator.command(), timeout)
         record.exit_code = outcome.exit_code
         record.duration_seconds = round(outcome.duration_seconds, 3)
 
@@ -190,9 +212,18 @@ class Task:
         if outcome.timed_out and limited_by_budget:
             raise LimitReached("time", f"active runtime ran out during {spec.run_id}")
 
+    def _cleanup(self) -> None:
+        """Remove the task's containers. A failure is recorded, never raised, so the results still get written."""
+        try:
+            self.runner.cleanup(self.task_id)
+        except Exception as e:  # noqa: BLE001 - partial results must survive a broken Docker daemon
+            error = f"{type(e).__name__}: {e}"
+            self.manifest["cleanup_error"] = error
+            self.trace.event("cleanup_failed", error=error)
+
     def close(self, status: str, stop_reason: str) -> TaskResult:
         if self.started_containers:
-            self.runner.cleanup(self.task_id)
+            self._cleanup()
         self.manifest.update(
             status=status,
             stop_reason=stop_reason,
@@ -223,9 +254,10 @@ def run_task(
     plan = load_plan(plan_path)
     task = Task(runner, runs_root, budget, mode="plan_file", plan_file=str(plan_path))
     shutil.copyfile(plan_path, task.artifact_dir / "plan.toml")
-    task.add_plan(plan)
     status, stop_reason = FAILED, "unknown"
     try:
+        plan = task.pin_image(plan)
+        task.add_plan(plan)
         decision, _ = task.review(plan, decide)
         if decision != "approve":
             status, stop_reason = REJECTED, "plan rejected by researcher"

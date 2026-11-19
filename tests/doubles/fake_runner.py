@@ -2,18 +2,26 @@
 
 It copies fixture source instead of exporting it from an image, and instead of
 starting a container it writes fixture output (or fails, or times out) and
-advances an optional fake clock by a fixed number of seconds.
+advances an optional fake clock by a fixed number of seconds. Each image tag
+points to a fake image ID; `rebuild` points the tag at a new ID, as
+`abc-harness image build` would. The tag behind an ID selects the fixture set:
+a tag containing "blocksim" gets BlockSim files.
 """
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from abc_harness.runner import RunOutcome
+from abc_harness.execution.runner import RunnerError, RunOutcome
 
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "simblock"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+
+
+def _fixtures(tag: str) -> Path:
+    return FIXTURES / ("blocksim" if "blocksim" in tag else "simblock")
 
 
 class FakeClock:
@@ -36,21 +44,50 @@ class FakeRunner:
     seconds_per_run: float = 1.0
     is_test_double: bool = True
     runs: list[str] = field(default_factory=list)
+    images: list[str] = field(default_factory=list)
     exports: list[str] = field(default_factory=list)
     cleanups: list[str] = field(default_factory=list)
+    cleanup_error: str | None = None  # set to make cleanup fail, as with an unreachable Docker daemon
+    tags: dict[str, str] = field(default_factory=dict)  # tag -> current image ID
+    built: dict[str, str] = field(default_factory=dict)  # every image ID that exists -> its tag
 
-    def image_info(self) -> dict[str, str]:
-        return {"image": "fake-image", "image_id": "sha256:fake"}
+    def rebuild(self, tag: str, remove_old: bool = False) -> str:
+        """Point the tag at a new image ID, as rebuilding the image would."""
+        old = self._current(tag)
+        if remove_old:
+            del self.built[old]
+        new = "sha256:" + hashlib.sha256(f"{old}-rebuilt".encode()).hexdigest()
+        self.tags[tag], self.built[new] = new, tag
+        return new
 
-    def export(self, image_path: str, dest: Path) -> None:
+    def _current(self, tag: str) -> str:
+        if tag not in self.tags:
+            self.tags[tag] = "sha256:" + hashlib.sha256(tag.encode()).hexdigest()
+            self.built[self.tags[tag]] = tag
+        return self.tags[tag]
+
+    def _tag(self, image: str) -> str:
+        return self.built.get(image, image)
+
+    def image_info(self, image: str) -> dict[str, str]:
+        if image.startswith("sha256:"):
+            if image not in self.built:
+                raise RunnerError(f"execution image {image} not found")
+            return {"image": image, "image_id": image}
+        return {"image": image, "image_id": self._current(image)}
+
+    def export(self, image: str, image_path: str, dest: Path) -> None:
         self.exports.append(image_path)
         if image_path.endswith("REVISION"):
-            shutil.copyfile(FIXTURES / "REVISION", dest)
+            shutil.copyfile(_fixtures(self._tag(image)) / "REVISION", dest)
         else:
-            shutil.copytree(FIXTURES / "source", dest)
+            shutil.copytree(_fixtures(self._tag(image)) / "source", dest)
 
-    def run(self, task_id: str, run_id: str, workdir: Path, command: str, timeout_seconds: float) -> RunOutcome:
+    def run(
+        self, image: str, task_id: str, run_id: str, workdir: Path, command: str, timeout_seconds: float
+    ) -> RunOutcome:
         self.runs.append(run_id)
+        self.images.append(image)
         behaviour = self.behaviours.get(run_id, "complete")
         if self.clock:
             self.clock.advance(min(self.seconds_per_run, timeout_seconds))
@@ -58,15 +95,35 @@ class FakeRunner:
             return RunOutcome(None, True, timeout_seconds)
         if behaviour == "fail":
             return RunOutcome(1, False, self.seconds_per_run)
+        if "blocksim" in self._tag(image):
+            self._write_blocksim(workdir, behaviour)
+        else:
+            self._write_simblock(workdir, behaviour)
+        return RunOutcome(0, False, self.seconds_per_run)
+
+    def cleanup(self, task_id: str) -> None:
+        self.cleanups.append(task_id)
+        if self.cleanup_error:
+            raise RunnerError(self.cleanup_error)
+
+    @staticmethod
+    def _write_simblock(workdir: Path, behaviour: str) -> None:
         output_dir = workdir / "src" / "dist" / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
         if behaviour == "garbage":
             (workdir / "stdout.txt").write_text("not simblock output\n")
             (output_dir / "blockList.txt").write_text("")
-        else:
-            shutil.copyfile(FIXTURES / "stdout.txt", workdir / "stdout.txt")
-            shutil.copyfile(FIXTURES / "blockList.txt", output_dir / "blockList.txt")
-        return RunOutcome(0, False, self.seconds_per_run)
+            return
+        shutil.copyfile(FIXTURES / "simblock" / "stdout.txt", workdir / "stdout.txt")
+        shutil.copyfile(FIXTURES / "simblock" / "blockList.txt", output_dir / "blockList.txt")
 
-    def cleanup(self, task_id: str) -> None:
-        self.cleanups.append(task_id)
+    @staticmethod
+    def _write_blocksim(workdir: Path, behaviour: str) -> None:
+        output_dir = workdir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (workdir / "stdout.txt").write_text("")
+        if behaviour == "garbage":
+            (output_dir / "SimOutput.csv").write_text("Total Blocks,Stale Blocks\n")
+            return
+        for name in ("SimOutput.csv", "Chain.csv"):
+            shutil.copyfile(FIXTURES / "blocksim" / "output" / name, output_dir / name)

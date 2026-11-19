@@ -1,0 +1,21 @@
+# Example BlockSim plan. Review and run it with:
+#   uv run abc-harness run examples/blocksim-baseline.toml
+
+title = "BlockSim: propagation delay versus stale blocks and the largest miner's share"
+question = "With three miners holding 50%, 20% and 30% of the hash power, how do the stale rate and the largest miner's share of main-chain blocks change when the mean block propagation delay grows from 0.42 s to 60 s?"
+simulator = "blocksim"
+rationale = "BlockSim's Bitcoin model gives each miner its own hash power (BS-M1), draws one propagation delay per block (BS-M2), counts stale blocks after longest-chain resolution (BS-M3), and reports which miner mined each main-chain block (BS-M4). It has no topology (BS-N1), so delay is a single mean value."
+seeds = [1, 2, 3, 4, 5]
+metrics = ["stale_rate", "node0_block_share"]
+run_timeout_seconds = 60
+
+[baseline]
+simTime = 86400
+HASH_POWERS = [50, 20, 30]
+
+[[configurations]]
+name = "delay-0p42s"
+
+[[configurations]]
+name = "delay-60s"
+params = { Bdelay = 60 }

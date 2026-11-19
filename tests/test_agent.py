@@ -7,11 +7,11 @@ import json
 from doubles.fake_runner import FakeClock, FakeRunner
 from doubles.scripted_model import ScriptedModel, last_tool_result, run_last_proposed, text_turn, tool_turn
 
-from abc_harness.agent import run_agent_task
-from abc_harness.approval import read_decisions
-from abc_harness.limits import Budget
-from abc_harness.secrets import Secrets
-from abc_harness.trace import read_trace, summarize_trace
+from abc_harness.agent.loop import run_agent_task
+from abc_harness.agent.secrets import Secrets
+from abc_harness.execution.limits import Budget
+from abc_harness.execution.trace import read_trace, summarize_trace
+from abc_harness.planning.approval import read_decisions
 
 SECRET = "sk-ant-test-secret-value-0123456789"
 
@@ -178,3 +178,33 @@ def test_secrets_never_reach_the_trace(tmp_path):
     assert SECRET not in trace_text
     assert "[REDACTED]" in trace_text
     assert read_trace(result.artifact_dir / "trace.jsonl")[-1]["event"] == "task_finished"
+
+
+def test_model_call_gets_only_the_remaining_time(tmp_path):
+    clock = FakeClock()
+    model = ScriptedModel([text_turn("still thinking")], clock=clock, seconds_per_call=60)
+    result, _ = run(model, decisions(), tmp_path, budget=Budget(time_limit_seconds=10, clock=clock))
+    assert model.requests[0]["timeout_seconds"] == 10
+    assert result.status == "stopped_by_limit"
+    assert clock.now == 10
+
+
+def test_final_answer_after_the_limit_does_not_complete_the_task(tmp_path):
+    clock = FakeClock()
+    model = ScriptedModel([text_turn("All done.")], clock=clock, seconds_per_call=10)
+    result, _ = run(model, decisions(), tmp_path, budget=Budget(time_limit_seconds=10, clock=clock))
+    assert result.status == "stopped_by_limit"
+    events = [e["event"] for e in read_trace(result.artifact_dir / "trace.jsonl")]
+    assert "model_call" in events and "limit_reached" in events
+
+
+def test_the_agent_cannot_choose_the_execution_image(tmp_path):
+    model = ScriptedModel([
+        tool_turn("propose_plan", {**plan_input(), "execution_image": "sha256:" + "b" * 64}),
+        lambda messages: text_turn(last_tool_result(messages)["content"]),
+    ])  # fmt: skip
+    review = decisions()
+    result, runner = run(model, review, tmp_path)
+    assert result.status == "not_executed"
+    assert review.seen == [] and runner.runs == []
+    assert "harness pins the image" in model.calls[1][-1]["content"][0]["content"]

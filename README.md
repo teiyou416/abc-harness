@@ -5,7 +5,7 @@ reproducible blockchain simulation. The researcher reviews an experiment plan
 and approves it. The harness then runs the simulator in a Docker container and
 writes a report linked to the raw output.
 
-The harness runs a hand-written SimBlock plan after approval (milestone M1),
+The harness runs a hand-written SimBlock or BlockSim plan after approval,
 and an agent drafts plans from a research question (milestone M2).
 [docs/status.md](docs/status.md) says what works today.
 
@@ -26,8 +26,15 @@ uv run abc-harness image build
 uv run abc-harness run examples/simblock-baseline.toml
 ```
 
-`image build` creates `abc-harness-sim:simblock-8a1285a`, which contains
-SimBlock at commit `8a1285aa37b832385b0be2ae6f804885a4a7031f` and JDK 21.
+`image build` creates two images:
+
+- `abc-harness-sim:simblock-8a1285a`: SimBlock at commit
+  `8a1285aa37b832385b0be2ae6f804885a4a7031f` with JDK 21.
+- `abc-harness-sim:blocksim-603361d`: BlockSim at commit
+  `603361dab49101cdd820dbfd86e19536d841cbae` with Python 3.11 and pandas 1.5.3.
+
+`uv run abc-harness run examples/blocksim-baseline.toml` runs the BlockSim
+example the same way.
 
 `run` prints the plan and asks `Approve this plan? [approve/reject]:`.
 
@@ -69,7 +76,9 @@ python3 scripts/recompute_metric.py runs/<task_id>/raw/interval-30s__seed-1 --no
 ```
 
 Its `t90_ms` and `orphan_rate` must equal that run's row in `report.md` and its
-entry in `runs/<task_id>/results.json`.
+entry in `runs/<task_id>/results.json`. For a BlockSim run, leave out
+`--nodes`; the script reads `SimOutput.csv` and `Chain.csv` and prints
+`stale_rate` and `node0_block_share`.
 
 ## What a task directory holds
 
@@ -82,9 +91,9 @@ entry in `runs/<task_id>/results.json`.
 | `history.md` | (`ask` only) every message of every context window, with full tool results |
 | `manifest.json` | simulator commit, image ID, command, limits, and task status |
 | `results.json`, `report.md` | per-run status and metrics, and the readable report |
-| `raw/<run_id>/` | `stdout.txt`, `stderr.txt`, `blockList.txt`, `static.json` from SimBlock |
-| `changes/<run_id>.diff` | the parameter and seed edits applied to the SimBlock source |
-| `workspace/source/` | the unmodified SimBlock source copied from the image |
+| `raw/<run_id>/` | the simulator's own output: `stdout.txt`, `blockList.txt`, `static.json` from SimBlock; `result.xlsx` and one CSV per sheet from BlockSim |
+| `changes/<run_id>.diff` | the parameter and seed edits applied to the simulator source |
+| `workspace/source/` | the unmodified simulator source copied from the image |
 
 ## Develop
 

@@ -12,6 +12,12 @@ MAX_OUTPUT_TOKENS = 16_384
 # On a safety decline the API reruns the request on a fallback model chosen
 # by refusal category, inside the same call.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+MAX_RETRIES = 3
+RETRY_STATUS = {408, 409, 429}  # plus every 5xx, as the SDK's own retry rule
+
+
+class ModelDeadlineExceeded(Exception):
+    """The call, including its retries, did not finish before the task's remaining active time ran out."""
 
 
 @dataclass
@@ -41,16 +47,26 @@ class ModelClient(Protocol):
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         max_tokens: int = MAX_OUTPUT_TOKENS,
-    ) -> ModelTurn: ...
+        timeout_seconds: float | None = None,
+    ) -> ModelTurn:
+        """Return one model turn. With `timeout_seconds`, raise ModelDeadlineExceeded once that much time
+        has passed, counting every retry."""
+        ...
 
 
 class AnthropicModel:
-    """Calls the Claude Messages API. The SDK retries 429, 5xx and connection errors itself."""
+    """Calls the Claude Messages API.
+
+    The harness retries 408, 409, 429, 5xx and connection errors itself, up to
+    MAX_RETRIES times, so that every attempt and every pause between attempts
+    fits inside the deadline the caller passes.
+    """
 
     def __init__(self, api_key: str, model: str = DEFAULT_MODEL, effort: str = DEFAULT_EFFORT) -> None:
         import anthropic
 
-        self._client = anthropic.Anthropic(api_key=api_key, max_retries=3)
+        self._anthropic = anthropic
+        self._client = anthropic.Anthropic(api_key=api_key, max_retries=0)
         self.name = model
         self.effort = effort
 
@@ -60,10 +76,12 @@ class AnthropicModel:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         max_tokens: int = MAX_OUTPUT_TOKENS,
+        timeout_seconds: float | None = None,
     ) -> ModelTurn:
         started = time.monotonic()
+        deadline = None if timeout_seconds is None else started + timeout_seconds
         optional: dict[str, Any] = {"tools": tools} if tools else {}
-        response = self._client.beta.messages.create(
+        request = dict(
             model=self.name,
             max_tokens=max_tokens,
             # An explicit breakpoint after the fixed system prompt (and the
@@ -77,6 +95,7 @@ class AnthropicModel:
             fallbacks="default",
             **optional,
         )
+        response = self._send(request, deadline)
         usage = {k: v for k, v in response.usage.to_dict().items() if isinstance(v, int)}
         return ModelTurn(
             content=[block.to_dict() for block in response.content],
@@ -86,3 +105,25 @@ class AnthropicModel:
             latency_seconds=round(time.monotonic() - started, 3),
             request_id=getattr(response, "_request_id", None),
         )
+
+    def _send(self, request: dict[str, Any], deadline: float | None) -> Any:
+        errors = self._anthropic
+        for attempt in range(MAX_RETRIES + 1):
+            left = None if deadline is None else deadline - time.monotonic()
+            if left is not None and left <= 0:
+                raise ModelDeadlineExceeded("the task's active time ran out before the model answered")
+            try:
+                client = self._client if left is None else self._client.with_options(timeout=left)
+                return client.beta.messages.create(**request)
+            except (errors.APIConnectionError, errors.APIStatusError) as e:
+                status = getattr(e, "status_code", None)
+                retryable = status is None or status in RETRY_STATUS or status >= 500
+                if not retryable or attempt == MAX_RETRIES:
+                    if isinstance(e, errors.APITimeoutError) and deadline is not None:
+                        raise ModelDeadlineExceeded("the task's active time ran out during a model call") from e
+                    raise
+                pause = min(0.5 * 2**attempt, 8.0)
+                if deadline is not None:
+                    pause = min(pause, max(0.0, deadline - time.monotonic()))
+                time.sleep(pause)
+        raise AssertionError("unreachable")

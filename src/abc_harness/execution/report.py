@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from abc_harness.plan import Plan
-    from abc_harness.task import RunRecord
+    from abc_harness.execution.task import RunRecord
+    from abc_harness.planning.plan import Plan
 
 
 def write_json(path: Path, data: Any) -> None:
@@ -41,7 +41,7 @@ def write_report(
         f"- Status: **{manifest['status']}** ({manifest['stop_reason']})",
         f"- Plan version: `{plan.version}`",
         f"- Simulator: {plan.simulator} at `{manifest.get('simulator_revision', 'not prepared')}`",
-        f"- Execution image: `{manifest.get('image', 'not used')}` (`{manifest.get('image_id', '-')}`)",
+        f"- Execution image: `{manifest.get('image_id', 'not used')}` (built as `{manifest.get('image', '-')}`)",
         (
             f"- Active runtime: {manifest['active_seconds']:.1f}s; "
             f"waiting for the researcher: {manifest['waiting_seconds']:.1f}s"
@@ -49,6 +49,8 @@ def write_report(
     ]
     if manifest.get("test_double"):
         lines.append("- **These results come from a test double, not from a real simulator.**")
+    if manifest.get("cleanup_error"):
+        lines.append(f"- **Container cleanup failed; check `docker ps` for leftovers:** {manifest['cleanup_error']}")
     if manifest.get("question"):
         lines.append(f"- Researcher's request: {manifest['question']}")
     lines += ["", f"Question: {plan.data['question']}", ""]

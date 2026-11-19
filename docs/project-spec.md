@@ -31,7 +31,7 @@ Each supported simulator has a capability card in the repository. A card lists w
 - Before approval, the agent may only read files, search literature, and ask the researcher questions.
 - The researcher can approve, request changes with comments, or reject. A change request produces a new plan version that needs its own approval. A rejection ends the task without starting any simulator container.
 - The harness writes each decision to the artifact directory with the plan hash and version. The runner and sandbox exec refuse to start unless an approval for the current plan version exists.
-- A change to the simulator, parameters, metrics, permitted edits, validation check, or execution image requires a new plan version and fresh approval.
+- A change to the simulator, parameters, metrics, permitted edits, validation check, or execution image requires a new plan version and fresh approval. Before the researcher sees a plan, the harness writes the execution image's ID into the plan's `execution_image` field, so the plan version covers the image. The agent cannot set this field. The runner starts only that image ID; if it no longer exists, the harness refuses to run and a new plan version is needed.
 - Retrying one simulation run once after a transient failure, with an unchanged configuration, does not require new approval. The trace records the retry.
 
 ## Permitted edits

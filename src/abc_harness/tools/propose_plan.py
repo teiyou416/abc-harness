@@ -6,8 +6,9 @@ import json
 from typing import Any
 
 from abc_harness.plan import PlanError, validate_plan
+from abc_harness.runner import RunnerError
 from abc_harness.simulators import SIMULATORS, SimulatorError
-from abc_harness.task import REJECTED
+from abc_harness.task import FAILED, REJECTED
 from abc_harness.tools.base import EndTask, ToolContext, ToolError
 
 PLAN_SCHEMA: dict[str, Any] = {
@@ -53,10 +54,16 @@ SPEC: dict[str, Any] = {
 def run(ctx: ToolContext, args: dict[str, Any]) -> str:
     if ctx.execution:
         raise ToolError("this task already ran a plan; write your final answer instead")
+    if "execution_image" in args:
+        raise ToolError("plan refused: leave out execution_image; the harness pins the image itself")
     try:
         plan = validate_plan(dict(args))
     except (PlanError, SimulatorError) as e:
         raise ToolError(f"plan refused: {e}") from e
+    try:
+        plan = ctx.task.pin_image(plan)
+    except RunnerError as e:
+        raise EndTask(FAILED, str(e)) from e
     ctx.task.add_plan(plan)
     decision, comment = ctx.task.review(plan, ctx.review)
     if decision == "reject":

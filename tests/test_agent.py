@@ -196,3 +196,15 @@ def test_final_answer_after_the_limit_does_not_complete_the_task(tmp_path):
     assert result.status == "stopped_by_limit"
     events = [e["event"] for e in read_trace(result.artifact_dir / "trace.jsonl")]
     assert "model_call" in events and "limit_reached" in events
+
+
+def test_the_agent_cannot_choose_the_execution_image(tmp_path):
+    model = ScriptedModel([
+        tool_turn("propose_plan", {**plan_input(), "execution_image": "sha256:" + "b" * 64}),
+        lambda messages: text_turn(last_tool_result(messages)["content"]),
+    ])  # fmt: skip
+    review = decisions()
+    result, runner = run(model, review, tmp_path)
+    assert result.status == "not_executed"
+    assert review.seen == [] and runner.runs == []
+    assert "harness pins the image" in model.calls[1][-1]["content"][0]["content"]

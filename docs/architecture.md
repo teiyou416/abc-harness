@@ -86,9 +86,11 @@ approval. A rejection ends the task without another model call.
 3. The model requests a tool. The harness checks the request against the
    limits and the approval state, executes it, writes a trace event, and
    returns the result to the model.
-4. The model drafts a plan. The Human Interaction tool shows it to the
-   researcher, and the harness records the decision for that plan version.
-5. After approval, the runner executes simulation runs in the execution image.
+4. The model drafts a plan. The harness pins the execution image's ID into
+   it, the Human Interaction tool shows it to the researcher, and the harness
+   records the decision for that plan version.
+5. After approval, the runner executes simulation runs in exactly that image
+   ID, even if the image tag was rebuilt in the meantime.
    The report step matches planned runs against completed runs and computes
    metrics from raw output.
 6. The loop ends when the model finishes, the researcher rejects the plan, or a
@@ -154,7 +156,9 @@ applies them.
 - Each simulator has its own image, built from `docker/<simulator>/Dockerfile`
   with `abc-harness image build`. The SimBlock image is a digest-pinned
   `eclipse-temurin:21-jdk` plus the SimBlock source at a pinned commit, checked
-  by SHA-256. Each task manifest records the image ID and simulator commit.
+  by SHA-256. Each plan pins the image ID it runs in, and each task manifest
+  records that ID and the simulator commit. Rebuilding an image therefore
+  changes the version of every new plan.
 - SimBlock reads its parameters from Java constants and hard-codes its random
   seed, so every simulation run gets its own source copy with the planned
   constants and seed written in, and compiles it with `javac` in its container.

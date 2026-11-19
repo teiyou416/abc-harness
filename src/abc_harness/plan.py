@@ -1,14 +1,17 @@
 """Experiment plans: loading, validation, versioning, and display.
 
 A plan version is the SHA-256 of the plan's canonical JSON form. Any change to
-the simulator, parameters, seeds, metrics, or permitted edits changes the
-version, so an approval recorded for one version never covers another.
+the simulator, parameters, seeds, metrics, permitted edits, or execution image
+changes the version, so an approval recorded for one version never covers
+another. The harness fills `execution_image` with the image ID before the
+researcher sees the plan (`Task.pin_image`).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,7 +30,8 @@ REQUIRED_FIELDS = {
     "baseline": dict,
     "configurations": list,
 }
-OPTIONAL_FIELDS = {"permitted_edits": list}
+OPTIONAL_FIELDS = {"permitted_edits": list, "execution_image": str}
+IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 class PlanError(ValueError):
@@ -65,6 +69,11 @@ class Plan:
         return list(self.data["metrics"])
 
     @property
+    def execution_image(self) -> str | None:
+        """The image ID this plan runs in; None until the harness pins it."""
+        return self.data.get("execution_image")
+
+    @property
     def run_timeout_seconds(self) -> int:
         return self.data["run_timeout_seconds"]
 
@@ -87,6 +96,7 @@ class Plan:
             "",
             f"Question: {d['question']}",
             f"Simulator: {d['simulator']}",
+            f"Execution image: {d.get('execution_image', 'not pinned yet')}",
             f"Why this simulator: {d['rationale']}",
             "",
             "Baseline parameters:",
@@ -152,6 +162,8 @@ def validate_plan(data: dict[str, Any]) -> Plan:
         names.append(config["name"])
     if len(set(names)) != len(names):
         raise PlanError("configuration names must be unique")
+    if "execution_image" in data and not IMAGE_ID.fullmatch(data["execution_image"]):
+        raise PlanError("execution_image must be a full image ID (sha256: followed by 64 hex digits)")
     if data.get("permitted_edits"):
         raise PlanError("permitted_edits is not supported until milestone M5")
 

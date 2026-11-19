@@ -78,11 +78,11 @@ def test_soft_limit_compresses_into_a_new_window(tmp_path):
 
 def test_task_state_comes_from_harness_records(tmp_path):
     task = Task(FakeRunner(), tmp_path / "runs", Budget())
-    plan = validate_plan({
+    plan = task.pin_image(validate_plan({
         "title": "Intervals", "question": "q", "simulator": "simblock", "rationale": "r", "seeds": [1, 2],
         "metrics": ["orphan_rate"], "run_timeout_seconds": 5,
         "baseline": {"NUM_OF_NODES": 10, "END_BLOCK_HEIGHT": 3}, "configurations": [{"name": "base"}],
-    })  # fmt: skip
+    }))  # fmt: skip
     task.add_plan(plan)
     task.review(plan, lambda p: ("approve", ""))
     task.execute(plan)

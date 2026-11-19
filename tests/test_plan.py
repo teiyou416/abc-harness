@@ -67,3 +67,10 @@ def test_invalid_plans_are_refused(overrides, error):
 
 def test_valid_plan_data_is_accepted():
     assert validate_plan(_plan_data()).runs()[0].run_id == "base__seed-1"
+
+
+@pytest.mark.parametrize("image", ["abc-harness-sim:simblock-8a1285a", "sha256:short", "sha256:" + "G" * 64])
+def test_execution_image_must_be_a_full_image_id(image, write_plan):
+    data = load_plan(write_plan()).data
+    with pytest.raises(PlanError, match="execution_image"):
+        validate_plan({**data, "execution_image": image})

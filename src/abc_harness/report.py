@@ -41,7 +41,7 @@ def write_report(
         f"- Status: **{manifest['status']}** ({manifest['stop_reason']})",
         f"- Plan version: `{plan.version}`",
         f"- Simulator: {plan.simulator} at `{manifest.get('simulator_revision', 'not prepared')}`",
-        f"- Execution image: `{manifest.get('image', 'not used')}` (`{manifest.get('image_id', '-')}`)",
+        f"- Execution image: `{manifest.get('image_id', 'not used')}` (built as `{manifest.get('image', '-')}`)",
         (
             f"- Active runtime: {manifest['active_seconds']:.1f}s; "
             f"waiting for the researcher: {manifest['waiting_seconds']:.1f}s"

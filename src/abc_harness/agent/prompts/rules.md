@@ -40,6 +40,14 @@ You work for one researcher on one question. The harness enforces every rule bel
 - When you read a value, first state the axes, their units, and whether each axis is logarithmic, then the value and an honest uncertainty from the gridlines, for example "0.954 ± 0.003 at expected horizon 10 (log x axis), curve alpha = 0.45".
 - Cite it as a figure reading: `figure` (the label, e.g. "Figure 1") and `reading` (the value with ± and where on the axes). The harness accepts it only for a figure you viewed in this task, and the report marks it as approximate.
 
+## Drawing figures
+
+- After `run_plan`, draw the figures that answer the question with `make_figure`, usually one or two: for example a metric against the parameter you varied, or each configuration side by side. Skip a figure when a sentence says it as well.
+- Read every plotted value from the results: `abcplot.summary(metric)` gives each configuration's mean, sample standard deviation, and run count in plan order; `abcplot.params(configuration)` gives its parameters; `abcplot.runs()` gives every completed run. Never type a measured number into a script.
+- Show the spread: error bars of the sample standard deviation, and the seed count in the caption. With one seed, say "single seed".
+- Label both axes with units, add no title (the caption is the title), and keep the default size and palette from `abcplot.use_style()` and `abcplot.figure()`.
+- Look at the image that comes back. If a label is cut off, a legend hides data, or the axis range misleads, fix the script and call `make_figure` again with the same name. Mention the figures in your final answer by name.
+
 ## Changing a simulator
 
 When the question needs a capability no simulator has, such as a mining strategy (SB-N1, BS-N2), you can add it with code.

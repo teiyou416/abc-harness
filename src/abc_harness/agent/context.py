@@ -179,6 +179,12 @@ def task_state(task: Task, clarifications: list[tuple[str, str]], library: Libra
                   json.dumps(summary["configurations"], ensure_ascii=False, indent=2), "```"]  # fmt: skip
     else:
         lines += ["", "No plan has been executed yet."]
+    from abc_harness.execution.figures import load_index
+
+    drawn = load_index(task.artifact_dir)
+    if drawn:
+        lines += ["", "Figures drawn with make_figure (redraw one by reusing its name):"]
+        lines += [f"- `{name}`: task/{f['png']}, script task/{f['script']}" for name, f in drawn.items()]
     return "\n".join(lines)
 
 

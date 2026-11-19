@@ -44,8 +44,12 @@ append to it. Git already records the history.
   `history.md`.
 - `search_files` lets the agent find lines by regular expression, or files by
   name, in the simulator source, the example plans, and its task directory.
-- `make check` runs ruff and 173 offline tests. `make test-docker` runs 9
-  integration tests against both execution images and the PDF parser image, and `make test-live` runs 7
+- After a plan runs, `make_figure` lets the agent draw static figures of the
+  results: its matplotlib script runs in the plot image (results read-only,
+  no network), the agent sees the PNG and can redraw, and the report shows
+  each figure with its caption and script.
+- `make check` runs ruff and 185 offline tests. `make test-docker` runs 11
+  integration tests against both execution images, the PDF parser image, and the plot image, and `make test-live` runs 7
   tests against the Claude API and the literature services.
 
 ## Known broken

@@ -13,6 +13,7 @@ from typing import Any
 from abc_harness.agent.model import DEFAULT_EFFORT, DEFAULT_MODEL
 from abc_harness.agent.secrets import DEFAULT_ENV_FILE, MissingSecret, Secrets
 from abc_harness.execution.export import ExportError, export_task
+from abc_harness.execution.figures import PLOT_IMAGE
 from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LIMIT_SECONDS, Budget
 from abc_harness.execution.runner import DockerRunner, RunnerError, build_image
 from abc_harness.execution.task import TaskResult, run_task
@@ -27,7 +28,12 @@ Write = Callable[[str], None]
 
 S2_KEY = "SEMANTIC_SCHOLAR_API_KEY"  # optional; without it literature search uses OpenAlex only
 PDF_PARSER = "pdf-parser"
-PDF_PARSER_CONTEXT = Path(__file__).resolve().parents[2] / "docker" / "mineru"
+PLOT = "plot"
+# Images that are not simulators: name for --only -> (Docker build context, tag).
+TOOL_IMAGES = {
+    PDF_PARSER: (Path(__file__).resolve().parents[2] / "docker" / "mineru", PARSER_IMAGE),
+    PLOT: (Path(__file__).resolve().parents[2] / "docker" / "plot", PLOT_IMAGE),
+}
 
 def prompt_decision(
     plan: Plan, read: Read | None = None, write: Write = print, allow_revise: bool = False
@@ -78,8 +84,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     image = sub.add_parser("image", help="manage execution images")
     image_sub = image.add_subparsers(dest="image_command", required=True)
-    build = image_sub.add_parser("build", help="build the execution image of each simulator and the PDF parser image")
-    build.add_argument("--only", default="all", choices=["all", *sorted(SIMULATORS), PDF_PARSER],
+    build = image_sub.add_parser("build", help="build the execution image of each simulator and the tool images")
+    build.add_argument("--only", default="all", choices=["all", *sorted(SIMULATORS), *TOOL_IMAGES],
                        help="build one image instead of all")  # fmt: skip
 
     def task_options(p: argparse.ArgumentParser) -> None:
@@ -146,10 +152,10 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     if args.command == "image":
-        names = [*sorted(SIMULATORS), PDF_PARSER] if args.only == "all" else [args.only]
+        names = [*sorted(SIMULATORS), *TOOL_IMAGES] if args.only == "all" else [args.only]
         for name in names:
-            if name == PDF_PARSER:
-                context, tag = PDF_PARSER_CONTEXT, PARSER_IMAGE
+            if name in TOOL_IMAGES:
+                context, tag = TOOL_IMAGES[name]
             else:
                 context, tag = get_simulator(name).docker_context, get_simulator(name).image_tag
             print(f"Built {tag} ({build_image(context, tag)})")
@@ -321,6 +327,12 @@ def describe_event(e: dict[str, Any]) -> list[str]:
         error = f" ({e['error']})" if e.get("error") else ""
         mark = " " if e.get("status") == "completed" else "!"
         return [f"{mark}   {e.get('run_id')}: {e.get('status')}{error} in {e.get('duration_seconds') or 0:.1f}s {metrics}"]
+    if kind == "figure_started":
+        return [f"  drawing figure {e.get('name')} in the plot image"]
+    if kind == "figure_finished":
+        if e.get("ok"):
+            return [f"  figure {e.get('name')}: saved {e.get('png')} ({e.get('duration_seconds', 0):.1f}s)"]
+        return [f"! figure {e.get('name')} failed: {_short(e.get('error', ''))}"]
     if kind == "pdf_parse_started":
         return [(f"  parsing {e.get('pdf')} with the PDF parser (up to {e.get('timeout_seconds', 0) // 60:.0f} min, "
                 "not counted toward the time limit)")]  # fmt: skip

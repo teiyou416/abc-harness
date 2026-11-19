@@ -17,7 +17,7 @@ flowchart TB
     subgraph LOOP["Agent: agent/"]
         CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 131,072"]
         LLM["Model client: agent/model.py<br/>only holder of the API key"]
-        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_files, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan"]
+        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_files, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan,<br/>make_figure"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
     end
 
@@ -37,9 +37,11 @@ flowchart TB
         SIMBLOCK["SimBlock image: JDK 21 + pinned commit"]
         BLOCKSIM["BlockSim image: Python 3.11 + pinned commit"]
         PDFIMG["PDF parser image: MinerU, models built in"]
+        PLOTIMG["Plot image: matplotlib + abcplot"]
         RUNNER --> SIMBLOCK
         RUNNER --> BLOCKSIM
         RUNNER --> PDFIMG
+        RUNNER --> PLOTIMG
     end
 
     subgraph ART["runs/task_id/"]
@@ -106,6 +108,7 @@ checks that every module appears in this table.
 | Tools | `tools/ask_researcher.py` | Asks the researcher a question; the wait is not active time. |
 | Tools | `tools/propose_plan.py` | Validates a plan and its citations, pins the image, and gets the researcher's decision. |
 | Tools | `tools/run_plan.py` | Runs an approved plan and summarises the results, including the validation check, for the model. |
+| Tools | `tools/make_figure.py` | After `run_plan`, runs the agent's matplotlib script in the plot image and shows it the PNG. |
 | Tools | `tools/write_file.py` | Writes a whole permitted source file, or a file under `scratch/`, after approval. |
 | Tools | `tools/edit_file.py` | Replaces one exact passage in such a file. |
 | Tools | `tools/run_command.py` | Sandbox exec: runs a build or test command in the execution image. |
@@ -113,6 +116,7 @@ checks that every module appears in this table.
 | Execution | `execution/task.py` | One task end to end: artifact directory, plan versions, image pinning, PDF parsing with its cache, sandbox exec, the validation check, simulation runs, final artifacts. |
 | Execution | `execution/runner.py` | Docker: one container per simulation run, sandbox command, or PDF parse, no network, label-based cleanup. |
 | Execution | `execution/workspace.py` | The original, edited, and scratch trees; which paths a write may touch; the diff of the edits. |
+| Execution | `execution/figures.py` | Runs one figure script in the plot image with the results read-only, checks its PNG, and keeps script, PNG, SVG, and log in `figures/` with `figures/index.json`. |
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
 | Execution | `execution/limits.py` | The 30-minute active time and 500-call limits; waiting for the researcher and PDF parsing do not count. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl`, passes each redacted event to an optional listener (the live terminal output), and summarises it. |
@@ -145,11 +149,13 @@ cli.py -> agent/loop.py <-> agent/model.py
 
 ## Agent tools
 
-The agent has twelve tools, one module each in `tools/`: `describe_simulator`,
+The agent has thirteen tools, one module each in `tools/`: `describe_simulator`,
 `read_file`, `search_files`, `search_papers`, `read_paper`, `view_figure`, `ask_researcher`,
-`propose_plan`, `write_file`, `edit_file`, `run_command` (sandbox exec), and
-`run_plan`. The three code tools work only after the researcher approved a plan
-with permitted edits. Each module
+`propose_plan`, `write_file`, `edit_file`, `run_command` (sandbox exec),
+`run_plan`, and `make_figure`. The three code tools work only after the researcher approved a plan
+with permitted edits; `make_figure` works only after a plan ran, needs no
+approval of its own because it changes no experiment, and counts toward the
+task's time limit. Each module
 holds the definition sent to the model and the harness code that runs it;
 `agent/loop.py` keeps only the loop, context compression, and the dispatch by tool
 name. The harness validates every
@@ -294,6 +300,13 @@ applies them.
   `pdf_parse_seconds` instead of counting toward the task's limit. Its output
   is cached under `runs/.cache/pdf/<image id>/<PDF sha256>/` and copied into
   each task that needs it.
+- The plot image (`docker/plot/Dockerfile`) is the same digest-pinned
+  `python:3.12-slim` with pinned matplotlib and numpy and the `abcplot`
+  helper (`docker/plot/abcplot.py`: loads the results, applies the house
+  style, saves SVG and PNG). One container runs one figure script, with
+  `results.json`, `plan.json`, `validation.json`, and `raw/` read-only under
+  `/data`, only `/out` writable, no network, the simulation limits, the task
+  label, and a 120-second timeout.
 - Nothing is installed at runtime. A new dependency means a new image, which
   requires a new plan version and fresh approval.
 

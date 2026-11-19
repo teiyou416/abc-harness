@@ -39,7 +39,8 @@ append to it. Git already records the history.
   packages the edited source.
 - The terminal shows every model call (with the model's summarized thinking),
   tool call, plan decision, PDF parse, and simulation run as it happens, and
-  prints the run statistics (time, model calls, tokens, tools, runs) at the end; `--quiet` hides the
+  prints the run statistics (time, model calls, tokens, estimated cost at list
+  prices, tools, runs) at the end; `--quiet` hides the
   live part. Thinking summaries are also kept in `trace.jsonl` and
   `history.md`.
 - `search_files` lets the agent find lines by regular expression, or files by

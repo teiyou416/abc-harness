@@ -83,3 +83,25 @@ def test_every_tool_image_has_a_build_context():
 
     for name, (context, _) in TOOL_IMAGES.items():
         assert (context / "Dockerfile").is_file(), name
+
+
+def test_estimated_cost_prices_each_call_from_its_usage(tmp_path):
+    from abc_harness.execution.trace import Trace
+
+    trace = Trace(tmp_path / "trace.jsonl")
+    usage = {"input_tokens": 50_000, "output_tokens": 30_000, "cache_read_input_tokens": 500_000,
+             "cache_creation_input_tokens": 20_000}  # fmt: skip
+    trace.event("model_call", model="claude-opus-5-5", usage=usage)
+    trace.event("compaction", usage={"input_tokens": 10_000, "output_tokens": 1_000})  # priced as the task's model
+    trace.close()
+    # 0.05*4 + 0.03*20 + 0.5*0.20 + 0.02*5 = 1.00; the summary call: 0.01*4 + 0.001*20 = 0.06
+    total, priced, unknown = console.estimated_cost(tmp_path / "trace.jsonl", "claude-opus-5-5")
+    assert round(total, 6) == 1.06 and priced == {"claude-opus-5-5"} and unknown == set()
+    line = console.estimated_cost_line(tmp_path / "trace.jsonl", "claude-opus-5-5")
+    assert line == "Estimated cost: $1.06 at list prices for claude-opus-5-5 (an estimate, not a bill)"
+
+
+def test_unknown_models_are_named_not_guessed(tmp_path):
+    result, _ = run_watched(tmp_path, [text_turn("Done.")])
+    summary = "\n".join(console.task_summary(result.artifact_dir))
+    assert "Estimated cost: unknown (no list price for scripted)" in summary

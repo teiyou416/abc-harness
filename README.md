@@ -84,6 +84,10 @@ uv run abc-harness ask "Reproduce Figure 2 of this paper." --paper ~/papers/self
 
 ### Chat
 
+Ready-made prompts, in Chinese, Japanese, and English, are in `examples/prompts/`;
+`examples/prompts/common-ancestor-reproduction.md` reproduces a stubborn-mining
+experiment from a paper and draws a comparison figure.
+
 For follow-up questions, start a conversation instead:
 
 ```bash

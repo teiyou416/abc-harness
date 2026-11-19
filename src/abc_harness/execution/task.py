@@ -71,6 +71,7 @@ class TaskResult:
     status: str
     stop_reason: str
     runs: list[RunRecord]
+    summary: str | None = None  # the agent's final answer, if it wrote one
 
 
 def new_task_id() -> str:
@@ -404,7 +405,7 @@ class Task:
         self.trace.event("task_finished", status=status, stop_reason=stop_reason,
                          active_seconds=self.budget.active_seconds, llm_calls=self.budget.llm_calls)  # fmt: skip
         self.trace.close()
-        return TaskResult(self.task_id, self.artifact_dir, status, stop_reason, self.records)
+        return TaskResult(self.task_id, self.artifact_dir, status, stop_reason, self.records, self.summary)
 
 
 def run_task(

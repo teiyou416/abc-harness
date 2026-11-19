@@ -28,7 +28,8 @@ caps it at 100 lines, so the detail lives in the files it points to.
 The terms used here (task, plan version, simulation run, task workspace,
 execution image, runner, sandbox exec, test double, permitted edit, validation
 check, edited source, citation, quote, figure reading, supplied paper,
-PDF parser image, machine-recognized text, result figure, plot image) are defined in [docs/glossary.md](docs/glossary.md).
+PDF parser image, machine-recognized text, result figure, plot image, chat
+session) are defined in [docs/glossary.md](docs/glossary.md).
 
 ## Hard rules
 
@@ -86,4 +87,4 @@ model client.
 
 `make check` (lint + offline tests) · `make test` · `make test-docker` · `make test-live` · `make lint` · `make fmt`
 `make image` (build both execution images) · `make example` / `make example-blocksim` (review and run an example plan)
-`uv run abc-harness ask "<question>" [--paper paper.pdf]` (agent drafts a plan) · `uv run abc-harness trace summary runs/<task_id>` · `uv run abc-harness export runs/<task_id>`
+`uv run abc-harness ask "<question>" [--paper paper.pdf]` (agent drafts a plan) · `uv run abc-harness chat` (conversation, one task per request) · `uv run abc-harness trace summary runs/<task_id>` · `uv run abc-harness export runs/<task_id>`

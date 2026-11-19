@@ -77,6 +77,8 @@ Simulators run in a prebuilt Docker image with pinned simulator revisions, no ne
 
 Give each task an ID and an artifact directory. Save the approved plan and all decisions, cited sources, simulator revisions and image digest, configuration, code changes, validation results, random seeds where available, raw output, figures with the scripts that drew them, and a short report.
 
+A chat session (`abc-harness chat`) is a conversation of several tasks: each researcher request runs as its own task with its own approval, report, and limits. The harness gives each new task the earlier tasks' questions, plans, results, figures, and final answers from their records, and lets the agent read their artifact directories; a paper is cited only if found again or supplied in the new task.
+
 After a plan runs, the agent may draw static figures of the task's results. It writes a matplotlib script, which the harness runs in the plot image with the results read-only and no network. The script, PNG, and SVG are kept together, and the report shows each figure with its caption and a link to its script, so every plotted value can be traced to the results. Include enough information to rerun the experiment.
 
 Append events to `trace.jsonl` as work happens, and show them in the terminal as they happen. Record model calls with the model's summarized thinking, tool calls, active and waiting time, errors, and the final stop reason. At the end, print the run statistics: time, model calls and tokens, tool calls, and completed simulation runs. Record token usage when the provider supplies it and label cost estimates as estimates.

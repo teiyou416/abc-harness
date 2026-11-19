@@ -25,7 +25,8 @@ When unsure which tier applies, ask. A question costs less than rework.
 ## 3. Where code goes
 
 The package `src/abc_harness/` has one folder per layer: `agent/`, `tools/`,
-`execution/`, `planning/`, and `simulators/`, with `cli.py` on top. The
+`execution/`, `planning/`, `literature/`, and `simulators/`, with
+`interfaces/` (the command line, its chat mode, and terminal output) on top. The
 [module map](../architecture.md#module-map) says what every file does.
 
 - A module imports only from its own layer or a lower one (order: entry,
@@ -35,8 +36,8 @@ The package `src/abc_harness/` has one folder per layer: `agent/`, `tools/`,
   callback, as `execution/task.py` takes the review function.
 - A new module gets a row in the module map in the same commit.
 - Put a new file in an existing folder. Add a folder only when a group of files
-  shares one job that no folder has; the second entry point, for example,
-  starts `interfaces/` and takes `cli.py` with it.
+  shares one job that no folder has. A new entry point, such as a web page,
+  goes in `interfaces/` next to `cli.py` and `chat.py`.
 
 - A new simulator is an adapter module plus a capability card, not a change to
   the runner.

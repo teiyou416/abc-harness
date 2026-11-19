@@ -18,6 +18,10 @@ _Avoid_: plan draft, plan revision number
 One simulator invocation for one configuration and one seed. A task usually contains many simulation runs.
 _Avoid_: experiment, trial, job
 
+**Chat session**:
+A conversation started with `abc-harness chat`. Each request in it runs as its own task; the next task learns about the earlier ones from a block the harness writes from their records.
+_Avoid_: thread, conversation task
+
 **Task workspace**:
 `runs/<task_id>/workspace/`, the task's copy of the simulator source, where every file change for the task happens.
 _Avoid_: sandbox, scratch directory

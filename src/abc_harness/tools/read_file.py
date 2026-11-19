@@ -14,7 +14,8 @@ SPEC: dict[str, Any] = {
     "description": "Read lines of a text file, or list a directory. Allowed paths: `examples/<file>` (example "
     "plans), `source/<simulator>/<path>` (the simulator's original source, read-only; for example "
     "`source/blocksim/` to list it), and `task/<path>` (this task's artifact directory, for example "
-    "`task/history.md`, `task/raw/<run_id>/stdout.txt`, or your edited source `task/workspace/edited/<path>`). "
+    "`task/history.md`, `task/raw/<run_id>/stdout.txt`, or your edited source `task/workspace/edited/<path>`), "
+    "and in a conversation `previous/<task_id>/<path>` (an earlier task's directory, e.g. its report.md). "
     "Returns at most `limit` lines starting at line `offset`.",
     "input_schema": {
         "type": "object",

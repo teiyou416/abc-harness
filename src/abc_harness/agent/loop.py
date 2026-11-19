@@ -215,16 +215,27 @@ def run_agent_task(
     on_start: Callable[[Path], None] | None = None,
     papers: Sequence[Path] = (),
     on_event: Callable[[dict[str, Any]], None] | None = None,
+    preface: str = "",
+    previous_tasks: dict[str, Path] | None = None,
+    session_id: str | None = None,
 ) -> TaskResult:
-    """Run one agent task. `papers` are PDFs the researcher supplied; they are parsed before the first model call."""
+    """Run one agent task.
+
+    `papers` are PDFs the researcher supplied; they are parsed before the first model call. In a chat session,
+    `preface` is the harness's account of the earlier tasks, added to the first message, and `previous_tasks`
+    are their artifact directories, which the agent may read.
+    """
+    previous_tasks = previous_tasks or {}
     limits = limits or ContextLimits()
     task = Task(runner, runs_root, budget, redact=redact, on_event=on_event, mode="agent", question=question, model=model.name,
                 prompts=prompt_hashes(), context_limits=limits.__dict__,
                 literature_services=literature.services if literature else [],
-                supplied_papers=[p.name for p in papers])  # fmt: skip
+                supplied_papers=[p.name for p in papers], session_id=session_id,
+                previous_tasks=list(previous_tasks))  # fmt: skip
     if on_start:
         on_start(task.artifact_dir)
     agent = Agent(task, model, ask, review, limits)
+    agent.tools.previous_tasks = dict(previous_tasks)
     try:
         runner.image_info(PARSER_IMAGE)
         convert = task.convert_pdf
@@ -234,8 +245,8 @@ def run_agent_task(
         agent.tools.library = Library(task.artifact_dir, literature, convert)
     status, stop_reason = FAILED, "unknown"
     try:
-        preface = _supply_papers(agent.tools.library, papers) if papers else ""
-        status, stop_reason = agent.run(question, preface)
+        parts = [_supply_papers(agent.tools.library, papers) if papers else "", preface]
+        status, stop_reason = agent.run(question, "\n\n".join(p for p in parts if p))
     except EndTask as e:
         status, stop_reason = e.status, e.reason
     except LimitReached as e:

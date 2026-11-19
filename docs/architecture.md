@@ -9,8 +9,9 @@ is kept under [Original design sketch](#original-design-sketch).
 flowchart TB
     R(["Researcher"])
 
-    subgraph CLI["cli.py"]
+    subgraph CLI["interfaces/"]
         ASK["ask: question"]
+        CHAT["chat: conversation,<br/>one task per request"]
         RUN["run: plan file"]
     end
 
@@ -89,9 +90,13 @@ checks that every module appears in this table.
 
 | Layer (high to low) | File | What it does |
 |---|---|---|
-| Entry | `cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `trace summary`, `export`; shows plans and questions, prints every trace event live (`Console`), and prints the run statistics at the end (`task_summary`). Holds no task logic. |
+| Entry | `interfaces/__init__.py` | Names the entry points of the package. |
+| Entry | `interfaces/cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `chat`, `trace summary`, `export`; shows plans and questions in the terminal. Holds no task logic. |
+| Entry | `interfaces/chat.py` | The `chat` loop: reads a line (prompt_toolkit, with history), runs slash commands, sends anything else to the chat session, and turns Ctrl-C during a task into stopping that task. |
+| Entry | `interfaces/console.py` | Prints every trace event live (`Console`) and the run statistics at the end of a task (`task_summary`). |
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
 | Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
+| Agent | `agent/session.py` | A chat session: runs each request as a new task, writes the earlier tasks into the next task's first message from their records, and logs the session in `runs/sessions/<id>/session.jsonl`. |
 | Agent | `agent/model.py` | The Claude API client; the only code that receives the API key. Bounds each call by the remaining time. |
 | Agent | `agent/context.py` | Token estimates, `history.md`, and the message that starts a new window. |
 | Agent | `agent/secrets.py` | Reads API keys from `.env` and redacts them from traces. |
@@ -140,9 +145,9 @@ checks that every module appears in this table.
 One `ask` passes through the layers in this order:
 
 ```
-cli.py -> agent/loop.py <-> agent/model.py
+interfaces/cli.py -> agent/loop.py <-> agent/model.py
             -> tools/propose_plan.py -> planning/plan.py -> execution/task.py (pin image)
-               -> cli.py (researcher decides) -> planning/approval.py
+               -> interfaces/cli.py (researcher decides) -> planning/approval.py
             -> tools/run_plan.py -> execution/task.py -> simulators/<name>.py -> execution/runner.py
           -> execution/task.py (close) -> execution/report.py, execution/trace.py
 ```
@@ -165,6 +170,19 @@ approval. A rejection ends the task without another model call. A plan's
 citations pass only if each paper came from `search_papers` in the same task,
 and its quote appears verbatim in the paper's abstract or saved full text or
 its figure reading names a figure the agent viewed, with an uncertainty.
+
+## Chat sessions
+
+`abc-harness chat` keeps a conversation going, but each researcher request
+still runs as its own task, with its own artifact directory, approval,
+report, and limits. A task executes at most one plan, as before. What the
+agent remembers of the conversation is a block the harness writes from the
+earlier tasks' records (question, plan, results table, figures, the agent's
+final answer; the latest five in full), added to the new task's first
+message; the earlier artifact directories are readable at
+`previous/<task_id>/`. Papers must be found again in each task before they
+are cited; papers added with `/paper` or `--paper` are parsed into every task
+of the session (the parse cache makes this instant).
 
 ## Data flow
 
@@ -209,7 +227,7 @@ to what the first release builds.
 | Tools: Files | Yes. Reads and searches examples, the simulator source, and the task; writes only the permitted files and `scratch/` after approval. | `tools/read_file.py`, `tools/search_files.py`, `tools/write_file.py`, `tools/edit_file.py` |
 | Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `execution/runner.py`, `tools/run_command.py` |
 | Tools: Web Retrieval | Yes, for academic literature only: search, arXiv full text, and PDFs parsed by MinerU. Sources are listed in the project specification. | `tools/search_papers.py`, `tools/read_paper.py`, `literature/` |
-| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `planning/approval.py`, `cli.py` (terminal prompts) |
+| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `planning/approval.py`, `interfaces/cli.py` (terminal prompts) |
 | Tools: Custom Tools | Later | |
 | Simulators: SimBlock, BlockSim | Yes. BlockSim runs its Bitcoin model only. | `simulators/simblock.py`, `simulators/blocksim.py` |
 | Simulators: Blockemulator | Later | |

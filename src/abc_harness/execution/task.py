@@ -105,6 +105,7 @@ class Task:
         self.validation_records: list[RunRecord] = []
         self.validation: dict[str, Any] | None = None
         self.sandbox_calls = 0
+        self.figure_calls = 0
         self.workspace = Workspace(self.artifact_dir, runner)
         self.started_containers = False
         self.manifest: dict[str, Any] = {
@@ -378,6 +379,10 @@ class Task:
             self.manifest["cleanup_error"] = error
             self.trace.event("cleanup_failed", error=error)
 
+    def write_results(self) -> None:
+        """Write results.json from the run records so far; figures read it before the task ends."""
+        write_json(self.artifact_dir / "results.json", [asdict(r) for r in self.records])
+
     def close(self, status: str, stop_reason: str) -> TaskResult:
         if self.started_containers:
             self._cleanup()
@@ -393,7 +398,7 @@ class Task:
             plan_versions=list(self.plans),
         )
         write_json(self.artifact_dir / "manifest.json", self.manifest)
-        write_json(self.artifact_dir / "results.json", [asdict(r) for r in self.records])
+        self.write_results()
         plan = self.executed or (list(self.plans.values())[-1] if self.plans else None)
         write_report(self.artifact_dir, plan, self.records, self.manifest, self.summary)
         self.trace.event("task_finished", status=status, stop_reason=stop_reason,

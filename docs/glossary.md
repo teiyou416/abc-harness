@@ -50,6 +50,14 @@ _Avoid_: unit test, sanity check, acceptance test
 The agent's copy of the simulator source in the task workspace, holding its permitted edits. A configuration runs either the edited source or the original source.
 _Avoid_: modified simulator, fork, patched source
 
+**Result figure**:
+A figure the agent draws from the task's own results with `make_figure`, kept with the script that drew it. Not to be confused with a figure in a paper, which the agent views.
+_Avoid_: plot, chart, graph
+
+**Plot image**:
+The container image that runs the agent's figure scripts, with the task's results read-only and no network.
+_Avoid_: plotting container, matplotlib sandbox
+
 ## Evidence
 
 **Found paper**:

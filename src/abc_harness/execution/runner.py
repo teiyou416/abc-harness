@@ -1,8 +1,9 @@
 """Executes simulation runs inside the execution image (AGENTS.md hard rules 4, 5, 7).
 
-It also runs the PDF parser image, one container per PDF, under the same
-rules; the parser gets more CPU and memory than a simulation because MinerU
-needs about 5 GB for a 20-page paper.
+It also runs the PDF parser image, one container per PDF, and the plot image,
+one container per figure script, under the same rules. The parser gets more
+CPU and memory than a simulation because MinerU needs about 5 GB for a
+20-page paper.
 
 Every container runs with no network, CPU and memory limits, no environment
 variables from the host, and a label that names its task. Cleanup removes
@@ -42,6 +43,9 @@ class RunOutcome:
 SANDBOX_SOURCE = "/work/src"  # the edited source, read-only
 SANDBOX_SCRATCH = "/work/scratch"  # writable; the working directory
 MAX_SANDBOX_OUTPUT = 200_000
+PLOT_DATA = "/data"  # the task's results, read-only
+PLOT_SCRIPT = "/work/figure.py"  # read-only
+PLOT_OUTPUT = "/out"  # writable; the working directory
 PDF_INPUT = "/in/paper.pdf"  # read-only
 PDF_OUTPUT = "/out"  # writable; receives structured_content.json and images/
 # Parse to a zip, unpack it inside the container (zipfile drops absolute and ".." paths), and keep only what
@@ -72,6 +76,9 @@ class Runner(Protocol):
 
     def convert_pdf(self, image: str, task_id: str, name: str, pdf: Path, out_dir: Path,
                     timeout_seconds: float) -> RunOutcome: ...
+
+    def plot(self, image: str, task_id: str, name: str, data: list[Path], script: Path, out_dir: Path,
+             timeout_seconds: float) -> RunOutcome: ...
 
     def cleanup(self, task_id: str) -> None: ...
 
@@ -158,6 +165,24 @@ class DockerRunner:
             "-v", f"{pdf.resolve()}:{PDF_INPUT}:ro",
             "-v", f"{out_dir.resolve()}:{PDF_OUTPUT}",
             image, "sh", "-c", PDF_COMMAND,
+        ]  # fmt: skip
+        return self._run_capturing(args, container, timeout_seconds)
+
+    def plot(self, image: str, task_id: str, name: str, data: list[Path], script: Path, out_dir: Path,
+             timeout_seconds: float) -> RunOutcome:
+        """Run one figure script: each data file or folder read-only under /data, only out_dir writable."""
+        container = f"abc-{task_id}-{name}"
+        mounts = [arg for path in data for arg in ("-v", f"{path.resolve()}:{PLOT_DATA}/{path.name}:ro")]
+        args = [
+            "run", "--rm", "--name", container,
+            "--label", f"{TASK_LABEL}={task_id}",
+            "--network", "none",
+            "--cpus", self.cpus, "--memory", self.memory,
+            *mounts,
+            "-v", f"{script.resolve()}:{PLOT_SCRIPT}:ro",
+            "-v", f"{out_dir.resolve()}:{PLOT_OUTPUT}",
+            "-w", PLOT_OUTPUT,
+            image, "python", PLOT_SCRIPT,
         ]  # fmt: skip
         return self._run_capturing(args, container, timeout_seconds)
 

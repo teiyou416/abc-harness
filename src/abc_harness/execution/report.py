@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from abc_harness.execution.task import RunRecord
 
+from abc_harness.execution.figures import load_index
 from abc_harness.literature.library import Library
 from abc_harness.planning.plan import Plan
 
@@ -88,6 +89,7 @@ def write_report(
     for name, cells in metric_rows(records, plan.metrics):
         lines.append(f"| {name} | " + " | ".join(cells) + " |")
 
+    lines += _figures(artifact_dir)
     lines += _code_changes(artifact_dir, plan, manifest)
     lines += _citations(artifact_dir, plan)
     lines += ["", "## Simulation runs", "", "| Run | Status | " + " | ".join(plan.metrics) + " | Raw output | Changes |"]
@@ -189,6 +191,21 @@ def _citations(artifact_dir: Path, plan: Plan) -> list[str]:
         lines.append("The plan cites no paper.")
     texts = "; full texts and viewed figures in `papers/`" if library.full_texts else ""
     lines += ["", f"{len(library.searches)} searches found {len(library.papers)} papers, all listed in `literature.json`{texts}."]
+    return lines
+
+
+def _figures(artifact_dir: Path) -> list[str]:
+    """Each figure the agent drew, with its caption and links to the script and the vector file."""
+    index = load_index(artifact_dir)
+    if not index:
+        return []
+    lines = ["", "## Figures", "",
+             ("The agent drew these from this task's results with the scripts linked below, run in the plot image "
+             "with the results read-only. Check a script to see where each plotted value comes from."), ""]  # fmt: skip
+    for name, f in index.items():
+        vector = f" · [SVG]({f['svg']})" if f.get("svg") else ""
+        lines += [f"![{f['caption']}]({f['png']})", "",
+                  f"**{name}**: {f['caption']} (script: [{f['script']}]({f['script']}){vector})", ""]  # fmt: skip
     return lines
 
 

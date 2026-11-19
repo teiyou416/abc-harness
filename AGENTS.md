@@ -28,7 +28,7 @@ caps it at 100 lines, so the detail lives in the files it points to.
 The terms used here (task, plan version, simulation run, task workspace,
 execution image, runner, sandbox exec, test double, permitted edit, validation
 check, edited source, citation, quote, figure reading, supplied paper,
-PDF parser image, machine-recognized text) are defined in [docs/glossary.md](docs/glossary.md).
+PDF parser image, machine-recognized text, result figure, plot image) are defined in [docs/glossary.md](docs/glossary.md).
 
 ## Hard rules
 

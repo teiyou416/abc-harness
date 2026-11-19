@@ -26,7 +26,7 @@ uv run abc-harness image build
 uv run abc-harness run examples/simblock-baseline.toml
 ```
 
-`image build` creates three images (about 4 GB in all; build one with `--only`):
+`image build` creates four images (about 4.5 GB in all; build one with `--only`):
 
 - `abc-harness-sim:simblock-8a1285a`: SimBlock at commit
   `8a1285aa37b832385b0be2ae6f804885a4a7031f` with JDK 21.
@@ -35,6 +35,8 @@ uv run abc-harness run examples/simblock-baseline.toml
 - `abc-harness-pdf:mineru-4.2.3`: the PDF parser, MinerU 4.2.3 with its CPU
   models, used to read papers given as PDF. Parsing needs 6 GB of memory, so
   give Docker Desktop at least 8 GB (12 GB to parse beside a simulation).
+- `abc-harness-plot:mpl-3.11.2`: matplotlib 3.11.2 and numpy 2.5.4, used to
+  run the figure scripts the agent writes after an experiment.
 
 `uv run abc-harness run examples/blocksim-baseline.toml` runs the BlockSim
 example the same way.
@@ -109,6 +111,7 @@ entry in `runs/<task_id>/results.json`. For a BlockSim run, leave out
 | `approvals.jsonl` | every decision, bound to a plan version |
 | `trace.jsonl` | every event, with active and waiting time and the stop reason |
 | `history.md` | (`ask` only) every message of every context window, with full tool results |
+| `figures/` | (`ask` only) each figure the agent drew: PNG, SVG, the script that drew it, its output, and `index.json` with the captions; the report shows them |
 | `literature.json`, `papers/` | (`ask` only) searches, found and supplied papers, full texts, PDFs and their parser output, viewed figures |
 | `manifest.json` | simulator commit, image ID, command, limits, PDF parses, and task status |
 | `results.json`, `report.md` | per-run status and metrics, and the readable report |

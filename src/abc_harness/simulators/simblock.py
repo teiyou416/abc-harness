@@ -19,6 +19,7 @@ from __future__ import annotations
 import math
 import re
 import statistics
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -143,15 +144,19 @@ class SimBlock:
             "static.json": "src/dist/output/static.json",
         }
 
-    def compute_metrics(self, raw_dir: Path, params: dict[str, Any]) -> dict[str, float]:
-        num_nodes = params["NUM_OF_NODES"]
-        t90 = block_quantile_times(raw_dir / "stdout.txt", 0.9, num_nodes)
-        if not t90:
-            raise SimulatorError("no block reached 90% of nodes; t90_ms is undefined")
-        return {
-            "t90_ms": statistics.fmean(t90),
-            "orphan_rate": orphan_rate(raw_dir / "blockList.txt"),
-        }
+    def compute_metrics(
+        self, raw_dir: Path, params: dict[str, Any], metrics: Sequence[str] | None = None
+    ) -> dict[str, float]:
+        wanted = self.supported_metrics if metrics is None else metrics
+        values: dict[str, float] = {}
+        if "t90_ms" in wanted:
+            t90 = block_quantile_times(raw_dir / "stdout.txt", 0.9, params["NUM_OF_NODES"])
+            if not t90:
+                raise SimulatorError("no block reached 90% of nodes; t90_ms is undefined")
+            values["t90_ms"] = statistics.fmean(t90)
+        if "orphan_rate" in wanted:
+            values["orphan_rate"] = orphan_rate(raw_dir / "blockList.txt")
+        return values
 
 
 def _replace_once(pattern: re.Pattern[str], replacement: str, text: str, what: str) -> str:

@@ -56,7 +56,12 @@ append to it. Git already records the history.
   checks with the Models API that a model supports adaptive thinking and
   the effort level before the next task uses it. The command line now
   lives in `interfaces/`.
-- `make check` runs ruff and 194 offline tests. `make test-docker` runs 11
+- Plans with permitted edits can define custom metrics (name and definition,
+  printed by the edited code as `ABC_METRIC` lines), and built-in metrics are
+  computed only when a plan asks for them. Before this, a task that redefined
+  `orphan_rate` as the attacker's revenue share failed because the unused
+  `t90_ms` could not be computed.
+- `make check` runs ruff and 216 offline tests. `make test-docker` runs 11
   integration tests against both execution images, the PDF parser image, and the plot image, and `make test-live` runs 7
   tests against the Claude API and the literature services.
 

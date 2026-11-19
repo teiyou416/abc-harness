@@ -38,6 +38,7 @@ from abc_harness.literature.pdf import (
 from abc_harness.planning.approval import NotApproved, read_decisions, record_decision, require_approval
 from abc_harness.planning.plan import Plan, SimulationRunSpec, canonical_json, load_plan
 from abc_harness.simulators import SimulatorError, get_simulator
+from abc_harness.simulators.base import read_custom_metrics
 
 # A decision function shows the plan to the researcher and returns
 # ("approve" | "revise" | "reject", comment).
@@ -361,7 +362,11 @@ class Task:
             record.status, record.error = "failed", f"exit code {outcome.exit_code}"
         else:
             try:
-                record.metrics = simulator.compute_metrics(raw_dir, spec.params)
+                metrics = simulator.compute_metrics(raw_dir, spec.params, plan.builtin_metrics)
+                custom = [m for m in plan.metrics if m in plan.custom_metrics]
+                if custom and spec.edited:  # the original source cannot print custom metrics
+                    metrics.update(read_custom_metrics(raw_dir / "stdout.txt", custom))
+                record.metrics = metrics
                 record.status = "completed"
             except (SimulatorError, OSError, ValueError) as e:
                 record.status, record.error = "failed", f"output did not parse: {e}"

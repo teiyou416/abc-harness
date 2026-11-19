@@ -16,6 +16,13 @@ SimBlock definitions (stdout.txt, blockList.txt):
     orphan_rate        Lines starting with "Orphan" in blockList.txt divided by
                        all non-empty lines.
 
+Custom metrics (stdout.txt), defined by a plan with permitted edits:
+    <name>             The value on the last line "ABC_METRIC <name>=<value>"
+                       that the agent's edited source printed.
+
+Each metric is computed on its own; one that cannot be computed is reported
+with the reason instead of stopping the others.
+
 BlockSim definitions (SimOutput.csv, Chain.csv):
     stale_rate         "Stale Blocks" divided by "Total Blocks".
     node0_block_share  Chain rows with "Block Depth" above 0 whose "Miner ID" is
@@ -68,23 +75,43 @@ def node0_block_share(chain_path: Path) -> float:
     return len(mined_by_node0) / len(blocks)
 
 
+def custom_metrics(stdout: Path) -> dict:
+    found = {}
+    if stdout.exists():
+        for line in stdout.read_text(encoding="utf-8", errors="replace").splitlines():
+            parts = line.strip().split(None, 1)
+            if len(parts) == 2 and parts[0] == "ABC_METRIC" and "=" in parts[1]:
+                name, value = (s.strip() for s in parts[1].split("=", 1))
+                found[name] = float(value)
+    return found
+
+
+def _try(compute):
+    try:
+        return compute()
+    except Exception as e:  # noqa: BLE001 - report each metric's failure on its own
+        return f"not computable: {e}"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("raw_dir", type=Path, help="runs/<task_id>/raw/<run_id>")
-    parser.add_argument("--nodes", type=int, help="NUM_OF_NODES used by a SimBlock run")
+    parser.add_argument("--nodes", type=int, help="NUM_OF_NODES used by a SimBlock run (needed for t90_ms)")
     args = parser.parse_args()
+    if not args.raw_dir.is_dir():
+        sys.exit(f"{args.raw_dir} is not a directory")
     if (args.raw_dir / "SimOutput.csv").exists():
         result = {
-            "stale_rate": stale_rate(args.raw_dir / "SimOutput.csv"),
-            "node0_block_share": node0_block_share(args.raw_dir / "Chain.csv"),
+            "stale_rate": _try(lambda: stale_rate(args.raw_dir / "SimOutput.csv")),
+            "node0_block_share": _try(lambda: node0_block_share(args.raw_dir / "Chain.csv")),
         }
-    elif args.nodes is None:
-        sys.exit("SimBlock output needs --nodes (the run's NUM_OF_NODES)")
     else:
+        nodes = args.nodes
         result = {
-            "t90_ms": t90_ms(args.raw_dir / "stdout.txt", args.nodes),
-            "orphan_rate": orphan_rate(args.raw_dir / "blockList.txt"),
+            "t90_ms": _try(lambda: t90_ms(args.raw_dir / "stdout.txt", nodes)) if nodes else "needs --nodes",
+            "orphan_rate": _try(lambda: orphan_rate(args.raw_dir / "blockList.txt")),
         }
+    result.update(custom_metrics(args.raw_dir / "stdout.txt"))
     print(json.dumps(result, indent=2))
 
 

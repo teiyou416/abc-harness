@@ -46,6 +46,10 @@ _Avoid_: mock (for these project-level fakes)
 A source file an approved plan lets the agent create or change, with its purpose. Approval covers the scope of the change, not a specific diff.
 _Avoid_: allowed file, patch, change request
 
+**Custom metric**:
+A metric a plan with permitted edits defines by name and definition, because no built-in metric measures it. The edited source prints it as an `ABC_METRIC <name>=<value>` line; the harness reads it from the run's raw output.
+_Avoid_: redefined metric, agent metric
+
 **Validation check**:
 The plan's test of agent-written code: a configuration whose metric must match an expected value within a tolerance. The harness runs it once before any configuration; if it fails, the task stops.
 _Avoid_: unit test, sanity check, acceptance test

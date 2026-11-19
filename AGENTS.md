@@ -29,7 +29,7 @@ The terms used here (task, plan version, simulation run, task workspace,
 execution image, runner, sandbox exec, test double, permitted edit, validation
 check, edited source, citation, quote, figure reading, supplied paper,
 PDF parser image, machine-recognized text, result figure, plot image, chat
-session) are defined in [docs/glossary.md](docs/glossary.md).
+session, custom metric) are defined in [docs/glossary.md](docs/glossary.md).
 
 ## Hard rules
 

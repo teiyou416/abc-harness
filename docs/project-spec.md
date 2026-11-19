@@ -39,7 +39,18 @@ Each supported simulator has a capability card in the repository. A card lists w
 - **Parameters.** The harness applies parameter values from the approved plan to the task workspace. The agent does not edit parameter files directly.
 - **New or modified code.** When a simulator lacks a required capability, such as a selfish mining strategy, the plan lists the files the agent may create or change, describes the intended behavior, and states a deterministic validation check. For selfish mining, the check compares the simulated revenue share against the closed-form result of Eyal and Sirer (2014) within a stated tolerance.
 - Approval covers the scope of the edit, not a specific diff. After approval, the agent writes, builds, and tests the code in the task workspace. If the validation check passes, the experiment proceeds without another review. If it fails, the task stops and the report explains why. The agent cannot relax the validation check without a new plan version.
+- The validation check runs a stated configuration and seeds on the edited source, and passes if the mean of one plan metric lies within the stated tolerance of the expected value. The harness runs it and decides; the agent writes the code but not the verdict. It runs once, when the agent calls `run_plan`, before any configuration.
+- The agent edits files only with its write tools, and only the files the approved plan permits. Its own tests and builds go to a scratch directory. At `run_plan` the harness refuses to run if any other source file differs from the original.
+- A configuration can run the original source instead of the edited one, for example an honest-mining baseline next to a selfish-mining strategy.
 - The artifact directory always contains the full diff against the pinned simulator revision. `abc-harness export <task_id>` packages the modified source for the researcher.
+
+### Sandbox exec
+
+- Sandbox exec runs the agent's build and test commands in the execution image after approval of a plan with permitted edits. The edited source is read-only there; only the scratch directory is writable. It has no network and no host environment.
+- Sandbox exec output never counts as a result. Only simulation runs of the approved plan enter `results.json` and the report.
+- The plan's validation check still gates the experiment, whatever the agent's own tests show.
+- Every sandbox command and its output go to `trace.jsonl` and `sandbox/`, and the agent's test files stay in the artifact directory.
+- Sandbox exec time and the model calls around it count toward the task's limits.
 
 ## Execution environment
 

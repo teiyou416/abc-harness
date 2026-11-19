@@ -11,10 +11,19 @@ Cite entries by their ID (for example `SB-M2`) when justifying a plan.
 
 ## What it does not model
 
-- **SB-N1** Mining strategies other than honest mining. Selfish mining, withholding, or any attacker behaviour needs a code change (milestone M5).
+- **SB-N1** Mining strategies other than honest mining. Selfish mining, withholding, or any attacker behaviour needs a code change through permitted edits (see SB-S1).
 - **SB-N2** Individual transactions, fees, or block rewards. Blocks have a size in bytes, not contents.
 - **SB-N3** Changes to the network topology model, region bandwidths, or latencies. Those live in `NetworkConfiguration.java` and are not plan parameters.
 - **SB-N4** Consensus protocols other than proof of work in the harness. Upstream has a sample proof-of-stake class, but plans cannot select it.
+
+## Where the code is
+
+Paths are relative to the source root, as permitted edits name them. Read them with `read_file` at `source/simblock/<path>`.
+
+- **SB-S1** `main/java/simblock/node/Node.java`: a node's behaviour, including what it does when it mines or receives a block. A mining strategy such as withholding blocks changes this file.
+- **SB-S2** `main/java/simblock/task/MiningTask.java` and `main/java/simblock/node/consensus/ProofOfWork.java`: when a node finds a block, and the proof-of-work difficulty.
+- **SB-S3** `main/java/simblock/simulator/Main.java` and `main/java/simblock/settings/SimulationConfiguration.java`: the harness writes the seed and the plan parameters into these. A permitted edit of them must keep the lines it patches.
+- **SB-S4** Build and test in the sandbox by compiling into scratch: `javac -nowarn -encoding UTF-8 -d classes $(find /work/src/main/java -name '*.java')`, then `java -cp classes:/work/src/dist/conf simblock.simulator.Main` from a copy that can write `dist/output`.
 
 ## Cost
 

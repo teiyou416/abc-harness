@@ -10,6 +10,7 @@ from pathlib import Path
 
 from abc_harness.agent.model import DEFAULT_EFFORT, DEFAULT_MODEL
 from abc_harness.agent.secrets import DEFAULT_ENV_FILE, MissingSecret, Secrets
+from abc_harness.execution.export import ExportError, export_task
 from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LIMIT_SECONDS, Budget
 from abc_harness.execution.runner import DockerRunner, build_image
 from abc_harness.execution.task import TaskResult, run_task
@@ -94,6 +95,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     trace = sub.add_parser("trace", help="inspect task traces")
     trace_sub = trace.add_subparsers(dest="trace_command", required=True)
+    export = sub.add_parser("export", help="package a task's modified simulator source")
+    export.add_argument("task", help="runs/<task_id>, or a task ID under --runs-dir")
+    export.add_argument("--runs-dir", type=Path, default=Path("runs"))
     summary = trace_sub.add_parser("summary", help="summarize model calls, tokens, tools, and errors")
     summary.add_argument("task_dir", type=Path, help="runs/<task_id>")
     return parser
@@ -106,8 +110,8 @@ def _announce(artifact_dir: Path) -> None:
 def _print_result(result: TaskResult) -> int:
     print(f"\nStatus: {result.status} ({result.stop_reason})")
     print(f"Artifacts: {result.artifact_dir}")
-    if not (result.artifact_dir / "workspace").exists():
-        print("No simulator was started.")
+    if not (result.artifact_dir / "raw").exists():
+        print("No simulation was run.")
     return 0 if result.status in ("completed", "rejected", "not_executed") else 1
 
 
@@ -120,6 +124,16 @@ def main(argv: list[str] | None = None) -> int:
             simulator = get_simulator(name)
             image_id = build_image(simulator.docker_context, simulator.image_tag)
             print(f"Built {simulator.image_tag} ({image_id})")
+        return 0
+
+    if args.command == "export":
+        task_dir = Path(args.task) if Path(args.task).is_dir() else args.runs_dir / args.task
+        try:
+            archive = export_task(task_dir)
+        except ExportError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        print(f"Exported: {archive}")
         return 0
 
     if args.command == "trace":

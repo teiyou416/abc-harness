@@ -129,3 +129,32 @@ name = "tiny"
     pinned = json.loads((result.artifact_dir / "plan.json").read_text())["execution_image"]
     assert manifest["image_id"] == pinned == runner.image_info(BlockSim.image_tag)["image_id"]
     assert running_containers(result.task_id) == []
+
+
+def test_sandbox_source_is_read_only_and_scratch_is_writable(runner, tmp_path, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", SECRET)
+    source, scratch = tmp_path / "src", tmp_path / "scratch"
+    source.mkdir()
+    scratch.mkdir()
+    (source / "code.py").write_text("print('original')\n")
+    command = (
+        "python -c 'print(1)' > /dev/null 2>&1; "  # the BlockSim image has Python; SimBlock's has a JDK
+        "echo changed > /work/src/code.py && echo SOURCE-WRITABLE || echo SOURCE-READ-ONLY; "
+        "echo test > /work/scratch/out.txt && echo SCRATCH-WRITABLE; "
+        "cat /proc/net/route | wc -l; env | grep -c ANTHROPIC || true; pwd"
+    )
+    outcome = runner.sandbox(BlockSim.image_tag, new_task_id(), "sandbox-1", source, scratch, command, 60)
+    lines = outcome.output.split()
+    assert outcome.exit_code == 0, outcome.output
+    assert "SOURCE-READ-ONLY" in lines and "SOURCE-WRITABLE" not in lines
+    assert (source / "code.py").read_text() == "print('original')\n"
+    assert "SCRATCH-WRITABLE" in lines and (scratch / "out.txt").read_text() == "test\n"
+    assert lines[-3:] == ["1", "0", "/work/scratch"]  # route header only; no key; scratch is the working dir
+
+
+def test_sandbox_timeout_removes_the_container(runner, tmp_path):
+    task_id = new_task_id()
+    (tmp_path / "s").mkdir()
+    outcome = runner.sandbox(IMAGE, task_id, "sandbox-1", tmp_path / "s", tmp_path, "echo started; sleep 120", 3)
+    assert outcome.timed_out
+    assert running_containers(task_id) == []

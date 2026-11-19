@@ -17,7 +17,7 @@ flowchart TB
     subgraph LOOP["Agent: agent/"]
         CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 131,072"]
         LLM["Model client: agent/model.py<br/>only holder of the API key"]
-        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan"]
+        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_files, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
     end
 
@@ -100,7 +100,9 @@ checks that every module appears in this table.
 | Tools | `tools/search_papers.py` | Searches the first-round venues, or everything when broadened. |
 | Tools | `tools/read_paper.py` | Opens a paper's full text (arXiv HTML, or a PDF parsed by MinerU) in `papers/` and returns its source, outline, and figure and table list. |
 | Tools | `tools/view_figure.py` | Shows the model one figure (or, for a PDF, a table) as an image and records that it was viewed. |
-| Tools | `tools/read_file.py` | Reads `examples/` and the task's artifact directory, nothing else. |
+| Tools | `tools/read_file.py` | Reads lines of a file, or lists a folder, under `examples/`, `source/<simulator>/`, or the task's artifact directory, nothing else. |
+| Tools | `tools/search_files.py` | Searches the same paths: matching lines as `path:line: text` for a regular expression, or file names for a glob. |
+| Tools | `tools/paths.py` | The three readable roots and the path check shared by `read_file` and `search_files`. |
 | Tools | `tools/ask_researcher.py` | Asks the researcher a question; the wait is not active time. |
 | Tools | `tools/propose_plan.py` | Validates a plan and its citations, pins the image, and gets the researcher's decision. |
 | Tools | `tools/run_plan.py` | Runs an approved plan and summarises the results, including the validation check, for the model. |
@@ -143,8 +145,8 @@ cli.py -> agent/loop.py <-> agent/model.py
 
 ## Agent tools
 
-The agent has eleven tools, one module each in `tools/`: `describe_simulator`,
-`read_file`, `search_papers`, `read_paper`, `view_figure`, `ask_researcher`,
+The agent has twelve tools, one module each in `tools/`: `describe_simulator`,
+`read_file`, `search_files`, `search_papers`, `read_paper`, `view_figure`, `ask_researcher`,
 `propose_plan`, `write_file`, `edit_file`, `run_command` (sandbox exec), and
 `run_plan`. The three code tools work only after the researcher approved a plan
 with permitted edits. Each module
@@ -198,7 +200,7 @@ to what the first release builds.
 | Diagram element | First release | Module |
 |---|---|---|
 | Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `agent/loop.py`, `agent/model.py`, `execution/limits.py` |
-| Tools: Files | Yes. Reads examples, the simulator source, and the task; writes only the permitted files and `scratch/` after approval. | `tools/read_file.py`, `tools/write_file.py`, `tools/edit_file.py` |
+| Tools: Files | Yes. Reads and searches examples, the simulator source, and the task; writes only the permitted files and `scratch/` after approval. | `tools/read_file.py`, `tools/search_files.py`, `tools/write_file.py`, `tools/edit_file.py` |
 | Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `execution/runner.py`, `tools/run_command.py` |
 | Tools: Web Retrieval | Yes, for academic literature only: search, arXiv full text, and PDFs parsed by MinerU. Sources are listed in the project specification. | `tools/search_papers.py`, `tools/read_paper.py`, `literature/` |
 | Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `planning/approval.py`, `cli.py` (terminal prompts) |

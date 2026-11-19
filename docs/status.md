@@ -42,7 +42,9 @@ append to it. Git already records the history.
   prints the run statistics (time, model calls, tokens, tools, runs) at the end; `--quiet` hides the
   live part. Thinking summaries are also kept in `trace.jsonl` and
   `history.md`.
-- `make check` runs ruff and 161 offline tests. `make test-docker` runs 9
+- `search_files` lets the agent find lines by regular expression, or files by
+  name, in the simulator source, the example plans, and its task directory.
+- `make check` runs ruff and 173 offline tests. `make test-docker` runs 9
   integration tests against both execution images and the PDF parser image, and `make test-live` runs 7
   tests against the Claude API and the literature services.
 

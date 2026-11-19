@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-from abc_harness.execution.runner import RunnerError
-from abc_harness.simulators import SIMULATORS
 from abc_harness.tools.base import ToolContext, ToolError
+from abc_harness.tools.paths import resolve
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
 READ_DEFAULT_LINES = 400
 
 SPEC: dict[str, Any] = {
@@ -38,23 +35,9 @@ def run(ctx: ToolContext, args: dict[str, Any]) -> str:
         limit = max(1, int(args.get("limit") or READ_DEFAULT_LINES))
     except (TypeError, ValueError) as e:
         raise ToolError("offset and limit must be whole numbers") from e
-    prefix, _, rest = path.partition("/")
-    if prefix == "source":
-        name, _, rest = rest.partition("/")
-        if name not in SIMULATORS:
-            raise ToolError(f"source/ holds one folder per simulator: {', '.join(sorted(SIMULATORS))}")
-        try:
-            root = ctx.task.original_source(name).resolve()
-        except RunnerError as e:
-            raise ToolError(str(e)) from e
-        rest = rest or "."
-    elif prefix in ("examples", "task") and rest:
-        root = (REPO_ROOT / "examples" if prefix == "examples" else ctx.task.artifact_dir).resolve()
-    else:
-        raise ToolError("path must start with examples/, source/<simulator>/, or task/")
-    target = (root / rest).resolve()
-    if not target.is_relative_to(root):
-        raise ToolError(f"no readable file at {path}")
+    if path.strip().rstrip("/") in ("task", "examples"):
+        raise ToolError("name a file or folder inside task/ or examples/, e.g. task/history.md")
+    _, target, _ = resolve(ctx, path)
     if target.is_dir():
         entries = sorted(target.iterdir())
         listing = [f"{e.name}/" if e.is_dir() else f"{e.name} ({e.stat().st_size} bytes)" for e in entries]

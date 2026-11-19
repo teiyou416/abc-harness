@@ -234,7 +234,7 @@ to what the first release builds.
 | Literature boxes | Partial. OpenAlex and Semantic Scholar replace DBLP (bot check) and Papers With Code (gone); arXiv serves full text; IEEE Xplore is optional and not built. | `literature/` |
 | System prompt, user prompt, working memory | Yes. The system prompt is `SOUL.md` followed by `rules.md`; the working memory is the current window. | `agent/prompts/`, `agent/loop.py`, `agent/secrets.py` (API keys from `.env`) |
 | SOUL.md, SKILL.md, History.md | SOUL.md and a per-task `history.md` are built; SKILL.md and memory across tasks are later. | `agent/prompts/SOUL.md`, `agent/context.py` |
-| Context summarization and token caps | Yes: soft limit 106,496 and summary 8,192 as in the diagram; output 65,536 and hard limit 180,224 instead of the diagram's 16,384 and 131,072, because thinking counts toward the output cap (same input room). | `agent/context.py`, `agent/loop.py` |
+| Context summarization and token caps | Yes: soft limit 106,496 as in the diagram; output 65,536, hard limit 180,224, and summary call 32,768 instead of the diagram's 16,384, 131,072, and 8,192, because thinking counts toward each output cap (same input room). | `agent/context.py`, `agent/loop.py` |
 | Draft | Yes. The draft is the structured plan shown for review. | `planning/plan.py` |
 | LLM Ops: trace | Yes. One `trace.jsonl` per task and a CLI summary of calls, tokens, latency, and errors. | `execution/trace.py` |
 | LLM Ops: LLM-as-a-judge, Diagnose, Gate, Release | Later. Result verification is deterministic. | |
@@ -254,7 +254,8 @@ applies them.
   than one full reply (65,536 tokens, thinking included) inside the hard limit (180,224 tokens)
   stops the task with reason `context`.
 - Compression asks the model, with `agent/prompts/compact.md` and no tools, for a
-  summary of at most 8,192 tokens. The summary call counts toward the
+  summary of at most 1,500 words; the call's reply cap is 32,768 tokens
+  because its thinking counts too. The summary call counts toward the
   500-call limit.
 - The new window is one user message: the original question, a task-state
   block written from the harness's records (plan versions, decisions,

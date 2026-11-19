@@ -38,7 +38,8 @@ class ContextLimits:
     # 72-configuration plan was cut off. The hard limit grew by the same amount, so the input room is unchanged.
     hard_limit: int = 180_224
     max_output_tokens: int = 65_536
-    compact_max_tokens: int = 8_192
+    # The summary call's reply cap, thinking included; compact.md keeps the summary itself to 1,500 words.
+    compact_max_tokens: int = 32_768
     tool_result_max_tokens: int = 8_192
 
     @property

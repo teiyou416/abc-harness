@@ -5,7 +5,7 @@ import os
 import pytest
 
 from abc_harness import cli
-from abc_harness.secrets import MissingSecret, Secrets, parse_env_file
+from abc_harness.agent.secrets import MissingSecret, Secrets, parse_env_file
 
 
 def test_env_file_parsing(tmp_path):

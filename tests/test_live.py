@@ -12,10 +12,10 @@ from pathlib import Path
 import pytest
 from doubles.fake_runner import FakeRunner
 
-from abc_harness.agent import run_agent_task
-from abc_harness.limits import Budget
-from abc_harness.model import AnthropicModel
-from abc_harness.secrets import Secrets
+from abc_harness.agent.loop import run_agent_task
+from abc_harness.agent.model import AnthropicModel
+from abc_harness.agent.secrets import Secrets
+from abc_harness.execution.limits import Budget
 
 pytestmark = pytest.mark.live
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,9 +52,9 @@ def test_real_model_compresses_and_continues(tmp_path):
     """A tiny soft limit forces one real summary call; the agent must keep working in the new window."""
     import json
 
-    from abc_harness.agent import TOOLS, system_prompt
-    from abc_harness.context import ContextLimits, estimate_tokens
-    from abc_harness.trace import read_trace
+    from abc_harness.agent.context import ContextLimits, estimate_tokens
+    from abc_harness.agent.loop import TOOLS, system_prompt
+    from abc_harness.execution.trace import read_trace
 
     secrets = Secrets.load(ROOT / ".env")
     if not secrets.has("ANTHROPIC_API_KEY"):

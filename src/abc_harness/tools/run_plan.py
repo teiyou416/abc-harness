@@ -6,8 +6,8 @@ import json
 import statistics
 from typing import Any
 
-from abc_harness.approval import NotApproved
-from abc_harness.task import STOPPED, Task
+from abc_harness.execution.task import STOPPED, Task
+from abc_harness.planning.approval import NotApproved
 from abc_harness.tools.base import EndTask, ToolContext, ToolError
 
 SPEC: dict[str, Any] = {

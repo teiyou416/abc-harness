@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 from doubles.fake_runner import FakeRunner
 
-from abc_harness.plan import validate_plan
+from abc_harness.execution.task import run_task
+from abc_harness.planning.plan import validate_plan
 from abc_harness.simulators import SimulatorError
 from abc_harness.simulators.blocksim import CONFIG_FILE, MAIN_FILE, BlockSim
-from abc_harness.task import run_task
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "blocksim"

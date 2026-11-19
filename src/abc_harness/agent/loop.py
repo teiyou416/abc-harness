@@ -14,7 +14,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from abc_harness.context import (
+from abc_harness.agent.context import (
     ContextLimits,
     History,
     cap_text,
@@ -24,10 +24,10 @@ from abc_harness.context import (
     render_transcript,
     task_state,
 )
-from abc_harness.limits import Budget, LimitReached
-from abc_harness.model import ModelClient, ModelDeadlineExceeded, ModelTurn
-from abc_harness.runner import Runner
-from abc_harness.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
+from abc_harness.agent.model import ModelClient, ModelDeadlineExceeded, ModelTurn
+from abc_harness.execution.limits import Budget, LimitReached
+from abc_harness.execution.runner import Runner
+from abc_harness.execution.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
 from abc_harness.tools import HANDLERS, TOOLS, EndTask, ToolContext, ToolError
 from abc_harness.tools.base import AskFn
 
@@ -35,7 +35,7 @@ PROMPT_FILES = ("SOUL.md", "rules.md", "compact.md")
 
 
 def _prompt(name: str) -> str:
-    return resources.files("abc_harness").joinpath(f"prompts/{name}").read_text(encoding="utf-8")
+    return resources.files("abc_harness.agent").joinpath(f"prompts/{name}").read_text(encoding="utf-8")
 
 
 def system_prompt() -> str:

@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from abc_harness.plan import PlanError, validate_plan
-from abc_harness.runner import RunnerError
+from abc_harness.execution.runner import RunnerError
+from abc_harness.execution.task import FAILED, REJECTED
+from abc_harness.planning.plan import PlanError, validate_plan
 from abc_harness.simulators import SIMULATORS, SimulatorError
-from abc_harness.task import FAILED, REJECTED
 from abc_harness.tools.base import EndTask, ToolContext, ToolError
 
 PLAN_SCHEMA: dict[str, Any] = {

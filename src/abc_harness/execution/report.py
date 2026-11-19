@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from abc_harness.plan import Plan
-    from abc_harness.task import RunRecord
+    from abc_harness.execution.task import RunRecord
+    from abc_harness.planning.plan import Plan
 
 
 def write_json(path: Path, data: Any) -> None:

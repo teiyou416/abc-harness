@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from abc_harness.runner import DockerRunner, running_containers
+from abc_harness.execution.runner import DockerRunner, running_containers
+from abc_harness.execution.task import new_task_id, run_task
 from abc_harness.simulators.blocksim import BLOCKSIM_COMMIT, BlockSim
 from abc_harness.simulators.simblock import SimBlock
-from abc_harness.task import new_task_id, run_task
 
 pytestmark = pytest.mark.docker
 ROOT = Path(__file__).resolve().parents[1]

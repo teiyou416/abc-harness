@@ -32,6 +32,12 @@ class RunOutcome:
     exit_code: int | None
     timed_out: bool
     duration_seconds: float
+    output: str = ""  # combined stdout and stderr; filled by sandbox exec only
+
+
+SANDBOX_SOURCE = "/work/src"  # the edited source, read-only
+SANDBOX_SCRATCH = "/work/scratch"  # writable; the working directory
+MAX_SANDBOX_OUTPUT = 200_000
 
 
 class Runner(Protocol):
@@ -43,6 +49,11 @@ class Runner(Protocol):
 
     def run(
         self, image: str, task_id: str, run_id: str, workdir: Path, command: str, timeout_seconds: float
+    ) -> RunOutcome: ...
+
+    def sandbox(
+        self, image: str, task_id: str, name: str, source_dir: Path, scratch_dir: Path, command: str,
+        timeout_seconds: float,
     ) -> RunOutcome: ...
 
     def cleanup(self, task_id: str) -> None: ...
@@ -97,6 +108,33 @@ class DockerRunner:
             _docker("rm", "-f", name, check=False)
             return RunOutcome(None, True, time.monotonic() - started)
         return RunOutcome(result.returncode, False, time.monotonic() - started)
+
+    def sandbox(
+        self, image: str, task_id: str, name: str, source_dir: Path, scratch_dir: Path, command: str,
+        timeout_seconds: float,
+    ) -> RunOutcome:
+        """Sandbox exec: run the agent's command with the edited source read-only and scratch writable."""
+        container = f"abc-{task_id}-{name}"
+        args = [
+            "run", "--rm", "--name", container,
+            "--label", f"{TASK_LABEL}={task_id}",
+            "--network", "none",
+            "--cpus", self.cpus, "--memory", self.memory,
+            "-v", f"{source_dir.resolve()}:{SANDBOX_SOURCE}:ro",
+            "-v", f"{scratch_dir.resolve()}:{SANDBOX_SCRATCH}",
+            "-w", SANDBOX_SCRATCH,
+            image, "sh", "-c", command,
+        ]  # fmt: skip
+        started = time.monotonic()
+        try:
+            result = subprocess.run(["docker", *args], env=docker_cli_env(), stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, errors="replace", timeout=timeout_seconds,
+                                    check=False)  # fmt: skip
+        except subprocess.TimeoutExpired as e:
+            _docker("rm", "-f", container, check=False)
+            partial = e.stdout.decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+            return RunOutcome(None, True, time.monotonic() - started, partial[-MAX_SANDBOX_OUTPUT:])
+        return RunOutcome(result.returncode, False, time.monotonic() - started, result.stdout[-MAX_SANDBOX_OUTPUT:])
 
     def cleanup(self, task_id: str) -> None:
         """Remove every container of the task. Raises RunnerError if that cannot be confirmed."""

@@ -97,6 +97,7 @@ def write_report(
                 cells.append(f"{_fmt(statistics.fmean(values))} ± {_fmt(statistics.stdev(values))} (n={len(values)})")
         lines.append(f"| {name} | " + " | ".join(cells) + " |")
 
+    lines += _code_changes(artifact_dir, plan, manifest)
     lines += _citations(artifact_dir, plan)
     lines += ["", "## Simulation runs", "", "| Run | Status | " + " | ".join(plan.metrics) + " | Raw output | Changes |"]
     lines.append("|---|---|" + "---|" * len(plan.metrics) + "---|---|")
@@ -135,8 +136,11 @@ def _write_planless_report(artifact_dir: Path, manifest: dict[str, Any], summary
         f"- Task: `{manifest['task_id']}`",
         f"- Status: **{manifest['status']}** ({manifest['stop_reason']})",
         f"- Plan versions proposed: {len(manifest.get('plan_versions', []))} (see `plans/` and `approvals.jsonl`)",
-        "- No simulator was started.",
+        "- No simulation run was started.",
     ]
+    if (artifact_dir / "sandbox").exists():
+        lines.append("- The agent ran sandbox commands (`sandbox/`) and edited source (`workspace/edited/`); "
+                     "they are not results.")  # fmt: skip
     if manifest.get("question"):
         lines.append(f"- Researcher's request: {manifest['question']}")
     if summary:
@@ -172,4 +176,38 @@ def _citations(artifact_dir: Path, plan: Plan) -> list[str]:
         lines.append("The plan cites no paper.")
     texts = "; full texts and viewed figures in `papers/`" if library.full_texts else ""
     lines += ["", f"{len(library.searches)} searches found {len(library.papers)} papers, all listed in `literature.json`{texts}."]
+    return lines
+
+
+def _code_changes(artifact_dir: Path, plan: Plan, manifest: dict[str, Any]) -> list[str]:
+    """The agent's edits, the validation check that gated the experiment, and the sandbox commands it ran."""
+    if not plan.permitted_paths:
+        return []
+    lines = ["", "## Code changes and validation", ""]
+    edited = manifest.get("edited_files")
+    if edited is None:
+        lines.append("The plan was not executed, so the edited source was never frozen.")
+    elif edited:
+        lines.append(f"The agent changed {', '.join(f'`{f}`' for f in edited)}. Full diff against the pinned "
+                     "revision: [changes/edits.diff](changes/edits.diff). Export the source with "
+                     f"`uv run abc-harness export {artifact_dir}`.")  # fmt: skip
+    else:
+        lines.append("The plan permitted edits, but the agent changed no file.")
+    check = plan.validation or {}
+    result_path = artifact_dir / "validation.json"
+    lines += ["", f"Validation check: {check.get('description', '')}"]
+    if result_path.exists():
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        mean = "no data" if result["mean"] is None else _fmt(result["mean"])
+        verdict = "**passed**" if result["passed"] else "**failed; no configuration was run**"
+        lines += ["", (f"Mean {result['metric']} over {result['n']} of {result['planned']} validation runs: {mean}; "
+                       f"required {result['expected']} ± {result['tolerance']}: {verdict}. "
+                       "Runs and raw output: [validation.json](validation.json).")]  # fmt: skip
+    elif edited is not None:
+        lines += ["", "The validation check did not finish."]
+    logs = sorted((artifact_dir / "sandbox").glob("*.log")) if (artifact_dir / "sandbox").exists() else []
+    if logs:
+        lines += ["", (f"The agent ran {len(logs)} sandbox commands to build and test its code "
+                       "([sandbox/](sandbox/)); their output is not a result. Its test files are in "
+                       "[workspace/scratch/](workspace/scratch/).")]  # fmt: skip
     return lines

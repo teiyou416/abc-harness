@@ -38,6 +38,18 @@ _Avoid_: shell, terminal
 A fake model, runner, simulator, or HTTP response used in tests. Results from a test double are labelled as such.
 _Avoid_: mock (for these project-level fakes)
 
+**Permitted edit**:
+A source file an approved plan lets the agent create or change, with its purpose. Approval covers the scope of the change, not a specific diff.
+_Avoid_: allowed file, patch, change request
+
+**Validation check**:
+The plan's test of agent-written code: a configuration whose metric must match an expected value within a tolerance. The harness runs it once before any configuration; if it fails, the task stops.
+_Avoid_: unit test, sanity check, acceptance test
+
+**Edited source**:
+The agent's copy of the simulator source in the task workspace, holding its permitted edits. A configuration runs either the edited source or the original source.
+_Avoid_: modified simulator, fork, patched source
+
 ## Evidence
 
 **Found paper**:

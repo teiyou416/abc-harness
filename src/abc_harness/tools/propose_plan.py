@@ -26,6 +26,33 @@ PLAN_SCHEMA: dict[str, Any] = {
         "metrics": {"type": "array", "items": {"type": "string"}},
         "run_timeout_seconds": {"type": "integer", "description": "Timeout for one simulation run."},
         "baseline": {"type": "object", "description": "Parameters shared by every configuration."},
+        "permitted_edits": {
+            "type": "array",
+            "description": "Only when the simulator lacks a capability the question needs: the source files you "
+            "will create or change after approval, each with its purpose. Paths are relative to the source root "
+            "(the card's 'Where the code is' section). Needs a validation check.",
+            "items": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}, "purpose": {"type": "string"}},
+                "required": ["path", "purpose"],
+            },
+        },
+        "validation": {
+            "type": "object",
+            "description": "Required with permitted_edits. A deterministic check the harness runs on your edited "
+            "source before any configuration: the mean of one plan metric over the given seeds must equal "
+            "expected within tolerance, for a case with a known answer (e.g. a closed-form result from a paper). "
+            "If it fails, the task stops.",
+            "properties": {
+                "description": {"type": "string", "description": "What the check shows and where expected comes from."},
+                "params": {"type": "object", "description": "Parameters that differ from the baseline for the check."},
+                "seeds": {"type": "array", "items": {"type": "integer"}},
+                "metric": {"type": "string"},
+                "expected": {"type": "number"},
+                "tolerance": {"type": "number"},
+            },
+            "required": ["description", "params", "seeds", "metric", "expected", "tolerance"],
+        },
         "citations": {
             "type": "array",
             "description": "Papers from search_papers that justify a choice in this plan. Leave out when none does.",
@@ -59,6 +86,11 @@ PLAN_SCHEMA: dict[str, Any] = {
                 "properties": {
                     "name": {"type": "string", "description": "Letters, digits, - and _ only."},
                     "params": {"type": "object", "description": "Parameters that differ from the baseline."},
+                    "edits": {
+                        "type": "boolean",
+                        "description": "Only with permitted_edits: run the edited source (default true) or the "
+                        "original source (false), e.g. for an honest-mining comparison.",
+                    },
                 },
                 "required": ["name"],
             },

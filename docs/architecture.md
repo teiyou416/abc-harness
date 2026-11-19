@@ -17,7 +17,7 @@ flowchart TB
     subgraph LOOP["Agent: agent/"]
         CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 131,072"]
         LLM["Model client: agent/model.py<br/>only holder of the API key"]
-        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan, run_plan"]
+        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
     end
 
@@ -97,9 +97,15 @@ checks that every module appears in this table.
 | Tools | `tools/read_file.py` | Reads `examples/` and the task's artifact directory, nothing else. |
 | Tools | `tools/ask_researcher.py` | Asks the researcher a question; the wait is not active time. |
 | Tools | `tools/propose_plan.py` | Validates a plan and its citations, pins the image, and gets the researcher's decision. |
-| Tools | `tools/run_plan.py` | Runs an approved plan and summarises the results for the model. |
-| Execution | `execution/task.py` | One task end to end: artifact directory, plan versions, image pinning, simulation runs, final artifacts. |
-| Execution | `execution/runner.py` | Docker: one container per simulation run, no network, label-based cleanup. |
+| Tools | `tools/run_plan.py` | Runs an approved plan and summarises the results, including the validation check, for the model. |
+| Tools | `tools/write_file.py` | Writes a whole permitted source file, or a file under `scratch/`, after approval. |
+| Tools | `tools/edit_file.py` | Replaces one exact passage in such a file. |
+| Tools | `tools/run_command.py` | Sandbox exec: runs a build or test command in the execution image. |
+| Tools | `tools/edits.py` | The rule the three code tools share: only for an approved plan with permitted edits, and only until it runs. |
+| Execution | `execution/task.py` | One task end to end: artifact directory, plan versions, image pinning, sandbox exec, the validation check, simulation runs, final artifacts. |
+| Execution | `execution/runner.py` | Docker: one container per simulation run or sandbox command, no network, label-based cleanup. |
+| Execution | `execution/workspace.py` | The original, edited, and scratch trees; which paths a write may touch; the diff of the edits. |
+| Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
 | Execution | `execution/limits.py` | The 30-minute active time and 500-call limits. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl` and summarises it. |
 | Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
@@ -130,9 +136,11 @@ cli.py -> agent/loop.py <-> agent/model.py
 
 ## Agent tools
 
-The agent has eight tools, one module each in `tools/`: `describe_simulator`,
+The agent has eleven tools, one module each in `tools/`: `describe_simulator`,
 `read_file`, `search_papers`, `read_paper`, `view_figure`, `ask_researcher`,
-`propose_plan`, and `run_plan`. Each module
+`propose_plan`, `write_file`, `edit_file`, `run_command` (sandbox exec), and
+`run_plan`. The three code tools work only after the researcher approved a plan
+with permitted edits. Each module
 holds the definition sent to the model and the harness code that runs it;
 `agent/loop.py` keeps only the loop, context compression, and the dispatch by tool
 name. The harness validates every
@@ -157,11 +165,18 @@ its figure reading names a figure the agent viewed, with an uncertainty.
 5. The model drafts a plan. The harness checks its citations, pins the execution image's ID into
    it, the Human Interaction tool shows it to the researcher, and the harness
    records the decision for that plan version.
-6. After approval, the runner executes simulation runs in exactly that image
-   ID, even if the image tag was rebuilt in the meantime.
+6. If the plan permits edits, the agent changes those files with `write_file`
+   and `edit_file`, and builds and tests them with `run_command`: the edited
+   source is mounted read-only and `scratch/` is the only writable directory.
+7. At `run_plan`, the harness freezes the edits, refuses any change to a file
+   the plan does not permit, saves the full diff, and runs the validation check
+   on the edited source. A failed check stops the task.
+8. The runner executes simulation runs in exactly the pinned image ID, even if
+   the image tag was rebuilt in the meantime, on the edited or the original
+   source as each configuration says.
    The report step matches planned runs against completed runs and computes
    metrics from raw output.
-7. The loop ends when the model finishes, the researcher rejects the plan, or a
+9. The loop ends when the model finishes, the researcher rejects the plan, or a
    limit stops the task. The harness writes the report and manifest in every
    case.
 
@@ -173,8 +188,8 @@ to what the first release builds.
 | Diagram element | First release | Module |
 |---|---|---|
 | Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `agent/loop.py`, `agent/model.py`, `execution/limits.py` |
-| Tools: Files | Yes. Reads anywhere in the repository and task; writes only inside the task workspace and permitted files. | `tools/read_file.py` (read-only); write tools _planned_ for M5 |
-| Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `execution/runner.py`; sandbox exec _planned_ for M5 |
+| Tools: Files | Yes. Reads examples, the simulator source, and the task; writes only the permitted files and `scratch/` after approval. | `tools/read_file.py`, `tools/write_file.py`, `tools/edit_file.py` |
+| Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `execution/runner.py`, `tools/run_command.py` |
 | Tools: Web Retrieval | Yes, for academic literature only: search and arXiv full text. Sources are listed in the project specification. | `tools/search_papers.py`, `tools/read_paper.py`, `literature/` |
 | Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `planning/approval.py`, `cli.py` (terminal prompts) |
 | Tools: Custom Tools | Later | |
@@ -242,9 +257,17 @@ applies them.
 - The harness and the model client run on the host. The API key never enters a
   container: the docker CLI receives only an allowlist of Docker variables, and
   containers receive no host variables at all.
-- At task start, the harness copies the simulator source from the image into the
-  task workspace. Each simulation run's container mounts only that run's
-  directory.
+- The harness copies the simulator source from the image into the task
+  workspace the first time the agent reads it or a plan runs:
+  `workspace/original/<simulator>/` stays unchanged, `workspace/edited/` is the
+  agent's copy, and `workspace/scratch/` holds its builds and tests. Each
+  simulation run gets its own copy of the original or the edited source, and
+  its container mounts only that run's directory.
+- Sandbox exec runs the agent's commands in the same image with the edited
+  source mounted read-only at `/work/src` and `scratch/` writable at
+  `/work/scratch`, with the same network, environment, resource, and label
+  rules as simulation runs. Each command and its full output go to
+  `sandbox/<n>.log` and the trace; its time counts toward the task's limit.
 - Containers run with `--network none`, CPU and memory limits, and a task label.
   On a timeout or limit, the harness stops and removes every container with that
   label. If removal fails (for example, the Docker daemon is unreachable), the

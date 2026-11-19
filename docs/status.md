@@ -28,7 +28,11 @@ append to it. Git already records the history.
   for papers, reads arXiv full texts and tables, and views figures. A plan
   cites a quote the harness checks verbatim, or a figure reading from a figure
   viewed in the task, marked as approximate.
-- `make check` runs ruff and 121 offline tests. `make test-docker` runs 5
+- M5: after approving a plan with permitted edits, the agent changes only
+  those files, builds and tests them in the sandbox, and must pass the plan's
+  validation check before any configuration runs. `abc-harness export`
+  packages the edited source.
+- `make check` runs ruff and 141 offline tests. `make test-docker` runs 7
   integration tests against both execution images, and `make test-live` runs 7
   tests against the Claude API and the literature services.
 
@@ -39,12 +43,14 @@ Nothing is known broken.
 ## Not verified yet
 
 - The harness has run only on macOS with Apple silicon and Docker Desktop.
+- The real model has proposed a code-changing plan, but has not yet written,
+  tested, and validated code end to end; M6 does that.
 - Semantic Scholar search has run only against a hand-written response; no
   key was available. Its venue names for FC, AFT, and ICBC are unchecked.
 
 ## Deliberately not built
 
-- Agent-written code (M5). DBLP and IEEE Xplore search.
+- DBLP and IEEE Xplore search.
 - BlockSim's Ethereum model.
 - Retrying a failed simulation run; the report shows it as failed instead.
 - Memory across tasks (Hermes-style `MEMORY.md` / `USER.md`) and `SKILL.md`.
@@ -52,4 +58,4 @@ Nothing is known broken.
 
 ## Next
 
-M5 in `docs/development-plan.md`: agent-written code in the task workspace.
+M6 in `docs/development-plan.md`: the MVP demonstration, selfish versus honest mining.

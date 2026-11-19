@@ -11,6 +11,7 @@ import difflib
 import platform
 import secrets
 import shutil
+import statistics
 import sys
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -21,9 +22,10 @@ from typing import Any
 from abc_harness import __version__
 from abc_harness.execution.limits import Budget, LimitReached
 from abc_harness.execution.report import write_json, write_report
-from abc_harness.execution.runner import Runner, RunnerError
+from abc_harness.execution.runner import Runner, RunnerError, RunOutcome
 from abc_harness.execution.trace import Trace
-from abc_harness.planning.approval import NotApproved, record_decision, require_approval
+from abc_harness.execution.workspace import Workspace
+from abc_harness.planning.approval import NotApproved, read_decisions, record_decision, require_approval
 from abc_harness.planning.plan import Plan, SimulationRunSpec, canonical_json, load_plan
 from abc_harness.simulators import SimulatorError, get_simulator
 
@@ -85,6 +87,10 @@ class Task:
         self.executed: Plan | None = None
         self.records: list[RunRecord] = []
         self.summary: str | None = None
+        self.validation_records: list[RunRecord] = []
+        self.validation: dict[str, Any] | None = None
+        self.sandbox_calls = 0
+        self.workspace = Workspace(self.artifact_dir, runner)
         self.started_containers = False
         self.manifest: dict[str, Any] = {
             "task_id": self.task_id,
@@ -107,6 +113,43 @@ class Task:
         image = plan.execution_image or get_simulator(plan.simulator).image_tag
         image_id = self.runner.image_info(image)["image_id"]
         return Plan({**plan.data, "execution_image": image_id})
+
+    def approved_plan(self) -> Plan | None:
+        """The plan version the researcher's latest decision approved, if that decision was an approval."""
+        decisions = read_decisions(self.artifact_dir)
+        if not decisions or decisions[-1].decision != "approve":
+            return None
+        return self.plans.get(decisions[-1].plan_version)
+
+    def original_source(self, simulator_name: str) -> Path:
+        """The simulator source for reading, exported from the image its tag points to now."""
+        image = self.runner.image_info(get_simulator(simulator_name).image_tag)["image_id"]
+        self.started_containers = True
+        return self.workspace.original(simulator_name, image)
+
+    def sandbox(self, plan: Plan, command: str, timeout_seconds: float) -> tuple[RunOutcome, str]:
+        """Sandbox exec for an approved plan with permitted edits. Returns (outcome, saved log path)."""
+        require_approval(self.artifact_dir, plan.version)
+        assert plan.execution_image is not None and plan.permitted_paths
+        edited = self.workspace.edited(plan.simulator, plan.execution_image)
+        self.sandbox_calls += 1
+        name = f"sandbox-{self.sandbox_calls}"
+        timeout = min(timeout_seconds, self.budget.remaining_seconds)
+        self.started_containers = True
+        self.trace.event("sandbox_started", call=self.sandbox_calls, command=command, timeout_seconds=timeout)
+        outcome = self.runner.sandbox(plan.execution_image, self.task_id, name, edited, self.workspace.scratch_dir,
+                                      command, timeout)  # fmt: skip
+        log = Path("sandbox") / f"{self.sandbox_calls:03d}.log"
+        (self.artifact_dir / log).parent.mkdir(exist_ok=True)
+        status = "timed out" if outcome.timed_out else f"exit code {outcome.exit_code}"
+        (self.artifact_dir / log).write_text(f"$ {command}\n{outcome.output}\n[{status}, "
+                                             f"{outcome.duration_seconds:.1f}s]\n", encoding="utf-8")  # fmt: skip
+        self.trace.event("sandbox_finished", call=self.sandbox_calls, exit_code=outcome.exit_code,
+                         timed_out=outcome.timed_out, duration_seconds=round(outcome.duration_seconds, 3),
+                         log=str(log), output_tail=outcome.output[-2000:])  # fmt: skip
+        if outcome.timed_out and timeout < timeout_seconds:
+            raise LimitReached("time", f"active runtime ran out during sandbox command {self.sandbox_calls}")
+        return outcome, str(log)
 
     def add_plan(self, plan: Plan) -> None:
         """Store a proposed plan version under plans/ so every version stays inspectable."""
@@ -139,27 +182,39 @@ class Task:
         except RunnerError as e:
             raise NotApproved(f"the approved execution image {image} is no longer available; "
                               "propose a new plan version for the current image") from e  # fmt: skip
+        self.started_containers = True
+        original = self.workspace.original(plan.simulator, image)
+        edited = None
+        if plan.permitted_paths:
+            edited = self.workspace.edited(plan.simulator, image)
+            outside = [f for f in self.workspace.changed_files(plan.simulator) if f not in plan.permitted_paths]
+            if outside:
+                raise NotApproved(f"the edited source changes files the approved plan does not permit: "
+                                  f"{', '.join(outside)}")  # fmt: skip
         self.executed = plan
         self.records = [RunRecord(s.run_id, s.configuration, s.seed, s.params) for s in plan.runs()]
         (self.artifact_dir / "plan.json").write_text(canonical_json(plan.data) + "\n", encoding="utf-8")
         self.manifest.update(image=simulator.image_tag, image_id=image)
         self.manifest.update(plan_version=plan.version, simulator=plan.simulator, command=simulator.command())
-
-        workspace = self.artifact_dir / "workspace"
-        workspace.mkdir()
-        pristine = workspace / "source"
-        self.started_containers = True
-        self.runner.export(image, simulator.source_path_in_image, pristine)
+        if edited is not None:
+            changed = self.workspace.save_diff(plan.simulator, self.artifact_dir / "changes" / "edits.diff")
+            self.manifest["edited_files"] = changed
+            self.trace.event("edits_frozen", files=changed)
         revision_file = self.artifact_dir / "simulator_revision.txt"
         self.runner.export(image, simulator.revision_path_in_image, revision_file)
         self.manifest["simulator_revision"] = revision_file.read_text(encoding="utf-8").strip()
         self.trace.event("workspace_prepared", simulator_revision=self.manifest["simulator_revision"])
 
         try:
+            if edited is not None:
+                failure = self._validate(plan, simulator, edited)
+                if failure:
+                    return FAILED, failure
             for spec, record in zip(plan.runs(), self.records, strict=True):
                 self.budget.check_time()
                 require_approval(self.artifact_dir, plan.version)
-                self._run_one(spec, record, plan, simulator, pristine)
+                base = edited if spec.edited and edited is not None else original
+                self._run_one(spec, record, plan, simulator, base)
         except LimitReached as e:
             self.trace.event("limit_reached", limit=e.limit, detail=str(e))
             self._cleanup()
@@ -172,12 +227,41 @@ class Task:
             return PARTIAL, f"{completed} of {len(self.records)} simulation runs completed"
         return FAILED, "no simulation run completed"
 
-    def _run_one(self, spec: SimulationRunSpec, record: RunRecord, plan: Plan, simulator: Any, pristine: Path) -> None:
+    def _validate(self, plan: Plan, simulator: Any, edited: Path) -> str | None:
+        """Run the plan's validation check on the edited source. Returns why it failed, or None if it passed."""
+        check = plan.validation
+        assert check is not None
+        specs = plan.validation_runs()
+        self.validation_records = [RunRecord(s.run_id, s.configuration, s.seed, s.params) for s in specs]
+        for spec, record in zip(specs, self.validation_records, strict=True):
+            self.budget.check_time()
+            require_approval(self.artifact_dir, plan.version)
+            self._run_one(spec, record, plan, simulator, edited)
+        values = [r.metrics[check["metric"]] for r in self.validation_records if r.status == "completed"]
+        mean = statistics.fmean(values) if values else None
+        complete = len(values) == len(specs)
+        passed = complete and mean is not None and abs(mean - check["expected"]) <= check["tolerance"]
+        self.validation = {"passed": passed, "metric": check["metric"], "mean": mean, "n": len(values),
+                           "planned": len(specs), "expected": check["expected"], "tolerance": check["tolerance"],
+                           "runs": [asdict(r) for r in self.validation_records]}  # fmt: skip
+        write_json(self.artifact_dir / "validation.json", self.validation)
+        self.manifest["validation_passed"] = passed
+        self.trace.event("validation_finished", passed=passed, mean=mean, n=len(values),
+                         expected=check["expected"], tolerance=check["tolerance"])  # fmt: skip
+        if passed:
+            return None
+        if not complete:
+            return (f"validation check failed: only {len(values)} of {len(specs)} validation runs completed; "
+                    "no configuration was run")  # fmt: skip
+        return (f"validation check failed: mean {check['metric']} {mean:.6g} is outside "
+                f"{check['expected']} ± {check['tolerance']}; no configuration was run")  # fmt: skip
+
+    def _run_one(self, spec: SimulationRunSpec, record: RunRecord, plan: Plan, simulator: Any, base: Path) -> None:
         run_dir = self.artifact_dir / "workspace" / "runs" / spec.run_id
-        shutil.copytree(pristine, run_dir / "src")
+        shutil.copytree(base, run_dir / "src")
         changed = simulator.apply_params(run_dir / "src", spec.params, spec.seed)
         diff_path = self.artifact_dir / "changes" / f"{spec.run_id}.diff"
-        record.diff_file = _save_diff(pristine, run_dir / "src", changed, diff_path)
+        record.diff_file = _save_diff(base, run_dir / "src", changed, diff_path)
 
         timeout = min(plan.run_timeout_seconds, self.budget.remaining_seconds)
         limited_by_budget = timeout < plan.run_timeout_seconds

@@ -113,22 +113,34 @@ def test_real_model_chooses_the_simulator_that_fits(tmp_path, question, expected
     assert other_card in plan.data["rationale"], "the rationale must cite the other simulator's card"
 
 
-def test_real_model_names_the_missing_capability(tmp_path):
+def test_real_model_plans_code_for_a_missing_capability(tmp_path):
+    """Selfish mining is in neither simulator (SB-N1, BS-N2). Since M5 the agent proposes permitted edits and a
+    validation check instead of giving up; the review rejects the plan, so no code is written."""
     secrets = Secrets.load(ROOT / ".env")
     if not secrets.has("ANTHROPIC_API_KEY"):
         pytest.skip("ANTHROPIC_API_KEY is not set in .env")
+    from abc_harness.execution.runner import DockerRunner, RunnerError
+    from abc_harness.literature import HttpFetcher, Literature
+    from abc_harness.simulators.blocksim import BlockSim
+
+    runner = DockerRunner()  # for the real source; the review rejects, so no simulation or command runs
+    try:
+        runner.image_info(BlockSim.image_tag)
+    except (RunnerError, FileNotFoundError):
+        pytest.skip("execution images missing; run `uv run abc-harness image build`")
     reviewed = []
     result = run_agent_task(
         "How much more than its fair share of rewards does a selfish miner with 33% of the hash power earn?",
-        AnthropicModel(secrets.get("ANTHROPIC_API_KEY")), FakeRunner(), lambda q: "Use your defaults.",
+        AnthropicModel(secrets.get("ANTHROPIC_API_KEY")), runner, lambda q: "Use your defaults.",
         lambda plan: reviewed.append(plan) or ("reject", "live test"), runs_root=tmp_path / "runs",
-        budget=Budget(llm_call_limit=15), redact=secrets.redact,
+        budget=Budget(llm_call_limit=40), redact=secrets.redact, literature=Literature(HttpFetcher()),
     )  # fmt: skip
-    report = (result.artifact_dir / "report.md").read_text()
-    print("\n[neither] " + report)
-    assert result.status == "not_executed", result.stop_reason
-    assert reviewed == []
-    assert "SB-N1" in report and "BS-N2" in report
+    assert result.status == "rejected", result.stop_reason
+    plan = reviewed[0]
+    print(f"\n[edits] {plan.render()}")
+    assert plan.permitted_paths, "the plan must name the files it will change"
+    assert plan.validation is not None
+    assert "SB-N1" in plan.data["rationale"] or "BS-N2" in plan.data["rationale"]
 
 
 def test_real_model_finds_and_cites_a_source(tmp_path):

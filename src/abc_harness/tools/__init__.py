@@ -12,17 +12,21 @@ from typing import Any
 from abc_harness.tools import (
     ask_researcher,
     describe_simulator,
+    edit_file,
     propose_plan,
     read_file,
     read_paper,
+    run_command,
     run_plan,
     search_papers,
     view_figure,
+    write_file,
 )
 from abc_harness.tools.base import EndTask, ToolContext, ToolError, ToolOutput, ToolRun
 
 _MODULES = (
-    describe_simulator, read_file, search_papers, read_paper, view_figure, ask_researcher, propose_plan, run_plan,
+    describe_simulator, read_file, search_papers, read_paper, view_figure, ask_researcher, propose_plan,
+    write_file, edit_file, run_command, run_plan,
 )  # fmt: skip
 
 TOOLS: list[dict[str, Any]] = [m.SPEC for m in _MODULES]

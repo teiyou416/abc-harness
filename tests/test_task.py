@@ -157,7 +157,7 @@ def test_cli_rejection_starts_no_container(write_plan, tmp_path, monkeypatch, ca
     code = cli.main(["run", str(write_plan()), "--runs-dir", str(tmp_path / "runs")])
     out = capsys.readouterr().out
     assert code == 0
-    assert "No simulator was started." in out
+    assert "No simulation was run." in out
     assert "Artifacts: " in out
 
 

@@ -15,8 +15,8 @@ change to the one file that covers it. This folder holds those files.
 | File | What it answers |
 |---|---|
 | [project-spec.md](project-spec.md) | goals, MVP boundaries, required behaviour, acceptance criteria |
-| [architecture.md](architecture.md) | how the system works, which diagram boxes the MVP builds, and which module is which box |
-| [architecture.png](architecture.png) | the long-term design diagram |
+| [architecture.md](architecture.md) | the current architecture diagram, how the system works, and which module is which part |
+| [architecture.png](architecture.png) | the maintainer's original long-term design sketch; not kept current |
 
 ## The rulebook
 

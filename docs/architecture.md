@@ -1,9 +1,61 @@
 # Architecture
 
-This page describes the system shown in [architecture.png](architecture.png),
-which parts the first release builds, and which module holds each part. The
-diagram shows the long-term design. The table below is authoritative where the
-two differ.
+This page describes the system as it is built today and which module holds
+each part. The diagram below is the current architecture; keep it true in the
+same commit as any change that makes it false. The original long-term sketch
+is kept under [Original design sketch](#original-design-sketch).
+
+```mermaid
+flowchart TB
+    R(["Researcher"])
+
+    subgraph CLI["cli.py"]
+        ASK["ask: question"]
+        RUN["run: plan file"]
+    end
+
+    subgraph LOOP["Agent loop: agent.py"]
+        CTX["Context window: context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 131,072"]
+        LLM["Model client: model.py<br/>only holder of the API key"]
+        TOOLS["Tools<br/>describe_simulator, read_file,<br/>ask_researcher, propose_plan, run_plan"]
+        CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
+    end
+
+    subgraph TASK["Task: task.py"]
+        PLAN["plan.py<br/>validate, version = SHA-256"]
+        APPROVAL["approval.py<br/>decisions recorded by the harness"]
+        LIMITS["limits.py<br/>30 min active time, 500 model calls"]
+        EXEC["execute approved plan"]
+    end
+
+    subgraph SIM["simulators/"]
+        ADAPTER["simblock.py + capability card<br/>parameter patch, metrics"]
+    end
+
+    subgraph DOCKER["Execution image, no network, no host env"]
+        RUNNER["runner.py: one container per simulation run"]
+        SIMBLOCK["SimBlock at a pinned commit"]
+        RUNNER --> SIMBLOCK
+    end
+
+    subgraph ART["runs/task_id/"]
+        FILES["approvals.jsonl, plans/, plan.json<br/>raw/, changes/, results.json<br/>report.md, manifest.json<br/>trace.jsonl, history.md"]
+    end
+
+    ENV[(".env")] -->|key| LLM
+    LLM <-->|Messages API| CLAUDE(["Claude API"])
+    R --> ASK --> LOOP
+    R --> RUN --> PLAN
+    TOOLS --> PLAN
+    TOOLS -->|show plan, ask| R
+    R -->|approve / revise / reject| APPROVAL
+    TOOLS -->|run_plan| EXEC
+    APPROVAL -->|required| EXEC
+    LIMITS -.->|checked before every call and run| LOOP
+    EXEC --> ADAPTER --> RUNNER
+    EXEC --> FILES
+    LOOP -->|trace, history| FILES
+```
 
 A module marked _planned_ names where code will go; replace the mark when the
 module lands. `task.py` owns a task's artifact directory and executes approved
@@ -38,6 +90,9 @@ approval. A rejection ends the task without another model call.
    case.
 
 ## Diagram boxes in the first release
+
+This table maps each box of the [original design sketch](#original-design-sketch)
+to what the first release builds.
 
 | Diagram element | First release | Module |
 |---|---|---|
@@ -109,3 +164,11 @@ applies them.
   label.
 - Nothing is installed at runtime. A new dependency means a new image, which
   requires a new plan version and fresh approval.
+
+## Original design sketch
+
+[architecture.png](architecture.png) is the maintainer's first sketch of the
+long-term design, drawn before any code existed. It records directions beyond
+the MVP, such as LLM Ops evaluation and release gates and memory across tasks.
+It is not updated as the code changes: where it differs from this page, this
+page is correct, and the table above lists each box's status.

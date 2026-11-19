@@ -7,6 +7,7 @@ from typing import Any
 
 from abc_harness.execution.runner import RunnerError
 from abc_harness.execution.task import FAILED, REJECTED
+from abc_harness.literature.library import MIN_QUOTE_CHARS
 from abc_harness.planning.plan import PlanError, validate_plan
 from abc_harness.simulators import SIMULATORS, SimulatorError
 from abc_harness.tools.base import EndTask, ToolContext, ToolError
@@ -25,6 +26,25 @@ PLAN_SCHEMA: dict[str, Any] = {
         "metrics": {"type": "array", "items": {"type": "string"}},
         "run_timeout_seconds": {"type": "integer", "description": "Timeout for one simulation run."},
         "baseline": {"type": "object", "description": "Parameters shared by every configuration."},
+        "citations": {
+            "type": "array",
+            "description": "Papers from search_papers that justify a choice in this plan. Leave out when none does.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "paper": {"type": "string", "description": "The paper id returned by search_papers."},
+                    "supports": {
+                        "type": "string",
+                        "description": "The parameter, assumption, or metric it justifies, e.g. 'Bdelay = 12.6'.",
+                    },
+                    "quote": {
+                        "type": "string",
+                        "description": "A sentence copied verbatim from the abstract or the saved full text.",
+                    },
+                },
+                "required": ["paper", "supports", "quote"],
+            },
+        },
         "configurations": {
             "type": "array",
             "items": {
@@ -60,6 +80,9 @@ def run(ctx: ToolContext, args: dict[str, Any]) -> str:
         plan = validate_plan(dict(args))
     except (PlanError, SimulatorError) as e:
         raise ToolError(f"plan refused: {e}") from e
+    problems = check_citations(ctx, plan.data.get("citations", []))
+    if problems:
+        raise ToolError("plan refused: " + "; ".join(problems))
     try:
         plan = ctx.task.pin_image(plan)
     except RunnerError as e:
@@ -69,3 +92,16 @@ def run(ctx: ToolContext, args: dict[str, Any]) -> str:
     if decision == "reject":
         raise EndTask(REJECTED, "plan rejected by researcher" + (f": {comment}" if comment else ""))
     return json.dumps({"plan_version": plan.version, "decision": decision, "comment": comment})
+
+
+def check_citations(ctx: ToolContext, citations: list[dict[str, str]]) -> list[str]:
+    """Every cited paper must come from this task's searches, and its quote must appear in it verbatim."""
+    problems = []
+    for c in citations:
+        if ctx.library is None or c["paper"] not in ctx.library.papers:
+            problems.append(f"{c['paper']} was not returned by search_papers in this task")
+        elif ctx.library.locate(c["paper"], c["quote"]) is None:
+            where = "its abstract or saved full text" if c["paper"] in ctx.library.full_texts else "its abstract"
+            problems.append(f"the quote for {c['paper']} does not appear verbatim in {where} "
+                            f"(at least {MIN_QUOTE_CHARS} characters; read_paper first to quote the full text)")  # fmt: skip
+    return problems

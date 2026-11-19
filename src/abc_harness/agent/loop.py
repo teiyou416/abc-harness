@@ -28,6 +28,7 @@ from abc_harness.agent.model import ModelClient, ModelDeadlineExceeded, ModelTur
 from abc_harness.execution.limits import Budget, LimitReached
 from abc_harness.execution.runner import Runner
 from abc_harness.execution.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
+from abc_harness.literature.library import Library, Literature
 from abc_harness.tools import HANDLERS, TOOLS, EndTask, ToolContext, ToolError
 from abc_harness.tools.base import AskFn
 
@@ -168,7 +169,7 @@ class Agent:
         summary = turn.text() or "(the summary call returned no text; read task/history.md for earlier details)"
         old_window = self.history.window
         message = new_window_message(
-            self.question, task_state(self.task, self.tools.clarifications), summary, latest_tool_results(messages)
+            self.question, task_state(self.task, self.tools.clarifications, self.tools.library), summary, latest_tool_results(messages)
         )
         self.task.trace.event("compaction", call=self.task.budget.llm_calls, from_window=old_window,
                               estimated_input_tokens=estimated, usage=turn.usage, summary=summary)  # fmt: skip
@@ -189,11 +190,15 @@ def run_agent_task(
     budget: Budget | None = None,
     redact: Callable[[str], str] | None = None,
     limits: ContextLimits | None = None,
+    literature: Literature | None = None,
 ) -> TaskResult:
     limits = limits or ContextLimits()
     task = Task(runner, runs_root, budget, redact=redact, mode="agent", question=question, model=model.name,
-                prompts=prompt_hashes(), context_limits=limits.__dict__)  # fmt: skip
+                prompts=prompt_hashes(), context_limits=limits.__dict__,
+                literature_services=literature.services if literature else [])  # fmt: skip
     agent = Agent(task, model, ask, review, limits)
+    if literature is not None:
+        agent.tools.library = Library(task.artifact_dir, literature)
     status, stop_reason = FAILED, "unknown"
     try:
         status, stop_reason = agent.run(question)

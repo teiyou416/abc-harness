@@ -129,3 +129,29 @@ def test_real_model_names_the_missing_capability(tmp_path):
     assert result.status == "not_executed", result.stop_reason
     assert reviewed == []
     assert "SB-N1" in report and "BS-N2" in report
+
+
+def test_real_model_finds_and_cites_a_source(tmp_path):
+    """Acceptance row "Literature retrieval": a question that needs a reference, with no paper supplied."""
+    from abc_harness.literature import HttpFetcher, Library, Literature
+
+    secrets = Secrets.load(ROOT / ".env")
+    if not secrets.has("ANTHROPIC_API_KEY"):
+        pytest.skip("ANTHROPIC_API_KEY is not set in .env")
+    s2_key = secrets.get("SEMANTIC_SCHOLAR_API_KEY") if secrets.has("SEMANTIC_SCHOLAR_API_KEY") else None
+    reviewed = []
+    result = run_agent_task(
+        "In BlockSim, compare the stale block rate at the average Bitcoin block propagation delay reported in "
+        "published measurements of the Bitcoin network with a delay ten times larger.",
+        AnthropicModel(secrets.get("ANTHROPIC_API_KEY")), FakeRunner(), lambda q: "Use your defaults.",
+        lambda plan: reviewed.append(plan) or ("reject", "live test: stop before running"),
+        runs_root=tmp_path / "runs", budget=Budget(llm_call_limit=30), redact=secrets.redact,
+        literature=Literature(HttpFetcher(), s2_key),
+    )  # fmt: skip
+    assert result.status == "rejected", result.stop_reason
+    citations = reviewed[0].data.get("citations") or []
+    print("\n[literature] " + "\n".join(f"{c['paper']} -> {c['supports']}: {c['quote']}" for c in citations))
+    assert citations, "the plan must cite at least one source"
+    library = Library.load(result.artifact_dir)
+    for c in citations:
+        assert library.locate(c["paper"], c["quote"]) is not None

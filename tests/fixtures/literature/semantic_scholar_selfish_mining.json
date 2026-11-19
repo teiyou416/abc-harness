@@ -1,0 +1,16 @@
+{
+ "total": 1,
+ "offset": 0,
+ "data": [
+  {
+   "paperId": "7bf3b2c5a1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6",
+   "externalIds": {"DOI": "10.1007/978-3-662-45472-5_28", "ArXiv": "1311.0243"},
+   "url": "https://www.semanticscholar.org/paper/7bf3b2c5a1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6",
+   "title": "Majority Is Not Enough: Bitcoin Mining Is Vulnerable",
+   "venue": "Financial Cryptography",
+   "year": 2014,
+   "authors": [{"authorId": "1", "name": "Ittay Eyal"}, {"authorId": "2", "name": "Emin Gün Sirer"}],
+   "abstract": "The Bitcoin cryptocurrency records its transactions in a public log called the blockchain. Its security rests critically on the distributed protocol that maintains the blockchain, run by participants called miners. Conventional wisdom asserts that the mining protocol is incentive-compatible and secure against colluding minority groups, that is, it incentivizes miners to follow the protocol as prescribed."
+  }
+ ]
+}

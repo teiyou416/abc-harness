@@ -9,6 +9,7 @@ without a recorded approval.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import statistics
 from collections.abc import Callable
@@ -17,6 +18,16 @@ from pathlib import Path
 from typing import Any
 
 from abc_harness.approval import NotApproved
+from abc_harness.context import (
+    ContextLimits,
+    History,
+    cap_text,
+    estimate_tokens,
+    latest_tool_results,
+    new_window_message,
+    render_transcript,
+    task_state,
+)
 from abc_harness.limits import Budget, LimitReached
 from abc_harness.model import ModelClient
 from abc_harness.plan import PlanError, validate_plan
@@ -26,10 +37,9 @@ from abc_harness.task import COMPLETED, FAILED, NOT_EXECUTED, REJECTED, STOPPED,
 
 AskFn = Callable[[str], str]
 
-# Requests whose input context exceeds this stop the task (context hard limit).
-CONTEXT_LIMIT_TOKENS = 800_000
 REPO_ROOT = Path(__file__).resolve().parents[2]
-READ_LIMIT_BYTES = 100_000
+READ_DEFAULT_LINES = 400
+PROMPT_FILES = ("SOUL.md", "rules.md", "compact.md")
 
 PLAN_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -76,11 +86,16 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "read_file",
-        "description": "Read a text file. Allowed paths: `examples/<file>` (example plans) and "
-        "`task/<path>` (this task's artifact directory, for example `task/report.md` or `task/raw/<run_id>/stdout.txt`).",
+        "description": "Read lines of a text file. Allowed paths: `examples/<file>` (example plans) and "
+        "`task/<path>` (this task's artifact directory, for example `task/history.md`, `task/report.md`, or "
+        "`task/raw/<run_id>/stdout.txt`). Returns at most `limit` lines starting at line `offset`.",
         "input_schema": {
             "type": "object",
-            "properties": {"path": {"type": "string"}},
+            "properties": {
+                "path": {"type": "string"},
+                "offset": {"type": "integer", "description": "First line to return, starting at 1. Default 1."},
+                "limit": {"type": "integer", "description": f"Number of lines. Default {READ_DEFAULT_LINES}."},
+            },
             "required": ["path"],
         },
     },
@@ -123,43 +138,71 @@ class EndTask(Exception):
         self.status, self.reason = status, reason
 
 
+def _prompt(name: str) -> str:
+    return resources.files("abc_harness").joinpath(f"prompts/{name}").read_text(encoding="utf-8")
+
+
 def system_prompt() -> str:
-    return resources.files("abc_harness").joinpath("prompts/system.md").read_text(encoding="utf-8")
+    """SOUL.md (identity and values) followed by rules.md (how this harness works)."""
+    return f"{_prompt('SOUL.md').strip()}\n\n{_prompt('rules.md').strip()}\n"
+
+
+def prompt_hashes() -> dict[str, str]:
+    """SHA-256 of each prompt file, recorded in the manifest so a task names the prompts it ran with."""
+    return {name: hashlib.sha256(_prompt(name).encode("utf-8")).hexdigest() for name in PROMPT_FILES}
 
 
 class Agent:
-    def __init__(self, task: Task, model: ModelClient, ask: AskFn, review: DecideFn) -> None:
+    def __init__(
+        self, task: Task, model: ModelClient, ask: AskFn, review: DecideFn, limits: ContextLimits | None = None
+    ) -> None:
         self.task = task
         self.model = model
         self.ask = ask
         self.review = review
+        self.limits = limits or ContextLimits()
+        self.history = History(task.artifact_dir / "history.md", task.task_id)
         self.execution: tuple[str, str] | None = None
+        self.clarifications: list[tuple[str, str]] = []
+        self.question = ""
 
     # ----- the loop -----
 
     def run(self, question: str) -> tuple[str, str]:
-        messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
+        self.question = question
         system = system_prompt()
+        messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
+        self.history.start_window("The task starts.")
+        self.history.user_text(question)
+        next_input = self._estimate(system, messages)
         while True:
+            if next_input > self.limits.soft_limit:
+                messages = self._compress(messages, next_input)
+                next_input = self._estimate(system, messages)
+            if next_input > self.limits.max_input_tokens:
+                raise LimitReached("context", f"about {next_input} input tokens exceed {self.limits.max_input_tokens}")
             self.task.budget.check_time()
             self.task.budget.count_llm_call()
-            turn = self.model.create(system, messages, TOOLS)
+            turn = self.model.create(system, messages, TOOLS, max_tokens=self.limits.max_output_tokens)
+            actual_input = sum(turn.usage.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens",
+                                                               "cache_creation_input_tokens"))  # fmt: skip
             self.task.trace.event(
                 "model_call",
                 call=self.task.budget.llm_calls,
+                window=self.history.window,
                 model=turn.model,
                 stop_reason=turn.stop_reason,
                 usage=turn.usage,
+                estimated_input_tokens=next_input,
                 latency_seconds=turn.latency_seconds,
                 request_id=turn.request_id,
                 text=turn.text(),
                 tool_uses=[{"name": t["name"], "input": t["input"]} for t in turn.tool_uses()],
             )
             messages.append({"role": "assistant", "content": turn.content})
-            context = sum(turn.usage.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens",
-                                                          "cache_creation_input_tokens"))  # fmt: skip
-            if context > CONTEXT_LIMIT_TOKENS:
-                raise LimitReached("context", f"{context} input tokens exceed {CONTEXT_LIMIT_TOKENS}")
+            self.history.assistant(turn.content)
+            if actual_input > self.limits.max_input_tokens:
+                raise LimitReached("context", f"{actual_input} input tokens exceed {self.limits.max_input_tokens}")
 
             if turn.stop_reason == "refusal":
                 raise EndTask(FAILED, "the model declined the request (refusal)")
@@ -176,6 +219,14 @@ class Agent:
 
             results = [self._call_tool(tool_use) for tool_use in tool_uses]
             messages.append({"role": "user", "content": results})
+            if actual_input:
+                output = turn.usage.get("output_tokens") or estimate_tokens(turn.content)
+                next_input = actual_input + output + estimate_tokens(results)
+            else:
+                next_input = self._estimate(system, messages)
+
+    def _estimate(self, system: str, messages: list[dict[str, Any]]) -> int:
+        return estimate_tokens(system) + estimate_tokens(TOOLS) + estimate_tokens(messages)
 
     def _call_tool(self, tool_use: dict[str, Any]) -> dict[str, Any]:
         name, args = tool_use["name"], tool_use.get("input") or {}
@@ -183,11 +234,44 @@ class Agent:
         try:
             if handler is None:
                 raise ToolError(f"unknown tool {name!r}")
-            content, is_error = handler(args), False
+            full, is_error = handler(args), False
         except ToolError as e:
-            content, is_error = str(e), True
-        self.task.trace.event("tool_call", tool=name, input=args, is_error=is_error, result=content[:2000])
+            full, is_error = str(e), True
+        self.history.tool_result(tool_use["id"], name, full, is_error)
+        where = f"task/history.md (tool result id {tool_use['id']})"
+        content = cap_text(full, self.limits.tool_result_max_tokens, where)
+        self.task.trace.event("tool_call", tool=name, input=args, is_error=is_error, result=full[:2000],
+                              result_chars=len(full), cut=content != full)  # fmt: skip
         return {"type": "tool_result", "tool_use_id": tool_use["id"], "content": content, "is_error": is_error}
+
+    def _compress(self, messages: list[dict[str, Any]], estimated: int) -> list[dict[str, Any]]:
+        """Summarize the window and start a new one (docs/development-plan.md, M2.5)."""
+        self.task.budget.check_time()
+        self.task.budget.count_llm_call()
+        budget = self.limits.hard_limit - self.limits.compact_max_tokens - estimate_tokens(_prompt("compact.md"))
+        transcript = render_transcript(messages)
+        if estimate_tokens(transcript) > budget:
+            keep = budget * 3 - 200
+            transcript = f"[the start of this window is cut; it is in task/history.md]\n\n{transcript[-keep:]}"
+        turn = self.model.create(
+            _prompt("compact.md"),
+            [{"role": "user", "content": f"Summarize this conversation window.\n\n{transcript}"}],
+            [],
+            max_tokens=self.limits.compact_max_tokens,
+        )
+        if turn.stop_reason == "refusal":
+            raise EndTask(FAILED, "the model declined to summarize the context window (refusal)")
+        summary = turn.text() or "(the summary call returned no text; read task/history.md for earlier details)"
+        old_window = self.history.window
+        message = new_window_message(
+            self.question, task_state(self.task, self.clarifications), summary, latest_tool_results(messages)
+        )
+        self.task.trace.event("compaction", call=self.task.budget.llm_calls, from_window=old_window,
+                              estimated_input_tokens=estimated, usage=turn.usage, summary=summary)  # fmt: skip
+        self.history.start_window(f"Started after window {old_window} reached the soft limit "
+                                  f"(about {estimated} input tokens).")  # fmt: skip
+        self.history.user_text(message, label="user (new window, written by the harness)")
+        return [{"role": "user", "content": message}]
 
     # ----- tools -----
 
@@ -199,6 +283,11 @@ class Agent:
 
     def tool_read_file(self, args: dict[str, Any]) -> str:
         path = str(args.get("path", ""))
+        try:
+            offset = max(1, int(args.get("offset") or 1))
+            limit = max(1, int(args.get("limit") or READ_DEFAULT_LINES))
+        except (TypeError, ValueError) as e:
+            raise ToolError("offset and limit must be whole numbers") from e
         roots = {"examples": REPO_ROOT / "examples", "task": self.task.artifact_dir}
         prefix, _, rest = path.partition("/")
         if prefix not in roots or not rest:
@@ -207,11 +296,13 @@ class Agent:
         target = (root / rest).resolve()
         if not target.is_relative_to(root) or not target.is_file():
             raise ToolError(f"no readable file at {path}")
-        data = target.read_bytes()
-        text = data[:READ_LIMIT_BYTES].decode("utf-8", errors="replace")
-        if len(data) > READ_LIMIT_BYTES:
-            text += f"\n[file continues: showing the first {READ_LIMIT_BYTES} of {len(data)} bytes]"
-        return text
+        lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
+        chunk = lines[offset - 1 : offset - 1 + limit]
+        last = offset - 1 + len(chunk)
+        header = f"[{path}: lines {offset}-{last} of {len(lines)}]"
+        if last < len(lines):
+            header += f" [more: use offset {last + 1}]"
+        return header + "\n" + "\n".join(chunk)
 
     def tool_ask_researcher(self, args: dict[str, Any]) -> str:
         question = str(args.get("question", "")).strip()
@@ -220,6 +311,7 @@ class Agent:
         self.task.trace.event("human_wait_started", reason="clarification", question=question)
         with self.task.budget.waiting_for_human():
             answer = self.ask(question)
+        self.clarifications.append((question, answer))
         self.task.trace.event("researcher_answer", answer=answer)
         return answer or "(the researcher gave no answer; choose a sensible default and say so in the plan)"
 
@@ -294,9 +386,12 @@ def run_agent_task(
     runs_root: Path = Path("runs"),
     budget: Budget | None = None,
     redact: Callable[[str], str] | None = None,
+    limits: ContextLimits | None = None,
 ) -> TaskResult:
-    task = Task(runner, runs_root, budget, redact=redact, mode="agent", question=question, model=model.name)
-    agent = Agent(task, model, ask, review)
+    limits = limits or ContextLimits()
+    task = Task(runner, runs_root, budget, redact=redact, mode="agent", question=question, model=model.name,
+                prompts=prompt_hashes(), context_limits=limits.__dict__)  # fmt: skip
+    agent = Agent(task, model, ask, review, limits)
     status, stop_reason = FAILED, "unknown"
     try:
         status, stop_reason = agent.run(question)
@@ -318,6 +413,7 @@ def run_agent_task(
             if (status, stop_reason) != agent.execution:
                 run_reason = f"{run_reason}; afterwards: {stop_reason}"
             status, stop_reason = run_status, run_reason
+        task.manifest["context_windows"] = agent.history.window
         result = task.close(status, stop_reason)
     return result
 

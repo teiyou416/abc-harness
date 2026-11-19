@@ -50,14 +50,43 @@ approval. A rejection ends the task without another model call.
 | Simulators: SimBlock, BlockSim | Yes | `simulators/simblock.py`; `simulators/blocksim.py` _planned_ |
 | Simulators: Blockemulator | Later | |
 | Literature boxes | Partial. Papers With Code is gone; IEEE Xplore needs its own API key and is optional. | _planned_ for M4 |
-| System prompt, user prompt, working memory | Yes, with a single system prompt file. | `prompts/system.md`, `secrets.py` (API keys from `.env`) |
-| SOUL.md, SKILL.md, History.md | Later. `trace.jsonl` and the artifact directory are the record of a task. | |
-| Context summarization and token caps | Partial. A hard context limit stops the task with a recorded reason. Summarization waits until traces show the need. | `limits.py` |
+| System prompt, user prompt, working memory | Yes. The system prompt is `SOUL.md` followed by `rules.md`; the working memory is the current window. | `prompts/`, `agent.py`, `secrets.py` (API keys from `.env`) |
+| SOUL.md, SKILL.md, History.md | SOUL.md and a per-task `history.md` are built; SKILL.md and memory across tasks are later. | `prompts/SOUL.md`, `context.py` |
+| Context summarization and token caps | Yes, with the diagram's numbers: soft limit 106,496, hard limit 131,072, output 16,384, summary 8,192. | `context.py`, `agent.py` |
 | Draft | Yes. The draft is the structured plan shown for review. | `plan.py` |
 | LLM Ops: trace | Yes. One `trace.jsonl` per task and a CLI summary of calls, tokens, latency, and errors. | `trace.py` |
 | LLM Ops: LLM-as-a-judge, Diagnose, Gate, Release | Later. Result verification is deterministic. | |
 
 All module paths are relative to `src/abc_harness/`.
+
+## Context management
+
+The agent's input is the system prompt (`prompts/SOUL.md`, then
+`prompts/rules.md`), the tool definitions, and the messages of the current
+window. `context.py` holds the limits and the pieces below, and `Agent.run`
+applies them.
+
+- Before every model call the agent estimates the next input from the last
+  reported input tokens, the reply, and the new tool results. Past the soft
+  limit (106,496 tokens) it compresses first. An input that would leave less
+  than one full reply (16,384 tokens) inside the hard limit (131,072 tokens)
+  stops the task with reason `context`.
+- Compression asks the model, with `prompts/compact.md` and no tools, for a
+  summary of at most 8,192 tokens. The summary call counts toward the
+  500-call limit.
+- The new window is one user message: the original question, a task-state
+  block written from the harness's records (plan versions, decisions,
+  clarification answers, run results), the summary, the latest tool results,
+  and a pointer to `task/history.md`. Plan versions, decisions, and numbers
+  never pass through the summary.
+- `history.md` receives every message of every window as it happens, with
+  full tool results. A tool result longer than 8,192 tokens is cut in the
+  window, and the cut notice points to its full text in `history.md`. The
+  agent pages through files with `read_file` `offset` and `limit`.
+- Requests mark the system prompt as a cache breakpoint and enable automatic
+  caching of the conversation tail.
+- The manifest records the SHA-256 of each prompt file and the number of
+  context windows.
 
 ## Execution environment
 

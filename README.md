@@ -79,6 +79,7 @@ entry in `runs/<task_id>/results.json`.
 | `plans/` | every plan version proposed in the task |
 | `approvals.jsonl` | every decision, bound to a plan version |
 | `trace.jsonl` | every event, with active and waiting time and the stop reason |
+| `history.md` | (`ask` only) every message of every context window, with full tool results |
 | `manifest.json` | simulator commit, image ID, command, limits, and task status |
 | `results.json`, `report.md` | per-run status and metrics, and the readable report |
 | `raw/<run_id>/` | `stdout.txt`, `stderr.txt`, `blockList.txt`, `static.json` from SimBlock |

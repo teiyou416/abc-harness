@@ -48,9 +48,13 @@ class ScriptedModel:
     def __init__(self, steps: list[Step]) -> None:
         self.steps = list(steps)
         self.calls: list[list[dict[str, Any]]] = []
+        self.requests: list[dict[str, Any]] = []
 
-    def create(self, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> ModelTurn:
+    def create(
+        self, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]], max_tokens: int = 16_384
+    ) -> ModelTurn:
         self.calls.append(json.loads(json.dumps(messages)))
+        self.requests.append({"system": system, "tools": [t["name"] for t in tools], "max_tokens": max_tokens})
         if not self.steps:
             raise AssertionError("ScriptedModel ran out of steps")
         step = self.steps.pop(0)

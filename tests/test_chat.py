@@ -206,5 +206,5 @@ def test_model_command_shows_and_switches_the_model_for_following_tasks(tmp_path
     joined = "\n".join(out)
     assert "Model: claude-opus-5-5\nAvailable: claude-opus-5-5, claude-sonnet-5-5" in joined
     assert "! claude-opus-4-5-20251101 has no adaptive thinking" in joined
-    assert "The following tasks use claude-sonnet-5-5. (no list price known" in joined
+    assert "The following tasks use claude-sonnet-5-5. Earlier tasks keep the model they ran with." in joined
     assert used == ["claude-sonnet-5-5"] and "not_executed  claude-sonnet-5-5  hello" in joined

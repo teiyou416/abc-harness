@@ -9,7 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from abc_harness.agent.model import PRICES_PER_MTOK
+from abc_harness.agent.model import price_for
 from abc_harness.execution.trace import read_trace, summarize_trace
 
 Write = Callable[[str], None]
@@ -180,15 +180,12 @@ def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[float, se
         if e["event"] not in ("model_call", "compaction"):
             continue
         model = str(e.get("model") or default_model)
-        prices = next((p for name, p in PRICES_PER_MTOK.items() if model.startswith(name)), None)
-        if prices is None:
+        price = price_for(model)
+        if price is None:
             unknown.add(model or "unknown")
             continue
         priced.add(model)
-        usage = e.get("usage") or {}
-        tokens = (usage.get("input_tokens", 0), usage.get("output_tokens", 0),
-                  usage.get("cache_read_input_tokens", 0), usage.get("cache_creation_input_tokens", 0))  # fmt: skip
-        total += sum(n * price for n, price in zip(tokens, prices, strict=True)) / 1_000_000
+        total += price.cost(e.get("usage") or {})
     return total, priced, unknown
 
 

@@ -11,12 +11,57 @@ DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
 # Thinking counts toward this cap, so it leaves room for long reasoning plus a large tool input such as a plan.
 MAX_OUTPUT_TOKENS = 65_536
-# List prices in USD per million tokens: input, output, cache read, 5-minute cache write (the TTL the client
-# uses). Only for the cost estimate in the run statistics; update them when the published prices change.
-PRICES_PER_MTOK: dict[str, tuple[float, float, float, float]] = {
-    "claude-opus-5-5": (4.0, 20.0, 0.20, 5.0),
-    "claude-fable-5-2": (8.0, 40.0, 0.20, 10.0),
+
+
+@dataclass(frozen=True)
+class Price:
+    """List prices in USD per million tokens. `cache_write` is the 5-minute TTL, the one the client uses.
+
+    A model priced by prompt length (Claude Haiku 5.5) has `above`: a request whose prompt (input, cache reads,
+    and cache writes together) exceeds `above_tokens` pays those prices for all of its tokens.
+    """
+
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
+    above: Price | None = None
+    above_tokens: int = 0
+
+    def cost(self, usage: dict[str, int]) -> float:
+        prompt = sum(usage.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+        price = self.above if self.above and prompt > self.above_tokens else self
+        return (usage.get("input_tokens", 0) * price.input + usage.get("output_tokens", 0) * price.output
+                + usage.get("cache_read_input_tokens", 0) * price.cache_read
+                + usage.get("cache_creation_input_tokens", 0) * price.cache_write) / 1_000_000  # fmt: skip
+
+
+# From https://platform.claude.com/docs/en/about-claude/pricing, read 2026-11-19. Only for the cost estimate in
+# the run statistics; update the table when the published prices change.
+PRICES: dict[str, Price] = {
+    "claude-fable-5-2": Price(8.0, 40.0, 0.20, 10.0),
+    "claude-fable-5-1": Price(10.0, 50.0, 0.25, 12.50),
+    "claude-fable-5": Price(10.0, 50.0, 1.0, 12.50),
+    "claude-opus-5-5": Price(4.0, 20.0, 0.20, 5.0),
+    "claude-opus-5": Price(5.0, 25.0, 0.50, 6.25),
+    "claude-opus-4-8": Price(5.0, 25.0, 0.50, 6.25),
+    "claude-opus-4-7": Price(5.0, 25.0, 0.50, 6.25),
+    "claude-opus-4-6": Price(5.0, 25.0, 0.50, 6.25),
+    "claude-opus-4-5": Price(5.0, 25.0, 0.50, 6.25),
+    "claude-sonnet-5-5": Price(2.0, 10.0, 0.10, 2.50),
+    "claude-sonnet-5": Price(2.0, 10.0, 0.20, 2.50),
+    "claude-sonnet-4-6": Price(3.0, 15.0, 0.30, 3.75),
+    "claude-sonnet-4-5": Price(3.0, 15.0, 0.30, 3.75),
+    "claude-haiku-5-5": Price(0.10, 0.50, 0.01, 0.125, above=Price(0.50, 2.50, 0.05, 0.625), above_tokens=100_000),
+    "claude-haiku-4-5": Price(1.0, 5.0, 0.10, 1.25),
 }
+
+
+def price_for(model: str) -> Price | None:
+    """The price of a model id, matching the longest known name, so claude-opus-5-5 is not priced as claude-opus-5
+    and a dated id such as claude-haiku-4-5-20251001 finds its model."""
+    name = next((n for n in sorted(PRICES, key=len, reverse=True) if model.startswith(n)), None)
+    return PRICES[name] if name else None
 # On a safety decline the API reruns the request on a fallback model chosen
 # by refusal category, inside the same call.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"

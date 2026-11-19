@@ -122,16 +122,16 @@ class Task:
         self.executed = plan
         self.records = [RunRecord(s.run_id, s.configuration, s.seed, s.params) for s in plan.runs()]
         (self.artifact_dir / "plan.json").write_text(canonical_json(plan.data) + "\n", encoding="utf-8")
-        self.manifest.update(self.runner.image_info())
+        self.manifest.update(self.runner.image_info(simulator.image_tag))
         self.manifest.update(plan_version=plan.version, simulator=plan.simulator, command=simulator.command())
 
         workspace = self.artifact_dir / "workspace"
         workspace.mkdir()
         pristine = workspace / "source"
         self.started_containers = True
-        self.runner.export(simulator.source_path_in_image, pristine)
+        self.runner.export(simulator.image_tag, simulator.source_path_in_image, pristine)
         revision_file = self.artifact_dir / "simulator_revision.txt"
-        self.runner.export(simulator.revision_path_in_image, revision_file)
+        self.runner.export(simulator.image_tag, simulator.revision_path_in_image, revision_file)
         self.manifest["simulator_revision"] = revision_file.read_text(encoding="utf-8").strip()
         self.trace.event("workspace_prepared", simulator_revision=self.manifest["simulator_revision"])
 
@@ -162,7 +162,7 @@ class Task:
         timeout = min(plan.run_timeout_seconds, self.budget.remaining_seconds)
         limited_by_budget = timeout < plan.run_timeout_seconds
         self.trace.event("run_started", run_id=spec.run_id, seed=spec.seed, params=spec.params, timeout_seconds=timeout)
-        outcome = self.runner.run(self.task_id, spec.run_id, run_dir, simulator.command(), timeout)
+        outcome = self.runner.run(simulator.image_tag, self.task_id, spec.run_id, run_dir, simulator.command(), timeout)
         record.exit_code = outcome.exit_code
         record.duration_seconds = round(outcome.duration_seconds, 3)
 

@@ -31,13 +31,15 @@ class RunOutcome:
 
 
 class Runner(Protocol):
-    """What the task orchestration needs from an execution backend."""
+    """What the task orchestration needs from an execution backend. Each simulator has its own image."""
 
-    def image_info(self) -> dict[str, str]: ...
+    def image_info(self, image: str) -> dict[str, str]: ...
 
-    def export(self, image_path: str, dest: Path) -> None: ...
+    def export(self, image: str, image_path: str, dest: Path) -> None: ...
 
-    def run(self, task_id: str, run_id: str, workdir: Path, command: str, timeout_seconds: float) -> RunOutcome: ...
+    def run(
+        self, image: str, task_id: str, run_id: str, workdir: Path, command: str, timeout_seconds: float
+    ) -> RunOutcome: ...
 
     def cleanup(self, task_id: str) -> None: ...
 
@@ -53,26 +55,27 @@ def _docker(*args: str, check: bool = True, timeout: float | None = None) -> sub
 
 
 class DockerRunner:
-    def __init__(self, image: str, cpus: str = "2", memory: str = "4g") -> None:
-        self.image = image
+    def __init__(self, cpus: str = "2", memory: str = "4g") -> None:
         self.cpus = cpus
         self.memory = memory
 
-    def image_info(self) -> dict[str, str]:
-        result = _docker("image", "inspect", self.image, "--format", "{{.Id}}", check=False)
+    def image_info(self, image: str) -> dict[str, str]:
+        result = _docker("image", "inspect", image, "--format", "{{.Id}}", check=False)
         if result.returncode != 0:
-            raise RuntimeError(f"execution image {self.image} not found; run `abc-harness image build` first")
-        return {"image": self.image, "image_id": result.stdout.strip()}
+            raise RuntimeError(f"execution image {image} not found; run `abc-harness image build` first")
+        return {"image": image, "image_id": result.stdout.strip()}
 
-    def export(self, image_path: str, dest: Path) -> None:
+    def export(self, image: str, image_path: str, dest: Path) -> None:
         """Copy a path out of the image without starting it."""
-        container_id = _docker("create", self.image).stdout.strip()
+        container_id = _docker("create", image).stdout.strip()
         try:
             _docker("cp", f"{container_id}:{image_path}", str(dest))
         finally:
             _docker("rm", "-f", container_id, check=False)
 
-    def run(self, task_id: str, run_id: str, workdir: Path, command: str, timeout_seconds: float) -> RunOutcome:
+    def run(
+        self, image: str, task_id: str, run_id: str, workdir: Path, command: str, timeout_seconds: float
+    ) -> RunOutcome:
         name = f"abc-{task_id}-{run_id}".replace("__", "-")
         args = [
             "run", "--rm", "--name", name,
@@ -81,7 +84,7 @@ class DockerRunner:
             "--cpus", self.cpus, "--memory", self.memory,
             "-v", f"{workdir.resolve()}:{CONTAINER_WORKDIR}",
             "-w", CONTAINER_WORKDIR,
-            self.image, "sh", "-c", command,
+            image, "sh", "-c", command,
         ]  # fmt: skip
         started = time.monotonic()
         try:

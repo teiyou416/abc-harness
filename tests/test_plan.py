@@ -52,7 +52,7 @@ def _plan_data(**overrides):
         ({"seeds": [1, 1]}, PlanError),
         ({"configurations": [{"name": "a b"}]}, PlanError),
         ({"permitted_edits": ["src/x.java"]}, PlanError),
-        ({"simulator": "blocksim"}, SimulatorError),
+        ({"simulator": "ethereum"}, SimulatorError),
         ({"metrics": ["throughput"]}, SimulatorError),
         ({"baseline": {"NUM_OF_NODES": 10}}, SimulatorError),
         ({"baseline": {"NUM_OF_NODES": 10, "END_BLOCK_HEIGHT": 3, "ALGO": "x"}}, SimulatorError),

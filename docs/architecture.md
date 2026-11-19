@@ -29,13 +29,15 @@ flowchart TB
     end
 
     subgraph SIM["simulators/"]
-        ADAPTER["simblock.py + capability card<br/>parameter patch, metrics"]
+        ADAPTER["simblock.py, blocksim.py + capability cards<br/>parameter patch, seed, metrics"]
     end
 
-    subgraph DOCKER["Execution image, no network, no host env"]
+    subgraph DOCKER["Execution images, no network, no host env"]
         RUNNER["runner.py: one container per simulation run"]
-        SIMBLOCK["SimBlock at a pinned commit"]
+        SIMBLOCK["SimBlock image: JDK 21 + pinned commit"]
+        BLOCKSIM["BlockSim image: Python 3.11 + pinned commit"]
         RUNNER --> SIMBLOCK
+        RUNNER --> BLOCKSIM
     end
 
     subgraph ART["runs/task_id/"]
@@ -61,7 +63,9 @@ A module marked _planned_ names where code will go; replace the mark when the
 module lands. `task.py` owns a task's artifact directory and executes approved
 plans, `report.py` writes the report, and `simulators/base.py` defines the
 adapter interface. Each simulator adapter ships a capability card next to it,
-for example `simulators/simblock_card.md`.
+for example `simulators/simblock_card.md` and `simulators/blocksim_card.md`.
+The agent reads every card before choosing a simulator and cites entries of
+both in the plan's rationale.
 
 ## Agent tools
 
@@ -102,7 +106,7 @@ to what the first release builds.
 | Tools: Web Retrieval | Yes. Sources are listed in the project specification. | _planned_ for M4 |
 | Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `agent.py` (`ask_researcher`, `propose_plan`), `approval.py`, `cli.py` (terminal prompts) |
 | Tools: Custom Tools | Later | |
-| Simulators: SimBlock, BlockSim | Yes | `simulators/simblock.py`; `simulators/blocksim.py` _planned_ |
+| Simulators: SimBlock, BlockSim | Yes. BlockSim runs its Bitcoin model only. | `simulators/simblock.py`, `simulators/blocksim.py` |
 | Simulators: Blockemulator | Later | |
 | Literature boxes | Partial. Papers With Code is gone; IEEE Xplore needs its own API key and is optional. | _planned_ for M4 |
 | System prompt, user prompt, working memory | Yes. The system prompt is `SOUL.md` followed by `rules.md`; the working memory is the current window. | `prompts/`, `agent.py`, `secrets.py` (API keys from `.env`) |
@@ -153,6 +157,14 @@ applies them.
   seed, so every simulation run gets its own source copy with the planned
   constants and seed written in, and compiles it with `javac` in its container.
   The upstream Gradle wrapper is not used.
+- The BlockSim image is a digest-pinned `python:3.11-slim` with pandas 1.5.3
+  (BlockSim calls `ExcelWriter.save()`, which pandas 2 removed) and the
+  BlockSim source at a pinned commit. The adapter selects the Bitcoin model,
+  writes planned values into its block of `InputsConfig.py`, forces one
+  upstream run per simulation run, and seeds `random` and `numpy.random` in
+  `Main.py`. `docker/blocksim/xlsx_to_csv.py` turns BlockSim's Excel result
+  into one CSV per sheet so metrics can be recalculated with the standard
+  library.
 - The harness and the model client run on the host. The API key never enters a
   container: the docker CLI receives only an allowlist of Docker variables, and
   containers receive no host variables at all.

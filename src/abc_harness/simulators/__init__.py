@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from abc_harness.simulators.base import Simulator, SimulatorError
+from abc_harness.simulators.blocksim import BlockSim
 from abc_harness.simulators.simblock import SimBlock
 
-SIMULATORS: dict[str, Simulator] = {"simblock": SimBlock()}
+SIMULATORS: dict[str, Simulator] = {"simblock": SimBlock(), "blocksim": BlockSim()}
 
 
 def get_simulator(name: str) -> Simulator:

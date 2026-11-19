@@ -32,8 +32,8 @@ caps it at 100 lines, so the detail lives in the files it points to.
   repetition. A task usually contains many simulation runs.
 - **Task workspace**: `runs/<task_id>/workspace/`, the task's copy of the
   simulator source. Every file change for a task happens here.
-- **Execution image**: the prebuilt Docker image that holds the supported
-  simulators at pinned commits with their dependencies.
+- **Execution image**: a prebuilt Docker image, one per simulator, that holds
+  that simulator at a pinned commit with its dependencies.
 - **Runner**: the tool that executes simulation runs from an approved plan.
 - **Sandbox exec**: the tool that runs the agent's own build and test commands
   inside the execution image after approval.
@@ -94,5 +94,5 @@ model client.
 ## Commands
 
 `make check` (lint + offline tests) · `make test` · `make test-docker` · `make test-live` · `make lint` · `make fmt`
-`make image` (build the execution image) · `make example` (review and run `examples/simblock-baseline.toml`)
+`make image` (build both execution images) · `make example` / `make example-blocksim` (review and run an example plan)
 `uv run abc-harness ask "<question>"` (agent drafts a plan) · `uv run abc-harness trace summary runs/<task_id>`

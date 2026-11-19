@@ -9,6 +9,12 @@ from typing import Any, Protocol
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
 MAX_OUTPUT_TOKENS = 16_384
+# List prices in USD per million tokens: input, output, cache read, 5-minute cache write (the TTL the client
+# uses). Only for the cost estimate in the run statistics; update them when the published prices change.
+PRICES_PER_MTOK: dict[str, tuple[float, float, float, float]] = {
+    "claude-opus-5-5": (4.0, 20.0, 0.20, 5.0),
+    "claude-fable-5-2": (8.0, 40.0, 0.20, 10.0),
+}
 # On a safety decline the API reruns the request on a fallback model chosen
 # by refusal category, inside the same call.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"

@@ -69,8 +69,9 @@ returns), what it says, each tool it calls and a preview of the result, plan
 decisions, and each simulation run with its metrics. `--quiet` turns this
 off; `trace.jsonl` and `history.md` keep the full text either way. At the
 end, `ask` and `run` print the agent's summary and the run statistics: active
-and waiting time, model calls and tokens, tool calls, and completed simulation
-runs. The experiment's results are in `report.md`.
+and waiting time, model calls and tokens, an estimated cost at list prices
+(`PRICES_PER_MTOK` in `src/abc_harness/agent/model.py`; not a bill), tool
+calls, and completed simulation runs. The experiment's results are in `report.md`.
 
 To have the agent read a paper you choose, pass the PDF; repeat `--paper` for
 several. The harness parses each one before the agent starts (1 to 6 minutes

@@ -9,7 +9,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from abc_harness.execution.trace import summarize_trace
+from abc_harness.agent.model import PRICES_PER_MTOK
+from abc_harness.execution.trace import read_trace, summarize_trace
 
 Write = Callable[[str], None]
 
@@ -153,6 +154,8 @@ def task_summary(task_dir: Path) -> list[str]:
         lines.append(f"Model: {trace['model_calls']} calls of {(manifest.get('limits') or {}).get('llm_call_limit')}, "
                      f"{trace.get('model_latency_seconds', 0):.1f}s waiting for answers; tokens {tokens_in:,} in "
                      f"({cached:,} from cache), {tokens.get('output_tokens', 0):,} out")  # fmt: skip
+    if trace.get("model_calls"):
+        lines.append(estimated_cost_line(task_dir / "trace.jsonl", str(manifest.get("model") or "")))
     if trace.get("tool_calls"):
         calls = ", ".join(f"{name} {n}" for name, n in sorted(trace["tool_calls"].items()))
         lines.append(f"Tools: {calls}; {trace.get('tool_errors', 0)} refused or failed")
@@ -161,6 +164,39 @@ def task_summary(task_dir: Path) -> list[str]:
         lines.append(f"Simulation runs: {done} of {len(records)} completed")
     lines.append(f"Report: {task_dir / 'report.md'}")
     return lines
+
+
+def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[float, set[str], set[str]]:
+    """(USD, models priced, models without a known price) over every model call, summary calls included.
+
+    Each call is priced by the model that answered it (a server-side fallback may answer with another model),
+    from its own usage: uncached input, output (thinking included), cache reads, and cache writes.
+    """
+    total, priced, unknown = 0.0, set(), set()
+    for e in read_trace(trace_file):
+        if e["event"] not in ("model_call", "compaction"):
+            continue
+        model = str(e.get("model") or default_model)
+        prices = next((p for name, p in PRICES_PER_MTOK.items() if model.startswith(name)), None)
+        if prices is None:
+            unknown.add(model or "unknown")
+            continue
+        priced.add(model)
+        usage = e.get("usage") or {}
+        tokens = (usage.get("input_tokens", 0), usage.get("output_tokens", 0),
+                  usage.get("cache_read_input_tokens", 0), usage.get("cache_creation_input_tokens", 0))  # fmt: skip
+        total += sum(n * price for n, price in zip(tokens, prices, strict=True)) / 1_000_000
+    return total, priced, unknown
+
+
+def estimated_cost_line(trace_file: Path, default_model: str = "") -> str:
+    total, priced, unknown = estimated_cost(trace_file, default_model)
+    if not priced:
+        return f"Estimated cost: unknown (no list price for {', '.join(sorted(unknown))})"
+    line = f"Estimated cost: ${total:.2f} at list prices for {', '.join(sorted(priced))} (an estimate, not a bill)"
+    if unknown:
+        line += f"; calls to {', '.join(sorted(unknown))} are not included"
+    return line
 
 
 def _read_json(path: Path) -> Any:

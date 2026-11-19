@@ -81,6 +81,26 @@ the next task), and the agent can cite them:
 uv run abc-harness ask "Reproduce Figure 2 of this paper." --paper ~/papers/selfish-mining.pdf
 ```
 
+### Chat
+
+For follow-up questions, start a conversation instead:
+
+```bash
+uv run abc-harness chat [--paper paper.pdf]
+```
+
+Type a request and press Enter (Alt+Enter, or Esc then Enter, for a new
+line; the arrow keys recall earlier input). Each request runs as its own
+task, with its own directory, approval, report, and 30-minute limit, so a
+follow-up such as "now with 1000 nodes" gets a new plan to approve. The agent
+remembers the earlier tasks of the conversation: the harness gives it each
+one's question, plan, results, figures, and final answer, and it can read
+their files. Ctrl-C during a task stops that task and returns to the prompt;
+Ctrl-C or Ctrl-D at an empty prompt leaves. Commands: `/tasks` lists the
+conversation's tasks, `/paper <pdf>` adds a paper for every following task,
+`/new` starts over, `/help`, and `/quit`. The conversation's log is
+`runs/sessions/<session_id>/session.jsonl`.
+
 `uv run abc-harness trace summary runs/<task_id>` counts the task's model
 calls, tokens, tool calls, and errors.
 

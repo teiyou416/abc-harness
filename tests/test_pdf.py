@@ -14,11 +14,11 @@ from doubles.recorded_http import RECORDED, recorded_literature
 from doubles.scripted_model import ScriptedModel, last_tool_result, run_last_proposed, text_turn, tool_turn
 from test_literature import blocksim_plan
 
-from abc_harness import cli
 from abc_harness.agent.loop import run_agent_task
 from abc_harness.execution.limits import Budget
 from abc_harness.execution.task import Task
 from abc_harness.execution.trace import read_trace
+from abc_harness.interfaces import cli
 from abc_harness.literature import Library
 from abc_harness.literature.http import FetchError
 from abc_harness.literature.pdf import NOTE, PARSER_IMAGE, TABLE_WARNING, PdfError, parse_structured

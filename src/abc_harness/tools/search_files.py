@@ -25,8 +25,8 @@ SKIP_DIRS = {".git", "__pycache__", ".gradle", "node_modules", ".venv"}
 SPEC: dict[str, Any] = {
     "name": "search_files",
     "description": "Search the files read_file can read: the simulator source (`source/<simulator>/`), example "
-    "plans (`examples/`), and this task's directory (`task/`, including saved paper texts and your edited "
-    "source). With `pattern`, returns matching lines as `path:line: text`; without it, lists files whose names "
+    "plans (`examples/`), this task's directory (`task/`, including saved paper texts and your edited "
+    "source), and earlier tasks of the conversation (`previous/<task_id>/`). With `pattern`, returns matching lines as `path:line: text`; without it, lists files whose names "
     "match `glob`. Use it to find where something is defined or used, then read that part with read_file "
     "and an offset, instead of paging through whole folders.",
     "input_schema": {

@@ -59,7 +59,7 @@ def test_gotchas_are_dated_and_retirable():
 
 PACKAGE = ROOT / "src" / "abc_harness"
 # Higher layers may import lower ones, never the reverse (docs/architecture.md, "Module map").
-LAYERS = {"cli": 5, "agent": 4, "tools": 3, "execution": 2, "planning": 1, "literature": 1, "simulators": 0}
+LAYERS = {"interfaces": 5, "agent": 4, "tools": 3, "execution": 2, "planning": 1, "literature": 1, "simulators": 0}
 
 
 def _modules() -> list[Path]:

@@ -1,4 +1,4 @@
-"""Live terminal output and the final metrics summary (cli.Console, cli.task_summary)."""
+"""Live terminal output and the final metrics summary (console.Console, console.task_summary)."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ from doubles.fake_runner import FakeRunner
 from doubles.scripted_model import ScriptedModel, run_last_proposed, text_turn, tool_turn
 from test_literature import blocksim_plan
 
-from abc_harness import cli
 from abc_harness.agent.loop import run_agent_task
 from abc_harness.execution.task import run_task
 from abc_harness.execution.trace import Trace
+from abc_harness.interfaces import console
 
 SECRET = "sk-ant-console-secret"
 
@@ -20,7 +20,7 @@ def run_watched(tmp_path, steps):
     lines: list[str] = []
     model = ScriptedModel(steps)
     result = run_agent_task("Compare block intervals.", model, FakeRunner(), lambda q: "", lambda plan: ("approve", ""),
-                            runs_root=tmp_path / "runs", on_event=cli.Console(lines.append, color=False))  # fmt: skip
+                            runs_root=tmp_path / "runs", on_event=console.Console(lines.append, color=False))  # fmt: skip
     return result, lines
 
 
@@ -62,7 +62,7 @@ def test_the_listener_sees_events_after_redaction(tmp_path):
 
 def test_summary_lists_run_statistics_not_results(tmp_path, write_plan):
     result = run_task(write_plan(), FakeRunner(), lambda plan: ("approve", ""), runs_root=tmp_path)
-    summary = "\n".join(cli.task_summary(result.artifact_dir))
+    summary = "\n".join(console.task_summary(result.artifact_dir))
     assert "── Run statistics of task" in summary and "Status: completed" in summary
     assert "Time: " in summary and "waiting for you" in summary
     runs = len(result.runs)
@@ -73,6 +73,13 @@ def test_summary_lists_run_statistics_not_results(tmp_path, write_plan):
 
 def test_agent_summary_counts_model_calls_tokens_and_tools(tmp_path):
     result, _ = run_watched(tmp_path, [tool_turn("describe_simulator", {"simulator": "blocksim"}), text_turn("Done.")])
-    summary = "\n".join(cli.task_summary(result.artifact_dir))
+    summary = "\n".join(console.task_summary(result.artifact_dir))
     assert "Model: 2 calls of 500" in summary and "tokens 200 in" in summary
     assert "Tools: describe_simulator 1; 0 refused or failed" in summary
+
+
+def test_every_tool_image_has_a_build_context():
+    from abc_harness.interfaces.cli import TOOL_IMAGES
+
+    for name, (context, _) in TOOL_IMAGES.items():
+        assert (context / "Dockerfile").is_file(), name

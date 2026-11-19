@@ -48,7 +48,12 @@ append to it. Git already records the history.
   results: its matplotlib script runs in the plot image (results read-only,
   no network), the agent sees the PNG and can redraw, and the report shows
   each figure with its caption and script.
-- `make check` runs ruff and 185 offline tests. `make test-docker` runs 11
+- `abc-harness chat` holds a conversation in the terminal: each request runs
+  as its own task, the next task gets a harness-written account of the
+  earlier ones and can read their files, Ctrl-C stops the running task, and
+  `/tasks`, `/paper`, `/new` manage the conversation. The command line now
+  lives in `interfaces/`.
+- `make check` runs ruff and 194 offline tests. `make test-docker` runs 11
   integration tests against both execution images, the PDF parser image, and the plot image, and `make test-live` runs 7
   tests against the Claude API and the literature services.
 

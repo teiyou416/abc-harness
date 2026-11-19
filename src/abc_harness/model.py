@@ -8,7 +8,7 @@ from typing import Any, Protocol
 
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
-MAX_OUTPUT_TOKENS = 16000
+MAX_OUTPUT_TOKENS = 16_384
 # On a safety decline the API reruns the request on a fallback model chosen
 # by refusal category, inside the same call.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
@@ -35,7 +35,13 @@ class ModelTurn:
 class ModelClient(Protocol):
     name: str
 
-    def create(self, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> ModelTurn: ...
+    def create(
+        self,
+        system: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        max_tokens: int = MAX_OUTPUT_TOKENS,
+    ) -> ModelTurn: ...
 
 
 class AnthropicModel:
@@ -48,17 +54,28 @@ class AnthropicModel:
         self.name = model
         self.effort = effort
 
-    def create(self, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> ModelTurn:
+    def create(
+        self,
+        system: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        max_tokens: int = MAX_OUTPUT_TOKENS,
+    ) -> ModelTurn:
         started = time.monotonic()
+        optional: dict[str, Any] = {"tools": tools} if tools else {}
         response = self._client.beta.messages.create(
             model=self.name,
-            max_tokens=MAX_OUTPUT_TOKENS,
-            system=system,
+            max_tokens=max_tokens,
+            # An explicit breakpoint after the fixed system prompt (and the
+            # tools before it), plus automatic caching of the growing
+            # conversation tail.
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            cache_control={"type": "ephemeral"},
             messages=messages,
-            tools=tools,
             output_config={"effort": self.effort},
             betas=[FALLBACK_BETA],
             fallbacks="default",
+            **optional,
         )
         usage = {k: v for k, v in response.usage.to_dict().items() if isinstance(v, int)}
         return ModelTurn(

@@ -15,14 +15,12 @@ append to it. Git already records the history.
   questions, proposes plans for approval or revision, runs the approved
   version, and writes a summary into the report. A real run took 4 model
   calls and 70 seconds for 20 SimBlock runs.
-- `make check` runs ruff and 48 offline tests. `make test-docker` runs 4
-  integration tests against the execution image, and `make test-live` runs 1
-  test against the Claude API.
-
-## Known gaps
-
-- Prompt caching does not take effect yet: `cache_read_input_tokens` stays 0.
-  M2.5 addresses it.
+- M2.5: the agent keeps each window under the soft limit by compressing it,
+  starts the next window from harness-written task state plus a model summary,
+  and archives every message in `history.md`. Prompt caching works.
+- `make check` runs ruff and 58 offline tests. `make test-docker` runs 4
+  integration tests against the execution image, and `make test-live` runs 2
+  tests against the Claude API.
 
 ## Known broken
 
@@ -38,11 +36,9 @@ Nothing is known broken.
 
 - Literature search (M4), BlockSim (M3), and agent-written code (M5).
 - Retrying a failed simulation run; the report shows it as failed instead.
-- Context summarization. A task stops when its input context passes 800,000
-  tokens.
+- Memory across tasks (Hermes-style `MEMORY.md` / `USER.md`) and `SKILL.md`.
 - No PRs and no hosted CI: this is a personal project, and checks run locally.
 
 ## Next
 
-M2.5 in `docs/development-plan.md`: context management with a soft limit,
-compression, and `history.md`. Then M3.
+M3 in `docs/development-plan.md`: BlockSim and simulator selection.

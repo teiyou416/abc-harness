@@ -58,7 +58,7 @@ The plan is a hand-written file. This milestone proves the approval gate, the ru
 - `make test-live` passes: the real model drafted a valid plan in 2 calls.
 - A real `abc-harness ask` run (task `20261119-122555-5402e5`) planned 2 configurations x 10 seeds, ran 20 SimBlock runs, and wrote a summary whose numbers match the Results table and `scripts/recompute_metric.py`. It used 4 model calls and about 16,000 input tokens.
 
-## M2.5: Context management
+## M2.5: Context management (done 2026-11-19)
 
 **What the researcher can do.** Run long agent tasks without the context growing without bound. Read the archived conversation of a task in `history.md`.
 
@@ -78,6 +78,8 @@ The plan is a hand-written file. This milestone proves the approval gate, the ru
 - The task-state block matches the harness records even when the summary contains a wrong number.
 - An oversized tool result is cut to its limit; a task that still exceeds the hard limit after compression stops with reason `context`.
 - Changing `SOUL.md` or `rules.md` changes the hashes in the manifest.
+
+All four pass in `tests/test_context.py`. `make test-live` also forces one real compression: the real summary kept to its three sections without numbers or versions, and the agent went on to propose a plan in the new window. Prompt caching now serves the system prompt and tools from cache, leaving 2 to 4 uncached input tokens per call.
 
 ## M3: BlockSim and simulator selection
 

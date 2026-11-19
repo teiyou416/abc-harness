@@ -127,3 +127,5 @@ All four pass in `tests/test_context.py`. `make test-live` also forces one real 
 **Scope:** the agent implements the selfish mining strategy if the chosen simulator lacks it, validates it against Eyal and Sirer (2014), and sweeps mining-power shares; the report includes the planned-versus-completed matrix and documents the strategy reference, reward definition, baseline, and simulator assumptions.
 
 **Acceptance:** the "Result verification" and "Controlled stopping" rows, including a deliberately omitted run reported as missing and reward share recalculated from raw output.
+
+**Open decision (2026-11-19).** A task executes at most one plan today: the agent can revise a plan before execution and read results afterwards, but a follow-up experiment needs a new task. Decide during M6 whether one task may execute several plans, each approved separately and sharing the task's limits, if validating the strategy and running the sweep in one task proves necessary.

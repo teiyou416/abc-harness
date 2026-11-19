@@ -81,13 +81,24 @@ The plan is a hand-written file. This milestone proves the approval gate, the ru
 
 All four pass in `tests/test_context.py`. `make test-live` also forces one real compression: the real summary kept to its three sections without numbers or versions, and the agent went on to propose a plan in the new window. Prompt caching now serves the system prompt and tools from cache, leaving 2 to 4 uncached input tokens per call.
 
-## M3: BlockSim and simulator selection
+## M3: BlockSim and simulator selection (done 2026-11-19)
 
-**What the researcher can do.** Ask for an experiment that either simulator could run and read the agent's justification for its choice.
+**What the researcher can do.** Ask a question that either simulator might answer and read why the agent chose one, with entries cited from both capability cards. Run `examples/blocksim-baseline.toml` directly.
 
-**Scope:** BlockSim in the execution image at a pinned commit; a BlockSim runner adapter and a real example; capability cards for both simulators; plan justification that cites card entries; reporting a missing capability when neither simulator fits.
+**Delivered**
 
-**Acceptance:** the "Simulator integration" row for BlockSim and the "Simulator selection" row.
+- `docker/blocksim/Dockerfile`: BlockSim at commit `603361d` on Python 3.11 with pandas 1.5.3, plus `xlsx_to_csv.py`. `abc-harness image build` builds both images.
+- `simulators/blocksim.py` and `blocksim_card.md`: the Bitcoin model only, with per-miner hash power, a closed parameter set, seeding of `random` and `numpy.random`, and the metrics `stale_rate` and `node0_block_share`. The Ethereum model is not offered.
+- The runner now takes the image per call, so one task runs whichever simulator its plan names.
+- `scripts/recompute_metric.py` recognises BlockSim output.
+- `rules.md`: the agent reads every card before choosing and cites both in the rationale.
+
+**Acceptance (passed)**
+
+- Simulator integration: the real example ran 10 BlockSim runs in 18 seconds. A seed reproduces a run exactly, and the recalculation script matches the harness.
+- Simulator selection, with the real model in `make test-live`: a t90 question chose SimBlock and cited BS-N1; a 40% hash-power question chose BlockSim and cited SB-M3 and SB-N3; a selfish-mining question proposed no plan and cited SB-N1 and BS-N2.
+
+**Notes for M6.** BlockSim has no selfish mining (BS-N2), as expected. `node0_block_share` is the reward-share measurement M6 needs once node 0 can run a selfish strategy.
 
 ## M4: Literature retrieval
 

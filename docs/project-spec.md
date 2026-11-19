@@ -2,7 +2,7 @@
 
 ABC Harness turns a researcher's question into a reproducible blockchain simulation. From a local CLI, the researcher describes an idea, reviews the proposed experiment, and approves it. The agent then runs the experiment and returns a report linked to the underlying data.
 
-The first release supports idea-driven experiments with [SimBlock](https://github.com/dsg-titech/simblock) and [BlockSim](https://github.com/maher243/BlockSim). [architecture.md](architecture.md) describes the system as built and which parts of the original design sketch the first release implements. [AGENTS.md](../AGENTS.md) defines the rules for changing this repository, and the [development plan](development-plan.md) defines the milestone order.
+The first release supports idea-driven experiments with [SimBlock](https://github.com/dsg-titech/simblock) and the Bitcoin model of [BlockSim](https://github.com/maher243/BlockSim). [architecture.md](architecture.md) describes the system as built and which parts of the original design sketch the first release implements. [AGENTS.md](../AGENTS.md) defines the rules for changing this repository, and the [development plan](development-plan.md) defines the milestone order.
 
 Terms such as task, plan version, and simulation run are defined in [AGENTS.md](../AGENTS.md#definitions).
 

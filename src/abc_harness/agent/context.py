@@ -106,7 +106,9 @@ class History:
     def assistant(self, content: list[dict[str, Any]]) -> None:
         parts = ["\n### assistant\n"]
         for block in content:
-            if block.get("type") == "text" and block.get("text"):
+            if block.get("type") == "thinking" and block.get("thinking"):
+                parts.append("\n> _thinking (summary):_ " + block["thinking"].strip().replace("\n", "\n> ") + "\n")
+            elif block.get("type") == "text" and block.get("text"):
                 parts.append(f"\n{block['text']}\n")
             elif block.get("type") == "tool_use":
                 args = json.dumps(block.get("input"), ensure_ascii=False, indent=2)

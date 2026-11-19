@@ -34,6 +34,10 @@ class ModelTurn:
     def text(self) -> str:
         return "\n".join(b["text"] for b in self.content if b.get("type") == "text").strip()
 
+    def thinking(self) -> list[str]:
+        """The model's reasoning summaries and progress notes, in order; empty blocks are left out."""
+        return [b["thinking"].strip() for b in self.content if b.get("type") == "thinking" and b.get("thinking")]
+
     def tool_uses(self) -> list[dict[str, Any]]:
         return [b for b in self.content if b.get("type") == "tool_use"]
 
@@ -91,6 +95,9 @@ class AnthropicModel:
             cache_control={"type": "ephemeral"},
             messages=messages,
             output_config={"effort": self.effort},
+            # Summaries of the model's reasoning, so the researcher can follow it in the terminal and the
+            # trace. Thinking is always on for this model; this only makes its text visible.
+            thinking={"type": "adaptive", "display": "summarized"},
             betas=[FALLBACK_BETA],
             fallbacks="default",
             **optional,

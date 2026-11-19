@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import time
 from collections.abc import Callable, Sequence
 from importlib import resources
 from pathlib import Path
@@ -93,6 +94,7 @@ class Agent:
                 estimated_input_tokens=next_input,
                 latency_seconds=turn.latency_seconds,
                 request_id=turn.request_id,
+                thinking=turn.thinking(),
                 text=turn.text(),
                 tool_uses=[{"name": t["name"], "input": t["input"]} for t in turn.tool_uses()],
             )
@@ -131,6 +133,8 @@ class Agent:
         budget = self.task.budget
         budget.check_time()
         budget.count_llm_call()
+        self.task.trace.event("model_call_started", call=budget.llm_calls, window=self.history.window,
+                              purpose="agent" if tools else "summary")  # fmt: skip
         try:
             return self.model.create(system, messages, tools, max_tokens=max_tokens,
                                      timeout_seconds=budget.remaining_seconds)  # fmt: skip
@@ -143,6 +147,7 @@ class Agent:
     def _call_tool(self, tool_use: dict[str, Any]) -> dict[str, Any]:
         name, args = tool_use["name"], tool_use.get("input") or {}
         handler = HANDLERS.get(name)
+        started = time.monotonic()
         try:
             if handler is None:
                 raise ToolError(f"unknown tool {name!r}")
@@ -156,7 +161,8 @@ class Agent:
         where = f"task/history.md (tool result id {tool_use['id']})"
         text = cap_text(full, self.limits.tool_result_max_tokens, where)
         self.task.trace.event("tool_call", tool=name, input=args, is_error=is_error, result=record[:2000],
-                              result_chars=len(full), cut=text != full, images=[rel for rel, _ in images])  # fmt: skip
+                              result_chars=len(full), cut=text != full, images=[rel for rel, _ in images],
+                              duration_seconds=round(time.monotonic() - started, 3))  # fmt: skip
         content: str | list[dict[str, Any]] = text
         if images:
             content = [{"type": "text", "text": text}] + [
@@ -208,10 +214,11 @@ def run_agent_task(
     literature: Literature | None = None,
     on_start: Callable[[Path], None] | None = None,
     papers: Sequence[Path] = (),
+    on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> TaskResult:
     """Run one agent task. `papers` are PDFs the researcher supplied; they are parsed before the first model call."""
     limits = limits or ContextLimits()
-    task = Task(runner, runs_root, budget, redact=redact, mode="agent", question=question, model=model.name,
+    task = Task(runner, runs_root, budget, redact=redact, on_event=on_event, mode="agent", question=question, model=model.name,
                 prompts=prompt_hashes(), context_limits=limits.__dict__,
                 literature_services=literature.services if literature else [],
                 supplied_papers=[p.name for p in papers])  # fmt: skip

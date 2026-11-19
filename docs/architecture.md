@@ -87,7 +87,7 @@ checks that every module appears in this table.
 
 | Layer (high to low) | File | What it does |
 |---|---|---|
-| Entry | `cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `trace summary`, `export`; shows plans and questions in the terminal. Holds no task logic. |
+| Entry | `cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `trace summary`, `export`; shows plans and questions, prints every trace event live (`Console`), and prints the run's metrics at the end (`task_summary`). Holds no task logic. |
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
 | Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
 | Agent | `agent/model.py` | The Claude API client; the only code that receives the API key. Bounds each call by the remaining time. |
@@ -113,7 +113,7 @@ checks that every module appears in this table.
 | Execution | `execution/workspace.py` | The original, edited, and scratch trees; which paths a write may touch; the diff of the edits. |
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
 | Execution | `execution/limits.py` | The 30-minute active time and 500-call limits; waiting for the researcher and PDF parsing do not count. |
-| Execution | `execution/trace.py` | Writes `trace.jsonl` and summarises it. |
+| Execution | `execution/trace.py` | Writes `trace.jsonl`, passes each redacted event to an optional listener (the live terminal output), and summarises it. |
 | Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
 | Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |
 | Planning | `planning/approval.py` | Records decisions in `approvals.jsonl` and refuses unapproved versions. |

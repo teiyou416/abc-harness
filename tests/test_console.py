@@ -60,17 +60,15 @@ def test_the_listener_sees_events_after_redaction(tmp_path):
     assert SECRET not in json.dumps(seen) and "[redacted]" in seen[0]["error"]
 
 
-def test_summary_lists_metrics_per_configuration_and_run_statistics(tmp_path, write_plan):
+def test_summary_lists_run_statistics_not_results(tmp_path, write_plan):
     result = run_task(write_plan(), FakeRunner(), lambda plan: ("approve", ""), runs_root=tmp_path)
     summary = "\n".join(cli.task_summary(result.artifact_dir))
-    assert "Status: completed" in summary
-    assert "Results (mean ± standard deviation over completed runs; n = runs):" in summary
-    header = next(line for line in summary.splitlines() if line.strip().startswith("configuration"))
-    plan = json.loads((result.artifact_dir / "plan.json").read_text())
-    assert all(metric in header for metric in plan["metrics"])
-    assert "(n=" in summary and "test double" in summary
+    assert "── Run statistics of task" in summary and "Status: completed" in summary
     assert "Time: " in summary and "waiting for you" in summary
-    assert "Simulation runs: " in summary and "Report: " in summary
+    runs = len(result.runs)
+    assert f"Simulation runs: {runs} of {runs} completed" in summary and "Report: " in summary
+    plan = json.loads((result.artifact_dir / "plan.json").read_text())
+    assert not any(metric in summary for metric in plan["metrics"])  # results stay in report.md
 
 
 def test_agent_summary_counts_model_calls_tokens_and_tools(tmp_path):

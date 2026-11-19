@@ -85,6 +85,7 @@ class Task:
         budget: Budget | None = None,
         redact: Callable[[str], str] | None = None,
         pdf_cache: Path | None = None,
+        on_event: Callable[[dict[str, Any]], None] | None = None,
         **manifest_fields: Any,
     ) -> None:
         self.runner = runner
@@ -96,7 +97,7 @@ class Task:
         self.artifact_dir = runs_root / self.task_id
         self.artifact_dir.mkdir(parents=True)
         (self.artifact_dir / "plans").mkdir()
-        self.trace = Trace(self.artifact_dir / "trace.jsonl", redact=redact)
+        self.trace = Trace(self.artifact_dir / "trace.jsonl", redact=redact, listener=on_event)
         self.plans: dict[str, Plan] = {}
         self.executed: Plan | None = None
         self.records: list[RunRecord] = []
@@ -408,10 +409,11 @@ def run_task(
     runs_root: Path = Path("runs"),
     budget: Budget | None = None,
     on_start: Callable[[Path], None] | None = None,
+    on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> TaskResult:
-    """Review and run a hand-written plan file (milestone M1)."""
+    """Review and run a hand-written plan file (milestone M1). `on_event` receives every trace event."""
     plan = load_plan(plan_path)
-    task = Task(runner, runs_root, budget, mode="plan_file", plan_file=str(plan_path))
+    task = Task(runner, runs_root, budget, on_event=on_event, mode="plan_file", plan_file=str(plan_path))
     if on_start:
         on_start(task.artifact_dir)
     shutil.copyfile(plan_path, task.artifact_dir / "plan.toml")

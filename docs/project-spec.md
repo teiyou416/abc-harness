@@ -77,7 +77,7 @@ Simulators run in a prebuilt Docker image with pinned simulator revisions, no ne
 
 Give each task an ID and an artifact directory. Save the approved plan and all decisions, cited sources, simulator revisions and image digest, configuration, code changes, validation results, random seeds where available, raw output, and a short report. Include enough information to rerun the experiment.
 
-Append events to `trace.jsonl` as work happens. Record model and tool calls, active and waiting time, errors, and the final stop reason. Record token usage when the provider supplies it and label cost estimates as estimates.
+Append events to `trace.jsonl` as work happens, and show them in the terminal as they happen. Record model calls with the model's summarized thinking, tool calls, active and waiting time, errors, and the final stop reason. At the end, print the run's results per configuration and its time, model, and tool statistics. Record token usage when the provider supplies it and label cost estimates as estimates.
 
 ## Acceptance criteria
 

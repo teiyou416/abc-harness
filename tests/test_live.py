@@ -16,6 +16,7 @@ from abc_harness.agent.loop import run_agent_task
 from abc_harness.agent.model import AnthropicModel
 from abc_harness.agent.secrets import Secrets
 from abc_harness.execution.limits import Budget
+from abc_harness.execution.trace import read_trace
 
 pytestmark = pytest.mark.live
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +47,9 @@ def test_real_model_drafts_a_valid_plan(tmp_path):
     assert len(reviewed) == 1
     assert reviewed[0].simulator == "simblock"
     assert key not in (result.artifact_dir / "trace.jsonl").read_text()
+    # The model's reasoning summaries reach the trace, for the live terminal output.
+    calls = [e for e in read_trace(result.artifact_dir / "trace.jsonl") if e["event"] == "model_call"]
+    assert any(c.get("thinking") for c in calls)
 
 
 def test_real_model_compresses_and_continues(tmp_path):

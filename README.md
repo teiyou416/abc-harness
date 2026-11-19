@@ -59,8 +59,17 @@ uv run abc-harness ask "With 300 nodes, does a 30 s block interval produce more 
 
 The agent may ask clarification questions, then shows a plan and asks
 `Approve this plan? [approve/revise/reject]:`. Choose `revise` to send it
-back with a comment; every new version needs a fresh approval. After the run,
-the command prints the agent's summary and the artifact directory.
+back with a comment; every new version needs a fresh approval.
+
+While the task runs, the terminal shows each step as it happens: every model
+call with its time and tokens, the model's thinking (a summary the API
+returns), what it says, each tool it calls and a preview of the result, plan
+decisions, and each simulation run with its metrics. `--quiet` turns this
+off; `trace.jsonl` and `history.md` keep the full text either way. At the
+end, `ask` and `run` print the agent's summary and the run's metrics: each
+configuration's results (mean ± standard deviation, n), the validation check,
+active and waiting time, model calls and tokens, tool calls, and completed
+simulation runs.
 
 To have the agent read a paper you choose, pass the PDF; repeat `--paper` for
 several. The harness parses each one before the agent starts (1 to 6 minutes

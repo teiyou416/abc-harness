@@ -37,7 +37,12 @@ append to it. Git already records the history.
   those files, builds and tests them in the sandbox, and must pass the plan's
   validation check before any configuration runs. `abc-harness export`
   packages the edited source.
-- `make check` runs ruff and 156 offline tests. `make test-docker` runs 9
+- The terminal shows every model call (with the model's summarized thinking),
+  tool call, plan decision, PDF parse, and simulation run as it happens, and
+  prints the run's metrics and statistics at the end; `--quiet` hides the
+  live part. Thinking summaries are also kept in `trace.jsonl` and
+  `history.md`.
+- `make check` runs ruff and 161 offline tests. `make test-docker` runs 9
   integration tests against both execution images and the PDF parser image, and `make test-live` runs 7
   tests against the Claude API and the literature services.
 

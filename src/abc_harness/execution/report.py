@@ -85,17 +85,7 @@ def write_report(
         "| Configuration | " + " | ".join(plan.metrics) + " |",
         "|---|" + "---|" * len(plan.metrics),
     ]
-    for name, rs in by_config.items():
-        done = [r for r in rs if r.status == "completed"]
-        cells = []
-        for metric in plan.metrics:
-            values = [r.metrics[metric] for r in done]
-            if not values:
-                cells.append("no data")
-            elif len(values) == 1:
-                cells.append(f"{_fmt(values[0])} (n=1)")
-            else:
-                cells.append(f"{_fmt(statistics.fmean(values))} ± {_fmt(statistics.stdev(values))} (n={len(values)})")
+    for name, cells in metric_rows(records, plan.metrics):
         lines.append(f"| {name} | " + " | ".join(cells) + " |")
 
     lines += _code_changes(artifact_dir, plan, manifest)
@@ -127,6 +117,27 @@ def write_report(
         "",
     ]
     (artifact_dir / "report.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def metric_rows(records: list[RunRecord], metrics: list[str]) -> list[tuple[str, list[str]]]:
+    """Per configuration, each metric as "mean ± sd (n=k)" over completed runs, or "no data"."""
+    by_config: dict[str, list[RunRecord]] = {}
+    for r in records:
+        by_config.setdefault(r.configuration, []).append(r)
+    rows = []
+    for name, rs in by_config.items():
+        done = [r for r in rs if r.status == "completed"]
+        cells = []
+        for metric in metrics:
+            values = [r.metrics[metric] for r in done if metric in r.metrics]
+            if not values:
+                cells.append("no data")
+            elif len(values) == 1:
+                cells.append(f"{_fmt(values[0])} (n=1)")
+            else:
+                cells.append(f"{_fmt(statistics.fmean(values))} ± {_fmt(statistics.stdev(values))} (n={len(values)})")
+        rows.append((name, cells))
+    return rows
 
 
 def _write_planless_report(artifact_dir: Path, manifest: dict[str, Any], summary: str | None) -> None:

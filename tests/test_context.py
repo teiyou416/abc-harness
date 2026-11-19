@@ -9,16 +9,16 @@ import pytest
 from doubles.fake_runner import FakeRunner
 from doubles.scripted_model import ScriptedModel, text_turn, tool_turn
 
-from abc_harness import agent as agent_module
-from abc_harness import model as model_module
-from abc_harness.agent import TOOLS, prompt_hashes, run_agent_task, system_prompt
-from abc_harness.context import ContextLimits, estimate_tokens, task_state
-from abc_harness.limits import Budget
-from abc_harness.model import AnthropicModel, ModelDeadlineExceeded
-from abc_harness.plan import validate_plan
-from abc_harness.task import Task
+from abc_harness.agent import loop as agent_module
+from abc_harness.agent import model as model_module
+from abc_harness.agent.context import ContextLimits, estimate_tokens, task_state
+from abc_harness.agent.loop import TOOLS, prompt_hashes, run_agent_task, system_prompt
+from abc_harness.agent.model import AnthropicModel, ModelDeadlineExceeded
+from abc_harness.execution.limits import Budget
+from abc_harness.execution.task import Task
+from abc_harness.execution.trace import read_trace
+from abc_harness.planning.plan import validate_plan
 from abc_harness.tools import ToolContext, read_file
-from abc_harness.trace import read_trace
 
 QUESTION = "Compare intervals."
 

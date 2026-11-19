@@ -19,13 +19,13 @@ from pathlib import Path
 from typing import Any
 
 from abc_harness import __version__
-from abc_harness.approval import NotApproved, record_decision, require_approval
-from abc_harness.limits import Budget, LimitReached
-from abc_harness.plan import Plan, SimulationRunSpec, canonical_json, load_plan
-from abc_harness.report import write_json, write_report
-from abc_harness.runner import Runner, RunnerError
+from abc_harness.execution.limits import Budget, LimitReached
+from abc_harness.execution.report import write_json, write_report
+from abc_harness.execution.runner import Runner, RunnerError
+from abc_harness.execution.trace import Trace
+from abc_harness.planning.approval import NotApproved, record_decision, require_approval
+from abc_harness.planning.plan import Plan, SimulationRunSpec, canonical_json, load_plan
 from abc_harness.simulators import SimulatorError, get_simulator
-from abc_harness.trace import Trace
 
 # A decision function shows the plan to the researcher and returns
 # ("approve" | "revise" | "reject", comment).

@@ -15,7 +15,7 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from abc_harness.runner import RunnerError, RunOutcome
+from abc_harness.execution.runner import RunnerError, RunOutcome
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 

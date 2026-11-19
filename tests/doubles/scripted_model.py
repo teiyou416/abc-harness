@@ -11,7 +11,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from abc_harness.model import ModelDeadlineExceeded, ModelTurn
+from abc_harness.agent.model import ModelDeadlineExceeded, ModelTurn
 
 Step = ModelTurn | Callable[[list[dict[str, Any]]], ModelTurn]
 

@@ -24,7 +24,7 @@ append to it. Git already records the history.
   its retries, may use only the task's remaining active time. A failed
   container cleanup is recorded and never stops the results and report from
   being written.
-- `make check` runs ruff and 90 offline tests. `make test-docker` runs 5
+- `make check` runs ruff and 92 offline tests. `make test-docker` runs 5
   integration tests against both execution images, and `make test-live` runs 5
   tests against the Claude API.
 

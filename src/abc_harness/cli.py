@@ -8,14 +8,14 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from abc_harness.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LIMIT_SECONDS, Budget
-from abc_harness.model import DEFAULT_EFFORT, DEFAULT_MODEL
-from abc_harness.plan import Plan, PlanError, load_plan
-from abc_harness.runner import DockerRunner, build_image
-from abc_harness.secrets import DEFAULT_ENV_FILE, MissingSecret, Secrets
+from abc_harness.agent.model import DEFAULT_EFFORT, DEFAULT_MODEL
+from abc_harness.agent.secrets import DEFAULT_ENV_FILE, MissingSecret, Secrets
+from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LIMIT_SECONDS, Budget
+from abc_harness.execution.runner import DockerRunner, build_image
+from abc_harness.execution.task import TaskResult, run_task
+from abc_harness.execution.trace import summarize_trace
+from abc_harness.planning.plan import Plan, PlanError, load_plan
 from abc_harness.simulators import SIMULATORS, SimulatorError, get_simulator
-from abc_harness.task import TaskResult, run_task
-from abc_harness.trace import summarize_trace
 
 Read = Callable[[str], str]
 Write = Callable[[str], None]
@@ -121,8 +121,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "ask":
-        from abc_harness.agent import run_agent_task
-        from abc_harness.model import AnthropicModel
+        from abc_harness.agent.loop import run_agent_task
+        from abc_harness.agent.model import AnthropicModel
 
         secrets = Secrets.load(args.env_file)
         try:

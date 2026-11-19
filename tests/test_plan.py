@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from abc_harness.plan import PlanError, load_plan, validate_plan
+from abc_harness.planning.plan import PlanError, load_plan, validate_plan
 from abc_harness.simulators import SimulatorError
 
 ROOT = Path(__file__).resolve().parents[1]

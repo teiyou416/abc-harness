@@ -14,17 +14,17 @@ flowchart TB
         RUN["run: plan file"]
     end
 
-    subgraph LOOP["Agent loop: agent.py"]
-        CTX["Context window: context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 131,072"]
-        LLM["Model client: model.py<br/>only holder of the API key"]
+    subgraph LOOP["Agent: agent/"]
+        CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 131,072"]
+        LLM["Model client: agent/model.py<br/>only holder of the API key"]
         TOOLS["Tools: tools/<br/>describe_simulator, read_file,<br/>ask_researcher, propose_plan, run_plan"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
     end
 
-    subgraph TASK["Task: task.py"]
-        PLAN["plan.py<br/>validate, version = SHA-256"]
-        APPROVAL["approval.py<br/>decisions recorded by the harness"]
-        LIMITS["limits.py<br/>30 min active time, 500 model calls"]
+    subgraph TASK["Task: execution/task.py"]
+        PLAN["planning/plan.py<br/>validate, version = SHA-256"]
+        APPROVAL["planning/approval.py<br/>decisions recorded by the harness"]
+        LIMITS["execution/limits.py<br/>30 min active time, 500 model calls"]
         EXEC["execute approved plan"]
     end
 
@@ -33,7 +33,7 @@ flowchart TB
     end
 
     subgraph DOCKER["Execution images, no network, no host env"]
-        RUNNER["runner.py: one container per simulation run"]
+        RUNNER["execution/runner.py: one container per simulation run"]
         SIMBLOCK["SimBlock image: JDK 21 + pinned commit"]
         BLOCKSIM["BlockSim image: Python 3.11 + pinned commit"]
         RUNNER --> SIMBLOCK
@@ -60,19 +60,61 @@ flowchart TB
 ```
 
 A module marked _planned_ names where code will go; replace the mark when the
-module lands. `task.py` owns a task's artifact directory and executes approved
-plans, `report.py` writes the report, and `simulators/base.py` defines the
-adapter interface. Each simulator adapter ships a capability card next to it,
+module lands. The [module map](#module-map) says what every file does. Each simulator adapter ships a capability card next to it,
 for example `simulators/simblock_card.md` and `simulators/blocksim_card.md`.
 The agent reads every card before choosing a simulator and cites entries of
 both in the plan's rationale.
+
+## Module map
+
+The package `src/abc_harness/` has one folder per layer. A module imports only
+from its own layer or a lower one; `tests/test_rulebook.py` checks this, and it
+checks that every module appears in this table.
+
+| Layer (high to low) | File | What it does |
+|---|---|---|
+| Entry | `cli.py` | Commands `image build`, `run`, `ask`, `trace summary`; shows plans and questions in the terminal. Holds no task logic. |
+| Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
+| Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
+| Agent | `agent/model.py` | The Claude API client; the only code that receives the API key. Bounds each call by the remaining time. |
+| Agent | `agent/context.py` | Token estimates, `history.md`, and the message that starts a new window. |
+| Agent | `agent/secrets.py` | Reads API keys from `.env` and redacts them from traces. |
+| Agent | `agent/prompts/` | `SOUL.md` (identity), `rules.md` (workflow), `compact.md` (summary instructions). |
+| Tools | `tools/__init__.py` | The explicit list of tools the agent can call. |
+| Tools | `tools/base.py` | `ToolContext` (shared task state), `ToolError` (refusal), `EndTask` (ends the task). |
+| Tools | `tools/describe_simulator.py` | Returns a simulator's capability card. |
+| Tools | `tools/read_file.py` | Reads `examples/` and the task's artifact directory, nothing else. |
+| Tools | `tools/ask_researcher.py` | Asks the researcher a question; the wait is not active time. |
+| Tools | `tools/propose_plan.py` | Validates a plan, pins the image, and gets the researcher's decision. |
+| Tools | `tools/run_plan.py` | Runs an approved plan and summarises the results for the model. |
+| Execution | `execution/task.py` | One task end to end: artifact directory, plan versions, image pinning, simulation runs, final artifacts. |
+| Execution | `execution/runner.py` | Docker: one container per simulation run, no network, label-based cleanup. |
+| Execution | `execution/limits.py` | The 30-minute active time and 500-call limits. |
+| Execution | `execution/trace.py` | Writes `trace.jsonl` and summarises it. |
+| Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
+| Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |
+| Planning | `planning/approval.py` | Records decisions in `approvals.jsonl` and refuses unapproved versions. |
+| Simulators | `simulators/__init__.py` | The registry of supported simulators. |
+| Simulators | `simulators/base.py` | The interface every simulator adapter implements. |
+| Simulators | `simulators/simblock.py` | SimBlock adapter and `simblock_card.md`. |
+| Simulators | `simulators/blocksim.py` | BlockSim adapter (Bitcoin model) and `blocksim_card.md`. |
+
+One `ask` passes through the layers in this order:
+
+```
+cli.py -> agent/loop.py <-> agent/model.py
+            -> tools/propose_plan.py -> planning/plan.py -> execution/task.py (pin image)
+               -> cli.py (researcher decides) -> planning/approval.py
+            -> tools/run_plan.py -> execution/task.py -> simulators/<name>.py -> execution/runner.py
+          -> execution/task.py (close) -> execution/report.py, execution/trace.py
+```
 
 ## Agent tools
 
 The agent has five tools, one module each in `tools/`: `describe_simulator`,
 `read_file`, `ask_researcher`, `propose_plan`, and `run_plan`. Each module
 holds the definition sent to the model and the harness code that runs it;
-`agent.py` keeps only the loop, context compression, and the dispatch by tool
+`agent/loop.py` keeps only the loop, context compression, and the dispatch by tool
 name. The harness validates every
 proposed plan in code before the researcher sees it, records each decision
 itself, and refuses `run_plan` for any plan version without a recorded
@@ -104,29 +146,29 @@ to what the first release builds.
 
 | Diagram element | First release | Module |
 |---|---|---|
-| Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `agent.py`, `model.py`, `limits.py` |
+| Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `agent/loop.py`, `agent/model.py`, `execution/limits.py` |
 | Tools: Files | Yes. Reads anywhere in the repository and task; writes only inside the task workspace and permitted files. | `tools/read_file.py` (read-only); write tools _planned_ for M5 |
-| Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `runner.py`; sandbox exec _planned_ for M5 |
+| Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `execution/runner.py`; sandbox exec _planned_ for M5 |
 | Tools: Web Retrieval | Yes. Sources are listed in the project specification. | _planned_ for M4 |
-| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `approval.py`, `cli.py` (terminal prompts) |
+| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `planning/approval.py`, `cli.py` (terminal prompts) |
 | Tools: Custom Tools | Later | |
 | Simulators: SimBlock, BlockSim | Yes. BlockSim runs its Bitcoin model only. | `simulators/simblock.py`, `simulators/blocksim.py` |
 | Simulators: Blockemulator | Later | |
 | Literature boxes | Partial. Papers With Code is gone; IEEE Xplore needs its own API key and is optional. | _planned_ for M4 |
-| System prompt, user prompt, working memory | Yes. The system prompt is `SOUL.md` followed by `rules.md`; the working memory is the current window. | `prompts/`, `agent.py`, `secrets.py` (API keys from `.env`) |
-| SOUL.md, SKILL.md, History.md | SOUL.md and a per-task `history.md` are built; SKILL.md and memory across tasks are later. | `prompts/SOUL.md`, `context.py` |
-| Context summarization and token caps | Yes, with the diagram's numbers: soft limit 106,496, hard limit 131,072, output 16,384, summary 8,192. | `context.py`, `agent.py` |
-| Draft | Yes. The draft is the structured plan shown for review. | `plan.py` |
-| LLM Ops: trace | Yes. One `trace.jsonl` per task and a CLI summary of calls, tokens, latency, and errors. | `trace.py` |
+| System prompt, user prompt, working memory | Yes. The system prompt is `SOUL.md` followed by `rules.md`; the working memory is the current window. | `agent/prompts/`, `agent/loop.py`, `agent/secrets.py` (API keys from `.env`) |
+| SOUL.md, SKILL.md, History.md | SOUL.md and a per-task `history.md` are built; SKILL.md and memory across tasks are later. | `agent/prompts/SOUL.md`, `agent/context.py` |
+| Context summarization and token caps | Yes, with the diagram's numbers: soft limit 106,496, hard limit 131,072, output 16,384, summary 8,192. | `agent/context.py`, `agent/loop.py` |
+| Draft | Yes. The draft is the structured plan shown for review. | `planning/plan.py` |
+| LLM Ops: trace | Yes. One `trace.jsonl` per task and a CLI summary of calls, tokens, latency, and errors. | `execution/trace.py` |
 | LLM Ops: LLM-as-a-judge, Diagnose, Gate, Release | Later. Result verification is deterministic. | |
 
 All module paths are relative to `src/abc_harness/`.
 
 ## Context management
 
-The agent's input is the system prompt (`prompts/SOUL.md`, then
-`prompts/rules.md`), the tool definitions, and the messages of the current
-window. `context.py` holds the limits and the pieces below, and `Agent.run`
+The agent's input is the system prompt (`agent/prompts/SOUL.md`, then
+`agent/prompts/rules.md`), the tool definitions, and the messages of the current
+window. `agent/context.py` holds the limits and the pieces below, and `Agent.run`
 applies them.
 
 - Before every model call the agent estimates the next input from the last
@@ -134,7 +176,7 @@ applies them.
   limit (106,496 tokens) it compresses first. An input that would leave less
   than one full reply (16,384 tokens) inside the hard limit (131,072 tokens)
   stops the task with reason `context`.
-- Compression asks the model, with `prompts/compact.md` and no tools, for a
+- Compression asks the model, with `agent/prompts/compact.md` and no tools, for a
   summary of at most 8,192 tokens. The summary call counts toward the
   500-call limit.
 - The new window is one user message: the original question, a task-state

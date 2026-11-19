@@ -7,11 +7,11 @@ import json
 from doubles.fake_runner import FakeClock, FakeRunner
 from doubles.scripted_model import ScriptedModel, last_tool_result, run_last_proposed, text_turn, tool_turn
 
-from abc_harness.agent import run_agent_task
-from abc_harness.approval import read_decisions
-from abc_harness.limits import Budget
-from abc_harness.secrets import Secrets
-from abc_harness.trace import read_trace, summarize_trace
+from abc_harness.agent.loop import run_agent_task
+from abc_harness.agent.secrets import Secrets
+from abc_harness.execution.limits import Budget
+from abc_harness.execution.trace import read_trace, summarize_trace
+from abc_harness.planning.approval import read_decisions
 
 SECRET = "sk-ant-test-secret-value-0123456789"
 

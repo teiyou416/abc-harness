@@ -85,7 +85,7 @@ fails on:
 |---|---|
 | a lint error in `src/` or `tests/` | `ruff check` |
 | a failing test that needs neither Docker nor an API key | `pytest` |
-| this file over 100 lines, a broken relative link, an unindexed doc, a gotcha without `Retire when:` | `tests/test_rulebook.py` |
+| this file over 100 lines, a broken relative link, an unindexed doc, a gotcha without `Retire when:`, an import from a higher layer, a module missing from the module map | `tests/test_rulebook.py` |
 
 Tests marked `docker` or `live` are skipped by `make check`. Run them with
 `make test-docker` and `make test-live` when a change touches the runner or the

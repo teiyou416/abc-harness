@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from abc_harness.task import DecideFn, Task
+from abc_harness.execution.task import DecideFn, Task
 
 AskFn = Callable[[str], str]
 

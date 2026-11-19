@@ -100,15 +100,24 @@ All four pass in `tests/test_context.py`. `make test-live` also forces one real 
 
 **Notes for M6.** BlockSim has no selfish mining (BS-N2), as expected. `node0_block_share` is the reward-share measurement M6 needs once node 0 can run a selfish strategy.
 
-## M4: Literature retrieval
+## M4: Literature retrieval (done 2026-11-19)
 
 **What the researcher can do.** Ask a question that needs a reference without supplying one and see each cited source tied to a specific choice in the plan.
 
-**Scope:** search tools for arXiv, DBLP, and Semantic Scholar; the broadening step; cited sources saved in the artifact directory.
+**Delivered**
 
-**Test doubles:** recorded HTTP responses.
+- `literature/`: OpenAlex search (no key) and Semantic Scholar search (optional key in `.env`); the first round covers FC, AFT, and ICBC, and a broadened search covers all venues and preprints. arXiv full text comes from arXiv's HTML rendering, with ar5iv as the fallback. Requests pause per host and retry within the task's remaining time.
+- `tools/search_papers.py` and `tools/read_paper.py`. Full texts are saved as `papers/<arxiv_id>.txt`, and the agent pages through them with `read_file`.
+- Plans carry `citations` (paper, what it supports, a verbatim quote). The harness refuses a citation unless the paper came from a search in the same task and the quote appears in its abstract or saved full text. The report lists each citation with the place its quote was found; `sources.json` keeps every search and paper.
+- DBLP is dropped: it answers scripts with a bot check. The arXiv search API answered 429 throughout. Both are in `docs/context/gotchas.md`.
 
-**Acceptance:** the "Literature retrieval" row.
+**Test doubles:** recorded OpenAlex and arXiv responses in `tests/fixtures/literature/`. The Semantic Scholar response is hand-written from its documented format, because the API refused requests without a key.
+
+**Acceptance (passed)**
+
+- Literature retrieval, with the real model and services in `make test-live`: asked to use the published mean Bitcoin block propagation delay, the agent searched, broadened, read the full text of arXiv 1505.05343, and set `Bdelay` to 12.6 s with the quote "the mean was 12.6 seconds"; it also cited Decker and Wattenhofer (P2P 2013) for propagation delay causing forks. The harness found every quote.
+
+**Not verified yet.** The Semantic Scholar path, including its venue names for FC, AFT, and ICBC, has run only against the hand-written fixture. Check it once a key is in `.env`.
 
 ## M5: Agent-written code in the task workspace
 

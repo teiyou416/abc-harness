@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from abc_harness.execution.task import DecideFn, Task
+from abc_harness.literature.library import Library
 
 AskFn = Callable[[str], str]
 
@@ -36,6 +37,7 @@ class ToolContext:
     review: DecideFn
     clarifications: list[tuple[str, str]] = field(default_factory=list)
     execution: tuple[str, str] | None = None  # (status, reason) once run_plan has executed a plan
+    library: Library | None = None  # the papers this task has found; None when literature search is off
 
 
 class ToolRun(Protocol):

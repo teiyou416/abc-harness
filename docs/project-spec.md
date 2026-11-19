@@ -47,7 +47,11 @@ Simulators run in a prebuilt Docker image with pinned simulator revisions, no ne
 
 ## Literature sources
 
-Search arXiv, DBLP (filtered by venues such as FC, AFT, and IEEE ICBC), and Semantic Scholar first. When those sources are insufficient, broaden the search by relaxing venue and keyword filters. IEEE Xplore may be added when the researcher configures an API key. Save every cited source in the artifact directory.
+- The first search round covers the venues FC, AFT, and IEEE ICBC. It uses Semantic Scholar when the researcher configures its API key in `.env`, and OpenAlex otherwise. When those venues give nothing relevant, the agent broadens the search to all venues and preprints (OpenAlex, plus Semantic Scholar with a key). More venues are added to the first round over time.
+- DBLP is not used: it answers automated requests with a bot check (see [gotchas](context/gotchas.md)). IEEE Xplore may be added when the researcher configures an API key.
+- The agent can read the full text of papers that have an arXiv version, through arXiv's HTML rendering. Other papers are available by abstract only.
+- A plan cites a paper with the parameter, assumption, or metric it supports and a quote copied from the paper. The harness accepts a citation only if the paper came from a search in the same task and the quote appears verbatim in its abstract or saved full text. Citations are part of the plan, so the approval covers them.
+- The artifact directory keeps every search and every paper found in `sources.json`, and each full text read in `papers/`. The report lists each citation with the place the harness found its quote.
 
 ## Run and task status
 

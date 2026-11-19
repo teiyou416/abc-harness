@@ -30,7 +30,9 @@ REQUIRED_FIELDS = {
     "baseline": dict,
     "configurations": list,
 }
-OPTIONAL_FIELDS = {"permitted_edits": list, "execution_image": str}
+OPTIONAL_FIELDS = {"permitted_edits": list, "execution_image": str, "citations": list}
+CITATION_FIELDS = ("paper", "supports", "quote")
+MAX_QUOTE_CHARS = 600
 IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
 
 
@@ -115,6 +117,9 @@ class Plan:
             f"Metrics: {', '.join(d['metrics'])}",
             f"Permitted edits beyond parameters and seeds: {', '.join(d.get('permitted_edits', [])) or 'none'}",
         ]
+        if d.get("citations"):
+            lines += ["", "Citations:"]
+            lines += [f"  {c['paper']} supports {c['supports']}: \"{c['quote']}\"" for c in d["citations"]]
         return "\n".join(lines)
 
 
@@ -164,6 +169,13 @@ def validate_plan(data: dict[str, Any]) -> Plan:
         raise PlanError("configuration names must be unique")
     if "execution_image" in data and not IMAGE_ID.fullmatch(data["execution_image"]):
         raise PlanError("execution_image must be a full image ID (sha256: followed by 64 hex digits)")
+    for citation in data.get("citations", []):
+        if not isinstance(citation, dict) or set(citation) != set(CITATION_FIELDS):
+            raise PlanError(f"each citation needs exactly the fields {', '.join(CITATION_FIELDS)}")
+        if not all(isinstance(citation[f], str) and citation[f].strip() for f in CITATION_FIELDS):
+            raise PlanError("citation fields must be non-empty text")
+        if len(citation["quote"]) > MAX_QUOTE_CHARS:
+            raise PlanError(f"a citation quote may be at most {MAX_QUOTE_CHARS} characters")
     if data.get("permitted_edits"):
         raise PlanError("permitted_edits is not supported until milestone M5")
 

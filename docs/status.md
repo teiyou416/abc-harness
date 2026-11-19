@@ -24,9 +24,12 @@ append to it. Git already records the history.
   its retries, may use only the task's remaining active time. A failed
   container cleanup is recorded and never stops the results and report from
   being written.
-- `make check` runs ruff and 92 offline tests. `make test-docker` runs 5
-  integration tests against both execution images, and `make test-live` runs 5
-  tests against the Claude API.
+- M4: the agent searches OpenAlex (and Semantic Scholar with a key) for
+  papers, reads arXiv full texts, and cites them with quotes the harness
+  checks verbatim. The report lists every citation and where its quote is.
+- `make check` runs ruff and 111 offline tests. `make test-docker` runs 5
+  integration tests against both execution images, and `make test-live` runs 6
+  tests against the Claude API and the literature services.
 
 ## Known broken
 
@@ -35,10 +38,12 @@ Nothing is known broken.
 ## Not verified yet
 
 - The harness has run only on macOS with Apple silicon and Docker Desktop.
+- Semantic Scholar search has run only against a hand-written response; no
+  key was available. Its venue names for FC, AFT, and ICBC are unchecked.
 
 ## Deliberately not built
 
-- Literature search (M4) and agent-written code (M5).
+- Agent-written code (M5). DBLP and IEEE Xplore search.
 - BlockSim's Ethereum model.
 - Retrying a failed simulation run; the report shows it as failed instead.
 - Memory across tasks (Hermes-style `MEMORY.md` / `USER.md`) and `SKILL.md`.
@@ -46,4 +51,4 @@ Nothing is known broken.
 
 ## Next
 
-M4 in `docs/development-plan.md`: literature retrieval.
+M5 in `docs/development-plan.md`: agent-written code in the task workspace.

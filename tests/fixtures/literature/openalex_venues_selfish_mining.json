@@ -1,0 +1,1654 @@
+{
+ "meta": {
+  "notice": "No API key, so this request shares one free daily budget ($0.10) with everyone on your network's IP address. Get a free key with its own $1/day at https://openalex.org/settings/api and add api_key=YOUR_KEY to your requests. An AI agent can get one for its user in one call: POST https://api.openalex.org/api-keys with {\"email\": \"<your user's email>\"}; we email them a link, and the key works once they click it. Docs for agents: https://help.openalex.org/llms.txt",
+  "count": 26,
+  "db_response_time_ms": 106,
+  "page": 1,
+  "per_page": 3,
+  "groups_count": null,
+  "x_query": {
+   "oql": "get works with (selfish mining) in the title, abstract, or full text in (S4306418423) or (S4363608612) or (S7407105243)",
+   "x_new_oql": "get works with (selfish mining) in the title, abstract, or full text in (S4306418423) or (S4363608612) or (S7407105243)",
+   "oqo": {
+    "get_rows": "works",
+    "filter_rows": [
+     {
+      "column_id": "fulltext.search",
+      "value": "selfish mining",
+      "operator": "has"
+     },
+     {
+      "join": "or",
+      "filters": [
+       {
+        "column_id": "primary_location.source.id",
+        "value": "S4306418423"
+       },
+       {
+        "column_id": "primary_location.source.id",
+        "value": "S4363608612"
+       },
+       {
+        "column_id": "primary_location.source.id",
+        "value": "S7407105243"
+       }
+      ]
+     }
+    ]
+   },
+   "url": "/works?filter=fulltext.search:selfish mining,primary_location.source.id:S4306418423|S4363608612|S7407105243&per_page=3",
+   "order": "best matches first",
+   "order_default": true
+  },
+  "cost_usd": 0.001
+ },
+ "results": [
+  {
+   "id": "https://openalex.org/W3097446043",
+   "title": "Efficient MDP Analysis for Selfish-Mining in Blockchains",
+   "publication_year": 2020,
+   "doi": "https://doi.org/10.1145/3419614.3423264",
+   "primary_location": {
+    "id": "doi:10.1145/3419614.3423264",
+    "doi": "https://doi.org/10.1145/3419614.3423264",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1145/3419614.3423264",
+    "pdf_url": null,
+    "source": {
+     "id": "https://openalex.org/S7407105243",
+     "display_name": "ACM Conference on Advances in Financial Technologies (AFT)",
+     "issn_l": null,
+     "issn": null,
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": "https://openalex.org/P4310319798",
+     "host_organization_name": "Association for Computing Machinery",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310319798"
+     ],
+     "host_organization_lineage_names": [
+      "Association for Computing Machinery"
+     ],
+     "type": "conference"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Proceedings of the 2nd ACM Conference on Advances in Financial Technologies",
+    "raw_type": "proceedings-article"
+   },
+   "locations": [
+    {
+     "id": "doi:10.1145/3419614.3423264",
+     "doi": "https://doi.org/10.1145/3419614.3423264",
+     "is_oa": false,
+     "landing_page_url": "https://doi.org/10.1145/3419614.3423264",
+     "pdf_url": null,
+     "source": {
+      "id": "https://openalex.org/S7407105243",
+      "display_name": "ACM Conference on Advances in Financial Technologies (AFT)",
+      "issn_l": null,
+      "issn": null,
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": false,
+      "listed_in": [],
+      "host_organization": "https://openalex.org/P4310319798",
+      "host_organization_name": "Association for Computing Machinery",
+      "host_organization_lineage": [
+       "https://openalex.org/P4310319798"
+      ],
+      "host_organization_lineage_names": [
+       "Association for Computing Machinery"
+      ],
+      "type": "conference"
+     },
+     "license": null,
+     "license_id": null,
+     "version": "publishedVersion",
+     "is_accepted": true,
+     "is_published": true,
+     "raw_source_name": "Proceedings of the 2nd ACM Conference on Advances in Financial Technologies",
+     "raw_type": "proceedings-article"
+    },
+    {
+     "id": "pmh:oai:arXiv.org:2007.05614",
+     "doi": null,
+     "is_oa": true,
+     "landing_page_url": "https://arxiv.org/abs/2007.05614",
+     "pdf_url": "https://arxiv.org/pdf/2007.05614",
+     "source": {
+      "id": "https://openalex.org/S4306400194",
+      "display_name": "arXiv (Cornell University)",
+      "issn_l": "2331-8422",
+      "issn": [
+       "2331-8422"
+      ],
+      "is_oa": true,
+      "is_in_doaj": false,
+      "is_core": false,
+      "listed_in": [],
+      "host_organization": "https://openalex.org/I205783295",
+      "host_organization_name": "Cornell University",
+      "host_organization_lineage": [
+       "https://openalex.org/I205783295"
+      ],
+      "host_organization_lineage_names": [],
+      "type": "repository"
+     },
+     "license": null,
+     "license_id": null,
+     "version": "submittedVersion",
+     "is_accepted": false,
+     "is_published": false,
+     "raw_source_name": null,
+     "raw_type": "text"
+    },
+    {
+     "id": "doi:10.48550/arxiv.2007.05614",
+     "doi": "https://doi.org/10.48550/arxiv.2007.05614",
+     "is_oa": true,
+     "landing_page_url": "https://doi.org/10.48550/arxiv.2007.05614",
+     "pdf_url": null,
+     "source": {
+      "id": "https://openalex.org/S4306400194",
+      "display_name": "arXiv (Cornell University)",
+      "issn_l": "2331-8422",
+      "issn": [
+       "2331-8422"
+      ],
+      "is_oa": true,
+      "is_in_doaj": false,
+      "is_core": false,
+      "listed_in": [],
+      "host_organization": "https://openalex.org/I205783295",
+      "host_organization_name": "Cornell University",
+      "host_organization_lineage": [
+       "https://openalex.org/I205783295"
+      ],
+      "host_organization_lineage_names": [],
+      "type": "repository"
+     },
+     "license": null,
+     "license_id": null,
+     "version": null,
+     "is_accepted": false,
+     "is_published": false,
+     "raw_source_name": null,
+     "raw_type": "Preprint"
+    }
+   ],
+   "abstract_inverted_index": {
+    "A": [
+     0
+    ],
+    "proof": [
+     1
+    ],
+    "of": [
+     2,
+     18
+    ],
+    "work": [
+     3
+    ],
+    "(PoW)": [
+     4
+    ],
+    "blockchain": [
+     5
+    ],
+    "protocol": [
+     6,
+     34
+    ],
+    "distributes": [
+     7
+    ],
+    "rewards": [
+     8
+    ],
+    "to": [
+     9,
+     15,
+     35
+    ],
+    "its": [
+     10
+    ],
+    "participants,": [
+     11
+    ],
+    "called": [
+     12
+    ],
+    "miners,": [
+     13
+    ],
+    "according": [
+     14
+    ],
+    "their": [
+     16,
+     39,
+     57
+    ],
+    "share": [
+     17
+    ],
+    "the": [
+     19,
+     33,
+     62
+    ],
+    "total": [
+     20
+    ],
+    "computational": [
+     21
+    ],
+    "power.": [
+     22
+    ],
+    "Sufficiently": [
+     23
+    ],
+    "large": [
+     24
+    ],
+    "miners": [
+     25,
+     49
+    ],
+    "can": [
+     26
+    ],
+    "perform": [
+     27
+    ],
+    "selfish": [
+     28
+    ],
+    "mining": [
+     29
+    ],
+    "--": [
+     30
+    ],
+    "deviate": [
+     31
+    ],
+    "from": [
+     32
+    ],
+    "gain": [
+     36
+    ],
+    "more": [
+     37
+    ],
+    "than": [
+     38,
+     52
+    ],
+    "fair": [
+     40
+    ],
+    "share.": [
+     41
+    ],
+    "Such": [
+     42
+    ],
+    "systems": [
+     43
+    ],
+    "are": [
+     44,
+     50
+    ],
+    "thus": [
+     45
+    ],
+    "secure": [
+     46
+    ],
+    "if": [
+     47
+    ],
+    "all": [
+     48
+    ],
+    "smaller": [
+     51
+    ],
+    "a": [
+     53
+    ],
+    "threshold": [
+     54
+    ],
+    "size": [
+     55
+    ],
+    "so": [
+     56
+    ],
+    "best": [
+     58
+    ],
+    "response": [
+     59
+    ],
+    "is": [
+     60
+    ],
+    "following": [
+     61
+    ],
+    "protocol.": [
+     63
+    ]
+   },
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": null,
+      "display_name": "Roi Bar Zur",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I174306211",
+       "display_name": "Technion – Israel Institute of Technology",
+       "ror": "https://ror.org/03qryx823",
+       "country_code": "IL",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I174306211"
+       ]
+      }
+     ],
+     "countries": [
+      "IL"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Roi Bar Zur",
+     "raw_affiliation_strings": [
+      "Technion"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Technion",
+       "institution_ids": [
+        "https://openalex.org/I174306211"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5087255124",
+      "display_name": "Ittay Eyal",
+      "orcid": "https://orcid.org/0000-0001-7595-2258",
+      "observed_orcids": [
+       "https://orcid.org/0000-0001-7595-2258"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I174306211",
+       "display_name": "Technion – Israel Institute of Technology",
+       "ror": "https://ror.org/03qryx823",
+       "country_code": "IL",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I174306211"
+       ]
+      }
+     ],
+     "countries": [
+      "IL"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Ittay Eyal",
+     "raw_affiliation_strings": [
+      "Technion"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Technion",
+       "institution_ids": [
+        "https://openalex.org/I174306211"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5020699288",
+      "display_name": "Aviv Tamar",
+      "orcid": "https://orcid.org/0000-0002-1972-854X",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-1972-854X"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I174306211",
+       "display_name": "Technion – Israel Institute of Technology",
+       "ror": "https://ror.org/03qryx823",
+       "country_code": "IL",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I174306211"
+       ]
+      }
+     ],
+     "countries": [
+      "IL"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Aviv Tamar",
+     "raw_affiliation_strings": [
+      "Technion"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Technion",
+       "institution_ids": [
+        "https://openalex.org/I174306211"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W3077087723",
+   "title": "A Simulation-Based Analysis of Multiplayer Selfish Mining",
+   "publication_year": 2020,
+   "doi": "https://doi.org/10.1109/icbc48266.2020.9169446",
+   "primary_location": {
+    "id": "doi:10.1109/icbc48266.2020.9169446",
+    "doi": "https://doi.org/10.1109/icbc48266.2020.9169446",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1109/icbc48266.2020.9169446",
+    "pdf_url": null,
+    "source": {
+     "id": "https://openalex.org/S4363608612",
+     "display_name": "IEEE International Conference on Blockchain and Cryptocurrency (ICBC)",
+     "issn_l": null,
+     "issn": null,
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": "https://openalex.org/P4310319808",
+     "host_organization_name": "Institute of Electrical and Electronics Engineers",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310319808"
+     ],
+     "host_organization_lineage_names": [
+      "Institute of Electrical and Electronics Engineers"
+     ],
+     "type": "conference"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "2020 IEEE International Conference on Blockchain and Cryptocurrency (ICBC)",
+    "raw_type": "proceedings-article"
+   },
+   "locations": [
+    {
+     "id": "doi:10.1109/icbc48266.2020.9169446",
+     "doi": "https://doi.org/10.1109/icbc48266.2020.9169446",
+     "is_oa": false,
+     "landing_page_url": "https://doi.org/10.1109/icbc48266.2020.9169446",
+     "pdf_url": null,
+     "source": {
+      "id": "https://openalex.org/S4363608612",
+      "display_name": "IEEE International Conference on Blockchain and Cryptocurrency (ICBC)",
+      "issn_l": null,
+      "issn": null,
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": false,
+      "listed_in": [],
+      "host_organization": "https://openalex.org/P4310319808",
+      "host_organization_name": "Institute of Electrical and Electronics Engineers",
+      "host_organization_lineage": [
+       "https://openalex.org/P4310319808"
+      ],
+      "host_organization_lineage_names": [
+       "Institute of Electrical and Electronics Engineers"
+      ],
+      "type": "conference"
+     },
+     "license": null,
+     "license_id": null,
+     "version": "publishedVersion",
+     "is_accepted": true,
+     "is_published": true,
+     "raw_source_name": "2020 IEEE International Conference on Blockchain and Cryptocurrency (ICBC)",
+     "raw_type": "proceedings-article"
+    },
+    {
+     "id": "pmh:oai:espace2.etsmtl.ca:21461",
+     "doi": null,
+     "is_oa": false,
+     "landing_page_url": "https://espace2.etsmtl.ca/id/eprint/21461/",
+     "pdf_url": null,
+     "source": {
+      "id": "https://openalex.org/S4306402392",
+      "display_name": "Espace ÉTS (ETS)",
+      "issn_l": null,
+      "issn": null,
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": false,
+      "listed_in": [],
+      "host_organization": "https://openalex.org/I9736820",
+      "host_organization_name": "École de Technologie Supérieure",
+      "host_organization_lineage": [
+       "https://openalex.org/I9736820"
+      ],
+      "host_organization_lineage_names": [],
+      "type": "repository"
+     },
+     "license": null,
+     "license_id": null,
+     "version": "submittedVersion",
+     "is_accepted": false,
+     "is_published": false,
+     "raw_source_name": "",
+     "raw_type": "Compte rendu de conférence"
+    }
+   ],
+   "abstract_inverted_index": {
+    "Proof-of-Work": [
+     0
+    ],
+    "(PoW)": [
+     1
+    ],
+    "is": [
+     2
+    ],
+    "the": [
+     3,
+     6,
+     48,
+     89
+    ],
+    "core": [
+     4
+    ],
+    "of": [
+     5,
+     47
+    ],
+    "most": [
+     7
+    ],
+    "popular": [
+     8
+    ],
+    "consensus": [
+     9
+    ],
+    "protocol": [
+     10
+    ],
+    "among": [
+     11
+    ],
+    "current": [
+     12
+    ],
+    "mainstream": [
+     13
+    ],
+    "blockchain": [
+     14
+    ],
+    "systems": [
+     15,
+     27
+    ],
+    "including": [
+     16
+    ],
+    "Bitcoin.": [
+     17
+    ],
+    "Selfish": [
+     18
+    ],
+    "mining": [
+     19,
+     40,
+     50,
+     94
+    ],
+    "attacks": [
+     20
+    ],
+    "are": [
+     21,
+     71
+    ],
+    "a": [
+     22,
+     34,
+     57,
+     61
+    ],
+    "possible": [
+     23
+    ],
+    "threat": [
+     24
+    ],
+    "towards": [
+     25
+    ],
+    "PoW-based": [
+     26
+    ],
+    "and": [
+     28
+    ],
+    "recent": [
+     29
+    ],
+    "works": [
+     30
+    ],
+    "have": [
+     31
+    ],
+    "shown": [
+     32
+    ],
+    "that": [
+     33,
+     65,
+     88
+    ],
+    "miner": [
+     35
+    ],
+    "can": [
+     36,
+     66
+    ],
+    "profit": [
+     37
+    ],
+    "using": [
+     38
+    ],
+    "selfish": [
+     39,
+     75,
+     93
+    ],
+    "if": [
+     41
+    ],
+    "it": [
+     42
+    ],
+    "has": [
+     43
+    ],
+    "more": [
+     44
+    ],
+    "than": [
+     45
+    ],
+    "25%": [
+     46
+    ],
+    "overall": [
+     49
+    ],
+    "power.": [
+     51
+    ],
+    "In": [
+     52,
+     77
+    ],
+    "this": [
+     53,
+     99
+    ],
+    "paper,": [
+     54
+    ],
+    "we": [
+     55,
+     80
+    ],
+    "present": [
+     56,
+     81
+    ],
+    "simulator": [
+     58
+    ],
+    "based": [
+     59
+    ],
+    "on": [
+     60
+    ],
+    "Markov": [
+     62
+    ],
+    "Process": [
+     63
+    ],
+    "model": [
+     64
+    ],
+    "analyze": [
+     67
+    ],
+    "scenarios": [
+     68
+    ],
+    "where": [
+     69
+    ],
+    "there": [
+     70
+    ],
+    "multiple,": [
+     72
+    ],
+    "independently": [
+     73
+    ],
+    "working": [
+     74
+    ],
+    "miners.": [
+     76
+    ],
+    "our": [
+     78
+    ],
+    "evaluations,": [
+     79
+    ],
+    "detailed": [
+     82
+    ],
+    "results": [
+     83
+    ],
+    "with": [
+     84
+    ],
+    "two": [
+     85
+    ],
+    "attackers": [
+     86
+    ],
+    "showing": [
+     87
+    ],
+    "threshold": [
+     90
+    ],
+    "for": [
+     91
+    ],
+    "profitable": [
+     92
+    ],
+    "decreases": [
+     95
+    ],
+    "to": [
+     96
+    ],
+    "21%": [
+     97
+    ],
+    "in": [
+     98
+    ],
+    "case.": [
+     100
+    ]
+   },
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5062999404",
+      "display_name": "Shiquan Zhang",
+      "orcid": "https://orcid.org/0009-0009-7112-2463",
+      "observed_orcids": [
+       "https://orcid.org/0009-0009-7112-2463"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I5023651",
+       "display_name": "McGill University",
+       "ror": "https://ror.org/01pxwe438",
+       "country_code": "CA",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I5023651"
+       ]
+      }
+     ],
+     "countries": [
+      "CA"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Shiquan Zhang",
+     "raw_affiliation_strings": [
+      "McGill University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "McGill University",
+       "institution_ids": [
+        "https://openalex.org/I5023651"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5025108369",
+      "display_name": "Kaiwen Zhang",
+      "orcid": "https://orcid.org/0000-0002-5599-0190",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-5599-0190",
+       "https://orcid.org/0009-0000-8270-1764"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I49663120",
+       "display_name": "Université du Québec",
+       "ror": "https://ror.org/010gxg263",
+       "country_code": "CA",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I49663120"
+       ]
+      },
+      {
+       "id": "https://openalex.org/I9736820",
+       "display_name": "École de Technologie Supérieure",
+       "ror": "https://ror.org/0020snb74",
+       "country_code": "CA",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I49663120",
+        "https://openalex.org/I9736820"
+       ]
+      }
+     ],
+     "countries": [
+      "CA"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Kaiwen Zhang",
+     "raw_affiliation_strings": [
+      "École de Technologie Supérieure, Université du Québec"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "École de Technologie Supérieure, Université du Québec",
+       "institution_ids": [
+        "https://openalex.org/I49663120",
+        "https://openalex.org/I9736820"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5000301016",
+      "display_name": "Bettina Kemme",
+      "orcid": "https://orcid.org/0000-0003-4694-4923",
+      "observed_orcids": [
+       "https://orcid.org/0000-0003-4694-4923"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I5023651",
+       "display_name": "McGill University",
+       "ror": "https://ror.org/01pxwe438",
+       "country_code": "CA",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I5023651"
+       ]
+      }
+     ],
+     "countries": [
+      "CA"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Bettina Kemme",
+     "raw_affiliation_strings": [
+      "McGill University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "McGill University",
+       "institution_ids": [
+        "https://openalex.org/I5023651"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W3069823195",
+   "title": "Mining blocks in a row: A statistical study of fairness in Bitcoin mining",
+   "publication_year": 2020,
+   "doi": "https://doi.org/10.1109/icbc48266.2020.9169436",
+   "primary_location": {
+    "id": "doi:10.1109/icbc48266.2020.9169436",
+    "doi": "https://doi.org/10.1109/icbc48266.2020.9169436",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1109/icbc48266.2020.9169436",
+    "pdf_url": null,
+    "source": {
+     "id": "https://openalex.org/S4363608612",
+     "display_name": "IEEE International Conference on Blockchain and Cryptocurrency (ICBC)",
+     "issn_l": null,
+     "issn": null,
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": "https://openalex.org/P4310319808",
+     "host_organization_name": "Institute of Electrical and Electronics Engineers",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310319808"
+     ],
+     "host_organization_lineage_names": [
+      "Institute of Electrical and Electronics Engineers"
+     ],
+     "type": "conference"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "2020 IEEE International Conference on Blockchain and Cryptocurrency (ICBC)",
+    "raw_type": "proceedings-article"
+   },
+   "locations": [
+    {
+     "id": "doi:10.1109/icbc48266.2020.9169436",
+     "doi": "https://doi.org/10.1109/icbc48266.2020.9169436",
+     "is_oa": false,
+     "landing_page_url": "https://doi.org/10.1109/icbc48266.2020.9169436",
+     "pdf_url": null,
+     "source": {
+      "id": "https://openalex.org/S4363608612",
+      "display_name": "IEEE International Conference on Blockchain and Cryptocurrency (ICBC)",
+      "issn_l": null,
+      "issn": null,
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": false,
+      "listed_in": [],
+      "host_organization": "https://openalex.org/P4310319808",
+      "host_organization_name": "Institute of Electrical and Electronics Engineers",
+      "host_organization_lineage": [
+       "https://openalex.org/P4310319808"
+      ],
+      "host_organization_lineage_names": [
+       "Institute of Electrical and Electronics Engineers"
+      ],
+      "type": "conference"
+     },
+     "license": null,
+     "license_id": null,
+     "version": "publishedVersion",
+     "is_accepted": true,
+     "is_published": true,
+     "raw_source_name": "2020 IEEE International Conference on Blockchain and Cryptocurrency (ICBC)",
+     "raw_type": "proceedings-article"
+    },
+    {
+     "id": "pmh:oai:www.zora.uzh.ch:20.500.14742/175207",
+     "doi": null,
+     "is_oa": true,
+     "landing_page_url": "https://www.zora.uzh.ch/handle/20.500.14742/175207",
+     "pdf_url": null,
+     "source": {
+      "id": "https://openalex.org/S4306401281",
+      "display_name": "Zurich Open Repository and Archive (University of Zurich)",
+      "issn_l": null,
+      "issn": null,
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": false,
+      "listed_in": [],
+      "host_organization": "https://openalex.org/I202697423",
+      "host_organization_name": "University of Zurich",
+      "host_organization_lineage": [
+       "https://openalex.org/I202697423"
+      ],
+      "host_organization_lineage_names": [],
+      "type": "repository"
+     },
+     "license": "other-oa",
+     "license_id": "https://openalex.org/licenses/other-oa",
+     "version": "submittedVersion",
+     "is_accepted": false,
+     "is_published": false,
+     "raw_source_name": "Li, S.-N., Yang, Z., & Tessone, C. J. (2020, May 6). Mining blocks in a row: a statistical study of fairness in Bitcoin mining. 2020 IEEE International Conference on Blockchain and Cryptocurrency (ICBC), Toronto. https://doi.org/10.1109/icbc48266.2020.9169436",
+     "raw_type": "Conference or Workshop Item"
+    },
+    {
+     "id": "doi:10.5167/uzh-193491",
+     "doi": "https://doi.org/10.5167/uzh-193491",
+     "is_oa": true,
+     "landing_page_url": "https://doi.org/10.5167/uzh-193491",
+     "pdf_url": null,
+     "source": {
+      "id": "https://openalex.org/S4306401281",
+      "display_name": "Zurich Open Repository and Archive (University of Zurich)",
+      "issn_l": null,
+      "issn": null,
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": false,
+      "listed_in": [],
+      "host_organization": "https://openalex.org/I202697423",
+      "host_organization_name": "University of Zurich",
+      "host_organization_lineage": [
+       "https://openalex.org/I202697423"
+      ],
+      "host_organization_lineage_names": [],
+      "type": "repository"
+     },
+     "license": null,
+     "license_id": null,
+     "version": null,
+     "is_accepted": false,
+     "is_published": false,
+     "raw_source_name": null,
+     "raw_type": "ConferencePaper"
+    },
+    {
+     "id": "doi:10.5167/uzh-265286",
+     "doi": "https://doi.org/10.5167/uzh-265286",
+     "is_oa": true,
+     "landing_page_url": "https://doi.org/10.5167/uzh-265286",
+     "pdf_url": null,
+     "source": {
+      "id": "https://openalex.org/S4306401281",
+      "display_name": "Zurich Open Repository and Archive (University of Zurich)",
+      "issn_l": null,
+      "issn": null,
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": false,
+      "listed_in": [],
+      "host_organization": "https://openalex.org/I202697423",
+      "host_organization_name": "University of Zurich",
+      "host_organization_lineage": [
+       "https://openalex.org/I202697423"
+      ],
+      "host_organization_lineage_names": [],
+      "type": "repository"
+     },
+     "license": null,
+     "license_id": null,
+     "version": null,
+     "is_accepted": false,
+     "is_published": false,
+     "raw_source_name": null,
+     "raw_type": "article-journal"
+    }
+   ],
+   "abstract_inverted_index": {
+    "The": [
+     0,
+     19
+    ],
+    "Bitcoin": [
+     1
+    ],
+    "system": [
+     2
+    ],
+    "keeps": [
+     3
+    ],
+    "its": [
+     4
+    ],
+    "ledger": [
+     5
+    ],
+    "consistent": [
+     6
+    ],
+    "in": [
+     7,
+     14,
+     33,
+     45,
+     93,
+     107,
+     121,
+     138,
+     158
+    ],
+    "a": [
+     8,
+     15,
+     37,
+     47,
+     50,
+     112
+    ],
+    "blockchain": [
+     9
+    ],
+    "by": [
+     10,
+     118
+    ],
+    "solving": [
+     11
+    ],
+    "cryptographic": [
+     12
+    ],
+    "problems,": [
+     13
+    ],
+    "method": [
+     16,
+     113,
+     132
+    ],
+    "called": [
+     17,
+     41
+    ],
+    "\"Proof-of-Work\".": [
+     18
+    ],
+    "conventional": [
+     20
+    ],
+    "wisdom": [
+     21
+    ],
+    "asserts": [
+     22
+    ],
+    "that": [
+     23,
+     152
+    ],
+    "the": [
+     24,
+     54,
+     66,
+     79,
+     86,
+     104,
+     122,
+     135
+    ],
+    "mining": [
+     25,
+     38,
+     43,
+     51,
+     91,
+     136
+    ],
+    "protocol": [
+     26
+    ],
+    "is": [
+     27
+    ],
+    "incentive-compatible.": [
+     28
+    ],
+    "However,": [
+     29
+    ],
+    "Eyal": [
+     30
+    ],
+    "and": [
+     31,
+     82,
+     144
+    ],
+    "Sirer": [
+     32
+    ],
+    "2014": [
+     34
+    ],
+    "have": [
+     35,
+     65
+    ],
+    "discovered": [
+     36
+    ],
+    "attack": [
+     39
+    ],
+    "strategy": [
+     40,
+     63,
+     81
+    ],
+    "selfish": [
+     42,
+     90,
+     116
+    ],
+    "(SM),": [
+     44
+    ],
+    "which": [
+     46,
+     139
+    ],
+    "miner": [
+     48
+    ],
+    "(or": [
+     49
+    ],
+    "pool)": [
+     52
+    ],
+    "publishes": [
+     53
+    ],
+    "blocks": [
+     55
+    ],
+    "it": [
+     56
+    ],
+    "mines": [
+     57
+    ],
+    "selectively": [
+     58
+    ],
+    "instead": [
+     59
+    ],
+    "of": [
+     60,
+     68,
+     71,
+     78,
+     100,
+     124
+    ],
+    "immediately.": [
+     61
+    ],
+    "SM": [
+     62,
+     80,
+     87
+    ],
+    "would": [
+     64
+    ],
+    "impact": [
+     67
+    ],
+    "wasting": [
+     69
+    ],
+    "resources": [
+     70
+    ],
+    "honest": [
+     72
+    ],
+    "miners.": [
+     73
+    ],
+    "Scholars": [
+     74
+    ],
+    "proposed": [
+     75
+    ],
+    "various": [
+     76
+    ],
+    "extensions": [
+     77
+    ],
+    "approaches": [
+     83
+    ],
+    "to": [
+     84,
+     114,
+     133
+    ],
+    "defense": [
+     85
+    ],
+    "attack.": [
+     88
+    ],
+    "Whether": [
+     89
+    ],
+    "occurs": [
+     92
+    ],
+    "practice": [
+     94
+    ],
+    "or": [
+     95
+    ],
+    "not,": [
+     96
+    ],
+    "has": [
+     97
+    ],
+    "been": [
+     98
+    ],
+    "subject": [
+     99
+    ],
+    "extensive": [
+     101
+    ],
+    "debate.": [
+     102
+    ],
+    "For": [
+     103
+    ],
+    "first": [
+     105
+    ],
+    "time,": [
+     106
+    ],
+    "this": [
+     108
+    ],
+    "paper": [
+     109
+    ],
+    "we": [
+     110,
+     129
+    ],
+    "propose": [
+     111
+    ],
+    "identify": [
+     115
+    ],
+    "miners": [
+     117,
+     140
+    ],
+    "detecting": [
+     119
+    ],
+    "anomalies": [
+     120
+    ],
+    "properties": [
+     123
+    ],
+    "consecutive": [
+     125
+    ],
+    "blocks'": [
+     126
+    ],
+    "statistics.": [
+     127
+    ],
+    "Furthermore,": [
+     128
+    ],
+    "extend": [
+     130
+    ],
+    "our": [
+     131
+    ],
+    "detect": [
+     134
+    ],
+    "cartels,": [
+     137
+    ],
+    "secretly": [
+     141
+    ],
+    "get": [
+     142
+    ],
+    "together": [
+     143
+    ],
+    "share": [
+     145
+    ],
+    "timely": [
+     146
+    ],
+    "information.": [
+     147
+    ],
+    "Our": [
+     148
+    ],
+    "results": [
+     149
+    ],
+    "provide": [
+     150
+    ],
+    "evidence": [
+     151
+    ],
+    "these": [
+     153
+    ],
+    "strategic": [
+     154
+    ],
+    "behaviors": [
+     155
+    ],
+    "take": [
+     156
+    ],
+    "place": [
+     157
+    ],
+    "practice.": [
+     159
+    ]
+   },
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5100359468",
+      "display_name": "Shengnan Li",
+      "orcid": "https://orcid.org/0000-0002-2305-3186",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-2305-3186"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I202697423",
+       "display_name": "University of Zurich",
+       "ror": "https://ror.org/02crff812",
+       "country_code": "CH",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I202697423"
+       ]
+      }
+     ],
+     "countries": [
+      "CH"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Sheng-Nan Li",
+     "raw_affiliation_strings": [
+      "URPP Social Networks, University of Zurich, Zurich, Switzerland"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "URPP Social Networks, University of Zurich, Zurich, Switzerland",
+       "institution_ids": [
+        "https://openalex.org/I202697423"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5011615347",
+      "display_name": "Yang Zhao",
+      "orcid": "https://orcid.org/0000-0002-1299-9670",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-1299-9670"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I202697423",
+       "display_name": "University of Zurich",
+       "ror": "https://ror.org/02crff812",
+       "country_code": "CH",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I202697423"
+       ]
+      }
+     ],
+     "countries": [
+      "CH"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Zhao Yang",
+     "raw_affiliation_strings": [
+      "URPP Social Networks, University of Zurich, Zurich, Switzerland"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "URPP Social Networks, University of Zurich, Zurich, Switzerland",
+       "institution_ids": [
+        "https://openalex.org/I202697423"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5020270223",
+      "display_name": "Claudio Juan Tessone",
+      "orcid": "https://orcid.org/0000-0001-7733-6221",
+      "observed_orcids": [
+       "https://orcid.org/0000-0001-7733-6221"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I202697423",
+       "display_name": "University of Zurich",
+       "ror": "https://ror.org/02crff812",
+       "country_code": "CH",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I202697423"
+       ]
+      }
+     ],
+     "countries": [
+      "CH"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Claudio J. Tessone",
+     "raw_affiliation_strings": [
+      "UZH Blockchain Center, URPP Social Networks University of Zurich, Zurich, Switzerland"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "UZH Blockchain Center, URPP Social Networks University of Zurich, Zurich, Switzerland",
+       "institution_ids": [
+        "https://openalex.org/I202697423"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "group_by": []
+}

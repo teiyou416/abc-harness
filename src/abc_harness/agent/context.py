@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from abc_harness.execution.task import Task
+    from abc_harness.literature.library import Library
 
 # A deliberately pessimistic ratio: real text averages closer to 4 characters
 # per token, so estimates err towards compressing early, never late.
@@ -110,7 +111,7 @@ def render_transcript(messages: list[dict[str, Any]]) -> str:
     return "\n\n".join(lines)
 
 
-def task_state(task: Task, clarifications: list[tuple[str, str]]) -> str:
+def task_state(task: Task, clarifications: list[tuple[str, str]], library: Library | None = None) -> str:
     """The facts the next window must have exactly, written from the harness's own records."""
     from abc_harness.planning.approval import read_decisions
 
@@ -129,6 +130,11 @@ def task_state(task: Task, clarifications: list[tuple[str, str]]) -> str:
     if clarifications:
         lines += ["", "Clarification questions and the researcher's answers:"]
         lines += [f"- Q: {q}\n  A: {a}" for q, a in clarifications]
+    if library is not None and library.papers:
+        lines += ["", "Papers found by search_papers (only these can be cited):"]
+        for paper in library.papers.values():
+            text = f"; full text in task/{library.full_texts[paper.id]}" if paper.id in library.full_texts else ""
+            lines.append(f"- `{paper.id}`: {paper.title} ({paper.year}){text}")
     if task.executed is not None:
         from abc_harness.tools.run_plan import run_summary
 

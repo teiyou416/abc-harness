@@ -135,15 +135,26 @@ All four pass in `tests/test_context.py`. `make test-live` also forces one real 
 
 - With the real model in `make test-live`, the agent found the paper, viewed Figure 1 of arXiv 2007.05614, and read 0.954 ± 0.002 for a point at about 0.954. This is one sample; rerun it when the model or prompt changes.
 
-## M5: Agent-written code in the task workspace
+## M5: Agent-written code in the task workspace (done 2026-11-19)
 
 **What the researcher can do.** Approve a plan that adds a capability to a simulator and receive the diff, validation result, and exportable source.
 
-**Scope:** write and edit tools restricted to the permitted files; sandbox exec inside the execution image; plan fields for permitted edits and the validation check; diff capture; `abc-harness export <task_id>`.
+**Delivered**
 
-**Test doubles:** a scripted fake model that attempts writes inside and outside the permitted files.
+- Plans carry `permitted_edits` (path and purpose), a `validation` check (parameters, seeds, one metric, expected value, tolerance), and `edits: false` on configurations that run the original source. The review shows all three.
+- `tools/write_file.py` and `tools/edit_file.py` write only the permitted files, or files under `scratch/`, and only after approval. `read_file` reads and lists the original source at `source/<simulator>/`, before approval too.
+- `tools/run_command.py` is sandbox exec: the edited source is read-only at `/work/src` and `scratch/` is writable; no network, no host environment; each command and its output go to `sandbox/` and the trace, and its time counts toward the limit.
+- At `run_plan` the harness freezes the edits, refuses a change to any file the plan does not permit, saves `changes/edits.diff`, and runs the validation check on the edited source; a failed check stops the task before any configuration runs. The report has a "Code changes and validation" section.
+- `abc-harness export runs/<task_id>` packages the edited source with the plan, diff, validation result, and report. Both capability cards gained a "Where the code is" section.
 
-**Acceptance:** the "Permitted edits" row.
+**Test doubles:** `FakeRunner` gained a sandbox and a hook that shows which source each run received; the scripted model writes inside and outside the permitted files.
+
+**Acceptance (passed)**
+
+- Permitted edits: writes outside the permitted files, before approval, or outside the source tree are refused; a change slipped into the edited source behind the harness's back blocks the run; a failed validation check stops the task before any configuration and the report says why. Docker tests confirm that the sandbox cannot write the source, has no network route, and gets no API key.
+- With the real model, real source, and real literature search in `make test-live`, the selfish-mining question now produces a plan instead of a refusal: it permits one file (`Models/Bitcoin/BlockCommit.py`), cites Eyal and Sirer with checked quotes, and validates against their closed form at alpha 0.4 and gamma 0.5 (0.5256 ± 0.02, which a wrong gamma would miss).
+
+**Notes for M6.** The live plan above is a good starting point for the demonstration. Writing and validating the strategy has not yet run end to end with the real model.
 
 ## M6: MVP demonstration
 

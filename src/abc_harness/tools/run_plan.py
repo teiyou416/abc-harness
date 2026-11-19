@@ -61,11 +61,13 @@ def run_summary(task: Task, status: str, reason: str) -> dict[str, Any]:
             "not_completed": {r.run_id: f"{r.status}: {r.error}" for r in rs if r.status != "completed"},
             "metrics": stats,
         }
+    validation = None if task.validation is None else {k: v for k, v in task.validation.items() if k != "runs"}
     return {
         "plan_version": plan.version,
         "status": status,
         "status_reason": reason,
         "configurations": by_config,
+        "validation": validation,
         "report": "task/report.md (written when the task ends)",
         "raw_output": "task/raw/<run_id>/",
     }

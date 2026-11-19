@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -48,6 +49,11 @@ class FakeRunner:
     exports: list[str] = field(default_factory=list)
     cleanups: list[str] = field(default_factory=list)
     cleanup_error: str | None = None  # set to make cleanup fail, as with an unreachable Docker daemon
+    # sandbox exec: each call is recorded; `sandbox_handler(command, source_dir, scratch_dir)` decides the outcome
+    sandbox_calls: list[str] = field(default_factory=list)
+    sandbox_handler: Callable[[str, Path, Path], RunOutcome] | None = None
+    # called with (run_id, workdir) before a run writes its output, so a test can see which source it got
+    inspect: Callable[[str, Path], None] | None = None
     tags: dict[str, str] = field(default_factory=dict)  # tag -> current image ID
     built: dict[str, str] = field(default_factory=dict)  # every image ID that exists -> its tag
 
@@ -88,6 +94,8 @@ class FakeRunner:
     ) -> RunOutcome:
         self.runs.append(run_id)
         self.images.append(image)
+        if self.inspect:
+            self.inspect(run_id, workdir)
         behaviour = self.behaviours.get(run_id, "complete")
         if self.clock:
             self.clock.advance(min(self.seconds_per_run, timeout_seconds))
@@ -100,6 +108,17 @@ class FakeRunner:
         else:
             self._write_simblock(workdir, behaviour)
         return RunOutcome(0, False, self.seconds_per_run)
+
+    def sandbox(
+        self, image: str, task_id: str, name: str, source_dir: Path, scratch_dir: Path, command: str,
+        timeout_seconds: float,
+    ) -> RunOutcome:
+        self.sandbox_calls.append(command)
+        if self.clock:
+            self.clock.advance(min(self.seconds_per_run, timeout_seconds))
+        if self.sandbox_handler:
+            return self.sandbox_handler(command, source_dir, scratch_dir)
+        return RunOutcome(0, False, self.seconds_per_run, f"ran: {command}\n")
 
     def cleanup(self, task_id: str) -> None:
         self.cleanups.append(task_id)

@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from abc_harness.execution.runner import RunnerError
+from abc_harness.simulators import SIMULATORS
 from abc_harness.tools.base import ToolContext, ToolError
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -12,9 +14,11 @@ READ_DEFAULT_LINES = 400
 
 SPEC: dict[str, Any] = {
     "name": "read_file",
-    "description": "Read lines of a text file. Allowed paths: `examples/<file>` (example plans) and "
-    "`task/<path>` (this task's artifact directory, for example `task/history.md`, `task/report.md`, or "
-    "`task/raw/<run_id>/stdout.txt`). Returns at most `limit` lines starting at line `offset`.",
+    "description": "Read lines of a text file, or list a directory. Allowed paths: `examples/<file>` (example "
+    "plans), `source/<simulator>/<path>` (the simulator's original source, read-only; for example "
+    "`source/blocksim/` to list it), and `task/<path>` (this task's artifact directory, for example "
+    "`task/history.md`, `task/raw/<run_id>/stdout.txt`, or your edited source `task/workspace/edited/<path>`). "
+    "Returns at most `limit` lines starting at line `offset`.",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -34,13 +38,28 @@ def run(ctx: ToolContext, args: dict[str, Any]) -> str:
         limit = max(1, int(args.get("limit") or READ_DEFAULT_LINES))
     except (TypeError, ValueError) as e:
         raise ToolError("offset and limit must be whole numbers") from e
-    roots = {"examples": REPO_ROOT / "examples", "task": ctx.task.artifact_dir}
     prefix, _, rest = path.partition("/")
-    if prefix not in roots or not rest:
-        raise ToolError("path must start with examples/ or task/")
-    root = roots[prefix].resolve()
+    if prefix == "source":
+        name, _, rest = rest.partition("/")
+        if name not in SIMULATORS:
+            raise ToolError(f"source/ holds one folder per simulator: {', '.join(sorted(SIMULATORS))}")
+        try:
+            root = ctx.task.original_source(name).resolve()
+        except RunnerError as e:
+            raise ToolError(str(e)) from e
+        rest = rest or "."
+    elif prefix in ("examples", "task") and rest:
+        root = (REPO_ROOT / "examples" if prefix == "examples" else ctx.task.artifact_dir).resolve()
+    else:
+        raise ToolError("path must start with examples/, source/<simulator>/, or task/")
     target = (root / rest).resolve()
-    if not target.is_relative_to(root) or not target.is_file():
+    if not target.is_relative_to(root):
+        raise ToolError(f"no readable file at {path}")
+    if target.is_dir():
+        entries = sorted(target.iterdir())
+        listing = [f"{e.name}/" if e.is_dir() else f"{e.name} ({e.stat().st_size} bytes)" for e in entries]
+        return f"[{path}: directory, {len(entries)} entries]\n" + "\n".join(listing[:500])
+    if not target.is_file():
         raise ToolError(f"no readable file at {path}")
     lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
     chunk = lines[offset - 1 : offset - 1 + limit]

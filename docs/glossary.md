@@ -53,8 +53,20 @@ _Avoid_: modified simulator, fork, patched source
 ## Evidence
 
 **Found paper**:
-A paper that a literature search returned during the task. Only found papers can be cited.
+A paper that a literature search returned during the task. Found papers and supplied papers are the only ones that can be cited.
 _Avoid_: source, reference
+
+**Supplied paper**:
+A paper the researcher hands to a task as a PDF file. It is parsed before the agent starts and can be cited like a found paper.
+_Avoid_: local paper, uploaded paper, attachment
+
+**PDF parser image**:
+The container image that turns one PDF into text, formulas, tables, and cropped figure images, without network. Its parse time does not count toward the task's time limit.
+_Avoid_: MinerU container, OCR service
+
+**Machine-recognized text**:
+A full text the PDF parser produced. It may differ from the paper in places, notably table numbers, so values from its tables are cited as figure readings.
+_Avoid_: OCR text, extracted text
 
 **First-round venues**:
 The venues every literature search starts from: FC, AFT, and ICBC. A broadened search drops this restriction.
@@ -65,9 +77,9 @@ An entry in a plan that ties one found paper to the parameter, assumption, or me
 _Avoid_: reference, source
 
 **Quote**:
-A passage copied verbatim from a found paper's abstract or saved full text. The harness confirms it appears there.
+A passage copied verbatim from a found or supplied paper's abstract or saved full text. The harness confirms it appears there, and refuses one taken from a table of machine-recognized text.
 _Avoid_: excerpt, snippet, evidence text
 
 **Figure reading**:
-A value the model reads off a figure it viewed during the task, stated with its uncertainty. It is approximate and cannot be checked against text.
+A value the model reads off a figure it viewed during the task (or a table image, for machine-recognized text), stated with its uncertainty. It is approximate and cannot be checked against text.
 _Avoid_: figure value, extracted data, digitized value

@@ -49,6 +49,7 @@ def write_report(
             f"waiting for the researcher: {manifest['waiting_seconds']:.1f}s"
         ),
     ]
+    lines += _pdf_parse_line(manifest)
     if manifest.get("test_double"):
         lines.append("- **These results come from a test double, not from a real simulator.**")
     if manifest.get("cleanup_error"):
@@ -138,6 +139,7 @@ def _write_planless_report(artifact_dir: Path, manifest: dict[str, Any], summary
         f"- Plan versions proposed: {len(manifest.get('plan_versions', []))} (see `plans/` and `approvals.jsonl`)",
         "- No simulation run was started.",
     ]
+    lines += _pdf_parse_line(manifest)
     if (artifact_dir / "sandbox").exists():
         lines.append("- The agent ran sandbox commands (`sandbox/`) and edited source (`workspace/edited/`); "
                      "they are not results.")  # fmt: skip
@@ -170,13 +172,30 @@ def _citations(artifact_dir: Path, plan: Plan) -> list[str]:
                           if k.lower() == c["figure"].strip().lower()), None)  # fmt: skip
             images = ", ".join(f"[image]({rel})" for rel in saved) if saved else "**figure not viewed**"
             found = f"_figure reading: read off the figure by the model, approximate, not checked against text_; {images}"
-        lines.append(f"- **{c['supports']}**: [{paper.title}]({paper.url}) ({paper.year}, {paper.venue or 'venue unknown'}): "
-                     f"{evidence} ({found})")  # fmt: skip
+        lines.append(f"- **{c['supports']}**: [{paper.title}]({paper.url}) ({paper.year or 'n.d.'}, "
+                     f"{paper.venue or 'venue unknown'}): {evidence} ({found}{_text_source(library, c['paper'])})")  # fmt: skip
     if not citations:
         lines.append("The plan cites no paper.")
     texts = "; full texts and viewed figures in `papers/`" if library.full_texts else ""
     lines += ["", f"{len(library.searches)} searches found {len(library.papers)} papers, all listed in `literature.json`{texts}."]
     return lines
+
+
+def _pdf_parse_line(manifest: dict[str, Any]) -> list[str]:
+    parses = manifest.get("pdf_parses") or []
+    if not parses:
+        return []
+    cached = sum(1 for p in parses if p.get("cached"))
+    reused = f", {cached} reused from the parse cache" if cached else ""
+    return [(f"- PDF parsing: {len(parses)} PDF(s){reused}; {manifest.get('pdf_parse_seconds', 0):.1f}s, "
+            "not counted in active runtime")]  # fmt: skip
+
+
+def _text_source(library: Library, paper_id: str) -> str:
+    source = library.sources.get(paper_id, {})
+    if source.get("kind") != "pdf":
+        return ""
+    return f"; full text machine-recognized from [the PDF]({source['pdf']}) by MinerU, so it may differ from the paper"
 
 
 def _code_changes(artifact_dir: Path, plan: Plan, manifest: dict[str, Any]) -> list[str]:

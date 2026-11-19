@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -27,10 +27,11 @@ from abc_harness.agent.context import (
 )
 from abc_harness.agent.model import ModelClient, ModelDeadlineExceeded, ModelTurn
 from abc_harness.execution.limits import Budget, LimitReached
-from abc_harness.execution.runner import Runner
+from abc_harness.execution.runner import Runner, RunnerError
 from abc_harness.execution.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
 from abc_harness.literature.figures import media_type
 from abc_harness.literature.library import Library, Literature
+from abc_harness.literature.pdf import PARSER_IMAGE, PdfError
 from abc_harness.tools import HANDLERS, TOOLS, EndTask, ToolContext, ToolError, ToolOutput
 from abc_harness.tools.base import AskFn
 
@@ -64,12 +65,14 @@ class Agent:
 
     # ----- the loop -----
 
-    def run(self, question: str) -> tuple[str, str]:
+    def run(self, question: str, preface: str = "") -> tuple[str, str]:
+        """Run the loop. `preface` is harness text added after the question, e.g. the papers the researcher supplied."""
         self.question = question
         system = system_prompt()
-        messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
+        first = f"{question}\n\n{preface}" if preface else question
+        messages: list[dict[str, Any]] = [{"role": "user", "content": first}]
         self.history.start_window("The task starts.")
-        self.history.user_text(question)
+        self.history.user_text(first)
         next_input = self._estimate(system, messages)
         while True:
             if next_input > self.limits.soft_limit:
@@ -204,19 +207,28 @@ def run_agent_task(
     limits: ContextLimits | None = None,
     literature: Literature | None = None,
     on_start: Callable[[Path], None] | None = None,
+    papers: Sequence[Path] = (),
 ) -> TaskResult:
+    """Run one agent task. `papers` are PDFs the researcher supplied; they are parsed before the first model call."""
     limits = limits or ContextLimits()
     task = Task(runner, runs_root, budget, redact=redact, mode="agent", question=question, model=model.name,
                 prompts=prompt_hashes(), context_limits=limits.__dict__,
-                literature_services=literature.services if literature else [])  # fmt: skip
+                literature_services=literature.services if literature else [],
+                supplied_papers=[p.name for p in papers])  # fmt: skip
     if on_start:
         on_start(task.artifact_dir)
     agent = Agent(task, model, ask, review, limits)
-    if literature is not None:
-        agent.tools.library = Library(task.artifact_dir, literature)
+    try:
+        runner.image_info(PARSER_IMAGE)
+        convert = task.convert_pdf
+    except RunnerError:
+        convert = None  # without the parser image, PDFs cannot be read; arXiv HTML still can
+    if literature is not None or papers:
+        agent.tools.library = Library(task.artifact_dir, literature, convert)
     status, stop_reason = FAILED, "unknown"
     try:
-        status, stop_reason = agent.run(question)
+        preface = _supply_papers(agent.tools.library, papers) if papers else ""
+        status, stop_reason = agent.run(question, preface)
     except EndTask as e:
         status, stop_reason = e.status, e.reason
     except LimitReached as e:
@@ -239,6 +251,21 @@ def run_agent_task(
         task.manifest["context_windows"] = agent.history.window
         result = task.close(status, stop_reason)
     return result
+
+
+def _supply_papers(library: Library | None, papers: Sequence[Path]) -> str:
+    """Parse the researcher's PDFs into the library and say so to the agent. A PDF that fails ends the task."""
+    assert library is not None
+    added = []
+    for path in papers:
+        try:
+            added.append(library.add_local(path))
+        except PdfError as e:
+            raise EndTask(FAILED, f"could not parse the supplied paper {path.name}: {e}") from e
+    lines = [("The researcher supplied these papers as PDFs. The harness has parsed them; open one with read_paper. "
+             "They can be cited like papers found by search_papers.")]  # fmt: skip
+    lines += [f"- `{p.id}`: {p.title}" for p in added]
+    return "\n".join(lines)
 
 
 __all__ = ["TOOLS", "Agent", "run_agent_task"]

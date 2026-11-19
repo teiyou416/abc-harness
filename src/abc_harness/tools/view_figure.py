@@ -11,12 +11,14 @@ SPEC: dict[str, Any] = {
     "name": "view_figure",
     "description": "Show one figure of a paper you opened with read_paper, as an image with its caption. The "
     "outline from read_paper lists the figures. Only a figure you viewed can support a figure reading in a "
-    "plan. Tables are text in the saved full text; read them with read_file instead.",
+    "plan. For arXiv HTML, tables are text in the saved full text; read them with read_file. For a paper parsed "
+    "from PDF, tables are listed too (label 'Table 1'): view a table before using its numbers, because the "
+    "recognized text may be wrong, and cite them as a figure reading.",
     "input_schema": {
         "type": "object",
         "properties": {
             "paper": {"type": "string", "description": "The paper id from search_papers."},
-            "figure": {"type": "string", "description": "The figure label from the outline, e.g. 'Figure 3'."},
+            "figure": {"type": "string", "description": "The label from read_paper, e.g. 'Figure 3' or 'Table 1'."},
         },
         "required": ["paper", "figure"],
     },

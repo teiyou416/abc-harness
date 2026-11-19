@@ -35,10 +35,15 @@ class Paper:
         lines = [
             f"### {self.id}",
             f"{self.title} ({self.year or 'n.d.'}). {authors}. {self.venue or 'venue unknown'}.",
-            f"Full text: {'read_paper can fetch it' if self.arxiv_id else 'not available (no arXiv version)'}.",
+            f"Full text: {self.full_text_note()}.",
             f"Abstract: {self.abstract or '(no abstract available)'}",
         ]
         return "\n".join(lines)
+
+    def full_text_note(self) -> str:
+        if self.source == "local":
+            return "a PDF the researcher supplied; read_paper opens it"
+        return "read_paper can fetch it" if self.arxiv_id else "not available (no arXiv version)"
 
 
 def paper_id(arxiv_id: str | None, doi: str | None, fallback: str) -> str:

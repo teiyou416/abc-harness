@@ -36,8 +36,10 @@ flowchart TB
         RUNNER["execution/runner.py: one container per simulation run"]
         SIMBLOCK["SimBlock image: JDK 21 + pinned commit"]
         BLOCKSIM["BlockSim image: Python 3.11 + pinned commit"]
+        PDFIMG["PDF parser image: MinerU, models built in"]
         RUNNER --> SIMBLOCK
         RUNNER --> BLOCKSIM
+        RUNNER --> PDFIMG
     end
 
     subgraph ART["runs/task_id/"]
@@ -46,12 +48,16 @@ flowchart TB
 
     subgraph LIT["Literature: literature/"]
         LIB["Library: literature.json, papers/<br/>citations checked against it"]
+        PDF["pdf.py: MinerU output to text, figures, tables"]
+        LIB --> PDF
     end
 
     ENV[(".env")] -->|keys| LLM
     ENV -->|optional S2 key| LIB
     TOOLS -->|search_papers, read_paper, view_figure| LIB
     LIB <-->|HTTPS from the host| ACADEMIC(["OpenAlex, Semantic Scholar, arXiv"])
+    R -->|ask --paper PDF| LIB
+    LIB -->|parse a PDF, via the task| RUNNER
     LIB --> FILES
     LLM <-->|Messages API| CLAUDE(["Claude API"])
     R --> ASK --> LOOP
@@ -81,7 +87,7 @@ checks that every module appears in this table.
 
 | Layer (high to low) | File | What it does |
 |---|---|---|
-| Entry | `cli.py` | Commands `image build`, `run`, `ask`, `trace summary`; shows plans and questions in the terminal. Holds no task logic. |
+| Entry | `cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `trace summary`, `export`; shows plans and questions in the terminal. Holds no task logic. |
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
 | Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
 | Agent | `agent/model.py` | The Claude API client; the only code that receives the API key. Bounds each call by the remaining time. |
@@ -92,8 +98,8 @@ checks that every module appears in this table.
 | Tools | `tools/base.py` | `ToolContext` (shared task state), `ToolOutput` (a result with images), `ToolError` (refusal), `EndTask` (ends the task). |
 | Tools | `tools/describe_simulator.py` | Returns a simulator's capability card. |
 | Tools | `tools/search_papers.py` | Searches the first-round venues, or everything when broadened. |
-| Tools | `tools/read_paper.py` | Fetches an arXiv paper's full text into `papers/` and returns its outline and figure list. |
-| Tools | `tools/view_figure.py` | Shows the model one figure as an image and records that it was viewed. |
+| Tools | `tools/read_paper.py` | Opens a paper's full text (arXiv HTML, or a PDF parsed by MinerU) in `papers/` and returns its source, outline, and figure and table list. |
+| Tools | `tools/view_figure.py` | Shows the model one figure (or, for a PDF, a table) as an image and records that it was viewed. |
 | Tools | `tools/read_file.py` | Reads `examples/` and the task's artifact directory, nothing else. |
 | Tools | `tools/ask_researcher.py` | Asks the researcher a question; the wait is not active time. |
 | Tools | `tools/propose_plan.py` | Validates a plan and its citations, pins the image, and gets the researcher's decision. |
@@ -102,11 +108,11 @@ checks that every module appears in this table.
 | Tools | `tools/edit_file.py` | Replaces one exact passage in such a file. |
 | Tools | `tools/run_command.py` | Sandbox exec: runs a build or test command in the execution image. |
 | Tools | `tools/edits.py` | The rule the three code tools share: only for an approved plan with permitted edits, and only until it runs. |
-| Execution | `execution/task.py` | One task end to end: artifact directory, plan versions, image pinning, sandbox exec, the validation check, simulation runs, final artifacts. |
-| Execution | `execution/runner.py` | Docker: one container per simulation run or sandbox command, no network, label-based cleanup. |
+| Execution | `execution/task.py` | One task end to end: artifact directory, plan versions, image pinning, PDF parsing with its cache, sandbox exec, the validation check, simulation runs, final artifacts. |
+| Execution | `execution/runner.py` | Docker: one container per simulation run, sandbox command, or PDF parse, no network, label-based cleanup. |
 | Execution | `execution/workspace.py` | The original, edited, and scratch trees; which paths a write may touch; the diff of the edits. |
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
-| Execution | `execution/limits.py` | The 30-minute active time and 500-call limits. |
+| Execution | `execution/limits.py` | The 30-minute active time and 500-call limits; waiting for the researcher and PDF parsing do not count. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl` and summarises it. |
 | Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
 | Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |
@@ -115,6 +121,7 @@ checks that every module appears in this table.
 | Literature | `literature/library.py` | `Literature` (the services and the Semantic Scholar key) and `Library` (one task's papers, figures, and views in `literature.json`; the quote check). |
 | Literature | `literature/openalex.py` | OpenAlex search: request URL and response parsing. |
 | Literature | `literature/semantic_scholar.py` | Semantic Scholar search: request URL and response parsing. |
+| Literature | `literature/pdf.py` | Turns MinerU's output for a PDF into the same text lines and figure list, with tables as viewable figures; the parser image name and timeout. |
 | Literature | `literature/fulltext.py` | Turns arXiv's HTML rendering of a paper into text lines, Markdown tables, an outline, and a figure list. |
 | Literature | `literature/figures.py` | The `Figure` record, and an image's format, size, and token cost read from its header. |
 | Literature | `literature/papers.py` | The `Paper` record, paper IDs, and the text normalisation used to match quotes. |
@@ -160,8 +167,11 @@ its figure reading names a figure the agent viewed, with an uncertainty.
    limits and the approval state, executes it, writes a trace event, and
    returns the result to the model.
 4. When a choice needs evidence, the model searches the literature and reads
-   arXiv full texts. The harness performs every request from the host, so the
+   full texts. The harness performs every request from the host, so the
    execution images stay offline, and records each paper in `literature.json`.
+   A full text comes from arXiv's HTML or, when there is none, from the arXiv
+   PDF parsed in the PDF parser image. PDFs the researcher supplies with
+   `ask --paper` are parsed before step 2 and listed in the first message.
 5. The model drafts a plan. The harness checks its citations, pins the execution image's ID into
    it, the Human Interaction tool shows it to the researcher, and the harness
    records the decision for that plan version.
@@ -190,7 +200,7 @@ to what the first release builds.
 | Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `agent/loop.py`, `agent/model.py`, `execution/limits.py` |
 | Tools: Files | Yes. Reads examples, the simulator source, and the task; writes only the permitted files and `scratch/` after approval. | `tools/read_file.py`, `tools/write_file.py`, `tools/edit_file.py` |
 | Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `execution/runner.py`, `tools/run_command.py` |
-| Tools: Web Retrieval | Yes, for academic literature only: search and arXiv full text. Sources are listed in the project specification. | `tools/search_papers.py`, `tools/read_paper.py`, `literature/` |
+| Tools: Web Retrieval | Yes, for academic literature only: search, arXiv full text, and PDFs parsed by MinerU. Sources are listed in the project specification. | `tools/search_papers.py`, `tools/read_paper.py`, `literature/` |
 | Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `planning/approval.py`, `cli.py` (terminal prompts) |
 | Tools: Custom Tools | Later | |
 | Simulators: SimBlock, BlockSim | Yes. BlockSim runs its Bitcoin model only. | `simulators/simblock.py`, `simulators/blocksim.py` |
@@ -273,6 +283,15 @@ applies them.
   label. If removal fails (for example, the Docker daemon is unreachable), the
   harness records the error in the trace, the manifest, and the report, and
   still writes the results and the final status.
+- The PDF parser image (`docker/mineru/Dockerfile`) is a digest-pinned
+  `python:3.12-slim` with a pinned MinerU release and its CPU models (about
+  0.8 GB) downloaded at build time; the whole image is about 3.2 GB. One
+  container parses one PDF, with the PDF mounted read-only, an output
+  directory writable, no network, 6 CPUs and 6 GB of memory, and the task
+  label. It has a 15-minute timeout, and its time is recorded as
+  `pdf_parse_seconds` instead of counting toward the task's limit. Its output
+  is cached under `runs/.cache/pdf/<image id>/<PDF sha256>/` and copied into
+  each task that needs it.
 - Nothing is installed at runtime. A new dependency means a new image, which
   requires a new plan version and fresh approval.
 

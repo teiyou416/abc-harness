@@ -135,6 +135,30 @@ All four pass in `tests/test_context.py`. `make test-live` also forces one real 
 
 - With the real model in `make test-live`, the agent found the paper, viewed Figure 1 of arXiv 2007.05614, and read 0.954 ± 0.002 for a point at about 0.954. This is one sample; rerun it when the model or prompt changes.
 
+## M4.2: Papers as PDF (done 2026-11-19)
+
+**What the researcher can do.** Hand the agent the paper to reproduce as a PDF (`ask --paper paper.pdf`), and have the agent read arXiv papers that have no HTML version.
+
+**Delivered**
+
+- `docker/mineru/Dockerfile`: the PDF parser image, MinerU 4.2.3 on CPU ("basic" tier: ONNX models for layout, OCR, formulas, and tables, no VLM), with the models built in. `abc-harness image build` builds it with the simulator images.
+- `Task.convert_pdf` runs one container per PDF (no network, 6 CPUs, 6 GB, task label, 15-minute timeout), records the parse in the trace and manifest, and keeps its time out of the active-runtime limit. Parses are cached by PDF content and parser image ID.
+- `literature/pdf.py` turns MinerU's `structured_content.json` into the same text lines and figure list as arXiv HTML. Tables are listed as figures, with their cropped image.
+- Supplied PDFs are parsed before the first model call and listed in the first message as `local:` papers. `read_paper` falls back to the arXiv PDF when arXiv has no HTML.
+- The saved text, `read_paper`, and the report label machine-recognized text. A quote from a PDF table is refused; a table value is cited as a figure reading after viewing the table.
+
+**Feasibility measurements** (2 CPUs unless noted)
+
+- 17-page arXiv 1311.0243: 80 s, 3.9 GB peak memory; Eq. 8 recognized exactly.
+- 19-page arXiv 2007.05614: 343 s with 2 CPUs and 155 s with 8 CPUs, identical output; 4.2 to 4.9 GB. Formula recognition (361 formulas) took most of the time.
+- Against arXiv HTML, 96% and 98% of body sentences matched exactly once citation styles were ignored. Table 1 lost its decimal points ("0 370 77"); its cropped image is exact.
+- The "flash" tier (text layer only) took 9 s but matched 72% of sentences and recognized no formulas, so it is not used.
+
+**Acceptance (passed offline and with Docker)**
+
+- `tests/test_pdf.py`: supplied PDFs are cited, table quotes are refused, parse failures end the task, parse time is excluded, and the cache is reused. `tests/test_docker.py` parses a hand-written PDF with the real image and checks the timeout cleanup.
+- Not yet run with the real model; see `docs/status.md`.
+
 ## M5: Agent-written code in the task workspace (done 2026-11-19)
 
 **What the researcher can do.** Approve a plan that adds a capability to a simulator and receive the diff, validation result, and exportable source.

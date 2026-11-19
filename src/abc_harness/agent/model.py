@@ -8,7 +8,8 @@ from typing import Any, Protocol
 
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
-MAX_OUTPUT_TOKENS = 16_384
+# Thinking counts toward this cap, so it leaves room for long reasoning plus a large tool input such as a plan.
+MAX_OUTPUT_TOKENS = 65_536
 # List prices in USD per million tokens: input, output, cache read, 5-minute cache write (the TTL the client
 # uses). Only for the cost estimate in the run statistics; update them when the published prices change.
 PRICES_PER_MTOK: dict[str, tuple[float, float, float, float]] = {

@@ -34,8 +34,10 @@ CHARS_PER_TOKEN = 3
 @dataclass(frozen=True)
 class ContextLimits:
     soft_limit: int = 106_496
-    hard_limit: int = 131_072
-    max_output_tokens: int = 16_384
+    # Output was 16,384 in the design sketch; thinking shares that cap, and a reply with long thinking plus a
+    # 72-configuration plan was cut off. The hard limit grew by the same amount, so the input room is unchanged.
+    hard_limit: int = 180_224
+    max_output_tokens: int = 65_536
     compact_max_tokens: int = 8_192
     tool_result_max_tokens: int = 8_192
 

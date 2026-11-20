@@ -228,7 +228,7 @@ def test_parse_time_does_not_count_toward_the_time_limit(tmp_path, supplied_pdf)
     clock = FakeClock()
     runner = FakeRunner(clock=clock, seconds_per_pdf=600)
     result = run_agent(ScriptedModel([text_turn("Done.")]), tmp_path, [supplied_pdf], runner=runner, clock=clock)
-    assert result.status == "not_executed"  # a 10-minute parse inside a 30-minute limit leaves it untouched
+    assert result.status == "not_executed"  # a 10-minute parse inside a 2-hour limit leaves it untouched
     manifest = json.loads((result.artifact_dir / "manifest.json").read_text())
     assert manifest["pdf_parse_seconds"] == 600 and manifest["active_seconds"] == 0
 

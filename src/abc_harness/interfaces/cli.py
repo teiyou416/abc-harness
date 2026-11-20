@@ -99,7 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     def task_options(p: argparse.ArgumentParser) -> None:
         p.add_argument("--runs-dir", type=Path, default=Path("runs"), help="where artifact directories go")
         p.add_argument("--time-limit-seconds", type=float, default=DEFAULT_TIME_LIMIT_SECONDS,
-                       help="active runtime limit per task (default: 1800)")  # fmt: skip
+                       help="active runtime limit per task (default: 7200)")  # fmt: skip
         p.add_argument("--quiet", action="store_true",
                        help="do not print each model call, tool call, and run as it happens")  # fmt: skip
 

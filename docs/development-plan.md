@@ -18,7 +18,7 @@ The plan is a hand-written file. This milestone proves the approval gate, the ru
 - `docker/simblock/Dockerfile` and `abc-harness image build`.
 - `abc-harness run` with a TOML plan, a content-hash plan version, and approval records.
 - Docker runner with per-run source copies, parameter and seed patching from a closed set, per-run timeouts, no network, no host environment, and label-based cleanup.
-- The 30-minute active-runtime limit, which excludes time spent waiting for the researcher.
+- The active-runtime limit (30 minutes at first, 2 hours since 2026-11-20), which excludes time spent waiting for the researcher.
 - Metrics `t90_ms` and `orphan_rate`, with an independent recalculation script `scripts/recompute_metric.py`.
 - `report.md`, `results.json`, `manifest.json`, `trace.jsonl`, raw output, and per-run diffs.
 - README steps that reproduce the example.

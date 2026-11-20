@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
-DEFAULT_TIME_LIMIT_SECONDS = 30 * 60
+DEFAULT_TIME_LIMIT_SECONDS = 2 * 60 * 60
 DEFAULT_LLM_CALL_LIMIT = 500
 
 

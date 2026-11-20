@@ -46,7 +46,7 @@ session, custom metric) are defined in [docs/glossary.md](docs/glossary.md).
    change to the simulator, parameters, metrics, permitted edits, validation
    check, or execution image requires a new plan version and fresh approval.
 4. **Enforce limits in code.** Restrict writes to the task workspace and the
-   files the approved plan permits. Enforce two limits per task: 30 minutes of
+   files the approved plan permits. Enforce two limits per task: 2 hours of
    active runtime, excluding time spent waiting for the researcher or parsing
    PDFs (the PDF parser has its own 15-minute timeout), and 500 LLM
    calls. At either limit, stop active work, remove the task's containers, and

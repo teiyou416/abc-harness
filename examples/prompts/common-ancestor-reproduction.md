@@ -31,10 +31,10 @@ new task of the same conversation.
 
 ## 中文
 
-启动（带上论文，每个任务的时限放宽到 60 分钟）：
+启动（带上论文；每个任务默认有 2 小时）：
 
 ```bash
-uv run abc-harness chat --paper thesis/common_anchestor.pdf --time-limit-seconds 3600
+uv run abc-harness chat --paper thesis/common_anchestor.pdf
 ```
 
 第一条提示词：
@@ -65,10 +65,10 @@ uv run abc-harness chat --paper thesis/common_anchestor.pdf --time-limit-seconds
 
 ## 日本語
 
-起動（論文を渡し、1 タスクの制限時間を 60 分に延長）：
+起動（論文を渡す。1 タスクの制限時間は既定で 2 時間）：
 
 ```bash
-uv run abc-harness chat --paper thesis/common_anchestor.pdf --time-limit-seconds 3600
+uv run abc-harness chat --paper thesis/common_anchestor.pdf
 ```
 
 最初のプロンプト：
@@ -99,10 +99,10 @@ uv run abc-harness chat --paper thesis/common_anchestor.pdf --time-limit-seconds
 
 ## English
 
-Start (with the paper, and a 60-minute limit per task):
+Start (with the paper; each task has 2 hours by default):
 
 ```bash
-uv run abc-harness chat --paper thesis/common_anchestor.pdf --time-limit-seconds 3600
+uv run abc-harness chat --paper thesis/common_anchestor.pdf
 ```
 
 First prompt:

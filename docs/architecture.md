@@ -25,7 +25,7 @@ flowchart TB
     subgraph TASK["Task: execution/task.py"]
         PLAN["planning/plan.py<br/>validate, version = SHA-256"]
         APPROVAL["planning/approval.py<br/>decisions recorded by the harness"]
-        LIMITS["execution/limits.py<br/>30 min active time, 500 model calls"]
+        LIMITS["execution/limits.py<br/>2 h active time, 500 model calls"]
         EXEC["execute approved plan"]
     end
 
@@ -123,7 +123,7 @@ checks that every module appears in this table.
 | Execution | `execution/workspace.py` | The original, edited, and scratch trees; which paths a write may touch; the diff of the edits. |
 | Execution | `execution/figures.py` | Runs one figure script in the plot image with the results read-only, checks its PNG, and keeps script, PNG, SVG, and log in `figures/` with `figures/index.json`. |
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
-| Execution | `execution/limits.py` | The 30-minute active time and 500-call limits; waiting for the researcher and PDF parsing do not count. |
+| Execution | `execution/limits.py` | The 2-hour active time and 500-call limits; waiting for the researcher and PDF parsing do not count. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl`, passes each redacted event to an optional listener (the live terminal output), and summarises it. |
 | Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
 | Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |

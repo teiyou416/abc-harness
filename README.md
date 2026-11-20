@@ -75,7 +75,7 @@ calls, and completed simulation runs. The experiment's results are in `report.md
 
 To have the agent read a paper you choose, pass the PDF; repeat `--paper` for
 several. The harness parses each one before the agent starts (1 to 6 minutes
-for a 20-page paper, not counted toward the 30-minute limit, and cached for
+for a 20-page paper, not counted toward the 2-hour limit, and cached for
 the next task), and the agent can cite them:
 
 ```bash
@@ -105,7 +105,7 @@ uv run abc-harness chat [--paper paper.pdf]
 
 Type a request and press Enter (Alt+Enter, or Esc then Enter, for a new
 line; the arrow keys recall earlier input). Each request runs as its own
-task, with its own directory, approval, report, and 30-minute limit, so a
+task, with its own directory, approval, report, and 2-hour limit, so a
 follow-up such as "now with 1000 nodes" gets a new plan to approve. The agent
 remembers the earlier tasks of the conversation: the harness gives it each
 one's question, plan, results, figures, and final answer, and it can read

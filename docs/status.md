@@ -31,7 +31,7 @@ append to it. Git already records the history.
 - M4.2: `ask --paper paper.pdf` hands the agent a PDF, parsed by MinerU in
   the PDF parser image before the agent starts. arXiv papers without HTML are
   read from their PDF. Parse time is recorded but not counted toward the
-  30-minute limit; the parser has a 15-minute timeout and a cache. Table
+  2-hour limit; the parser has a 15-minute timeout and a cache. Table
   values from a PDF are cited only as figure readings.
 - M5: after approving a plan with permitted edits, the agent changes only
   those files, builds and tests them in the sandbox, and must pass the plan's
@@ -67,8 +67,9 @@ append to it. Git already records the history.
   on 2026-11-19 with real chat tasks on both models (88 `deepseek-flash` calls,
   61 `deepseek-v4-pro` calls): requests, thinking blocks, tool calls, and the
   usage fields the cost estimate reads (`cache_read_input_tokens` included)
-  all work. `deepseek-v4-pro` averaged about 29 s per call, so long tasks on
-  it may need a higher `--time-limit-seconds`.
+  all work. `deepseek-v4-pro` averaged about 29 s per call.
+- The default active-runtime limit is 2 hours (was 30 minutes): reproducing
+  a paper with edited source and a few hundred runs hit 30 minutes twice.
 - `make check` runs ruff and 218 offline tests. `make test-docker` runs 11
   integration tests against both execution images, the PDF parser image, and the plot image, and `make test-live` runs 7
   tests against the Claude API and the literature services.

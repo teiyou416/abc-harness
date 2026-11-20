@@ -63,7 +63,12 @@ append to it. Git already records the history.
   `t90_ms` could not be computed.
 - The agent can run on DeepSeek (`deepseek-v4-pro`, `deepseek-flash`) through
   DeepSeek's Anthropic-compatible API, chosen with `--model` or `/model`; the
-  model list is fixed to four current Claude models and these two.
+  model list is fixed to four current Claude models and these two. Verified
+  on 2026-11-19 with real chat tasks on both models (88 `deepseek-flash` calls,
+  61 `deepseek-v4-pro` calls): requests, thinking blocks, tool calls, and the
+  usage fields the cost estimate reads (`cache_read_input_tokens` included)
+  all work. `deepseek-v4-pro` averaged about 29 s per call, so long tasks on
+  it may need a higher `--time-limit-seconds`.
 - `make check` runs ruff and 218 offline tests. `make test-docker` runs 11
   integration tests against both execution images, the PDF parser image, and the plot image, and `make test-live` runs 7
   tests against the Claude API and the literature services.
@@ -74,10 +79,6 @@ Nothing is known broken.
 
 ## Not verified yet
 
-- DeepSeek has not been called for real yet (no `DEEPSEEK_API_KEY` was
-  available): the request shape, thinking blocks, tool calls, and the usage
-  fields the cost estimate reads follow DeepSeek's documentation only.
-  `make test-live` checks them once the key is in `.env`.
 - The harness has run only on macOS with Apple silicon and Docker Desktop.
 - The real model has not read a supplied PDF yet; `make test-live` has no
   PDF test. MinerU quality was measured on two arXiv papers only.

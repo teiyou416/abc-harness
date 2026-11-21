@@ -35,7 +35,8 @@ as defined there, and add a term there before using a new one.
    descriptions, and all Markdown. Preserve user input, quoted research
    material, and raw simulator output in their original language.
 2. **Communicate with the maintainer in Chinese.** Use Chinese for questions,
-   plans, progress updates, review findings, and handoffs. Keep code and
+   plans, progress updates, review findings, and handoffs. Keep each reply
+   short: the point in a few sentences, not long sections. Keep code and
    copy-ready repository text in English, also in chat.
 3. **Require approval before execution.** The agent may read files and search
    sources while drafting a plan. Before modifying experiment files or starting

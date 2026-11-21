@@ -27,16 +27,18 @@ history.
 - Six models: four Claude models and two DeepSeek models. [M5.1]
 - The terminal shows every step live and ends with run statistics, including
   an estimated cost. [M5.1]
-- Limits per task: 2 hours of active runtime and 500 LLM calls.
-- `make check` runs ruff and 218 offline tests; `make test-docker` runs 11
+- Per-task limits on active runtime and model calls, changed with
+  `--time-limit-seconds` and `--llm-call-limit`
+  ([values](project-spec.md#limits)).
+- `make check` runs ruff and 220 offline tests; `make test-docker` runs 11
   Docker tests and `make test-live` runs 9 tests against the model APIs and
   literature services.
 
 ## Broken or not verified
 
 - The harness has run only on macOS with Apple silicon and Docker Desktop.
-- Docker Desktop needs 12 GB of memory to parse a PDF beside a simulation
-  run; its default of 8 GB fits only one of them.
+- Docker Desktop's default memory fits a PDF parse or a simulation run, not
+  both at once; raise it as [Limits](project-spec.md#limits) says.
 - MinerU quality was measured on two arXiv papers only.
 - Semantic Scholar search has run only against a hand-written response; no
   key was available. Its venue names for FC, AFT, and ICBC are unchecked.

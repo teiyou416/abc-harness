@@ -41,6 +41,30 @@ def test_relative_links_resolve():
     assert not broken, "broken links:\n" + "\n".join(broken)
 
 
+
+def _anchors(doc: Path) -> set[str]:
+    """GitHub's heading anchors: lowercase, punctuation dropped, spaces as hyphens."""
+    anchors, fenced = set(), False
+    for line in doc.read_text(encoding="utf-8").splitlines():
+        if line.startswith("```"):
+            fenced = not fenced
+        elif not fenced and (m := re.match(r"#{1,6} (.+)", line)):
+            anchors.add(re.sub(r"[^\w\- ]", "", m.group(1).strip().lower()).replace(" ", "-"))
+    return anchors
+
+
+def test_anchors_resolve():
+    broken = []
+    for doc in RULEBOOK:
+        for target in LINK.findall(doc.read_text(encoding="utf-8")):
+            if target.startswith(("http://", "https://", "mailto:")) or "#" not in target:
+                continue
+            file, anchor = target.split("#", 1)
+            path = (doc.parent / file).resolve() if file else doc
+            if path.suffix == ".md" and path.exists() and anchor not in _anchors(path):
+                broken.append(f"{doc.relative_to(ROOT)} -> {target}")
+    assert not broken, "links to missing headings:\n" + "\n".join(broken)
+
 def test_every_doc_is_indexed():
     index = DOCS / "README.md"
     linked = {(DOCS / t.split("#", 1)[0]).resolve() for t in _local_links(index)}

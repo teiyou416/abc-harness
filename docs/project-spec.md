@@ -2,7 +2,7 @@
 
 ABC Harness turns a researcher's question into a reproducible blockchain simulation. From a local CLI, the researcher describes an idea, reviews the proposed experiment, and approves it. The agent then runs the experiment and returns a report linked to the underlying data.
 
-The first release supports idea-driven experiments with [SimBlock](https://github.com/dsg-titech/simblock) and the Bitcoin model of [BlockSim](https://github.com/maher243/BlockSim). [architecture.md](architecture.md) describes the system as built and which parts of the original design sketch the first release implements. [AGENTS.md](../AGENTS.md) defines the rules for changing this repository, and the [development plan](development-plan.md) defines the milestone order.
+The first release supports idea-driven experiments with [SimBlock](https://github.com/dsg-titech/simblock) and the Bitcoin model of [BlockSim](https://github.com/maher243/BlockSim). [architecture.md](architecture.md) describes the system as built. [AGENTS.md](../AGENTS.md) defines the rules for changing this repository, and the [development plan](development-plan.md) defines the milestone order.
 
 Terms such as task, plan version, simulation run, and citation are defined in the [glossary](glossary.md).
 
@@ -17,11 +17,30 @@ Terms such as task, plan version, simulation run, and citation are defined in th
 
 - Use one agent loop and a local CLI. The model client supports a fixed list of models from two providers behind one thin interface: Claude (Opus 5.5 by default, Sonnet 5.5, Haiku 5.5, Fable 5.2) and DeepSeek (`deepseek-v4-pro`, `deepseek-flash`), the latter through DeepSeek's Anthropic-compatible API. The researcher supplies each provider's API key in `.env`, which also holds any other external service key. A model that cannot see images (`deepseek-v4-pro`) cannot read figures or check its own figures; the tools say so instead of pretending.
 - Run the harness on the researcher's Mac. The initial target is an Apple M5 with 32 GB of memory. Simulators run in a local Docker container (see [Execution environment](#execution-environment)).
-- Apply two hard limits to each task: **2 hours of active runtime** and **500 LLM calls**. Active runtime excludes time spent waiting for the researcher and time spent parsing PDFs; the trace records both separately. The limit exists to stop a model that spins; a PDF parse is not model work, so it has its own timeout of 15 minutes per PDF instead. Every model call counts toward the call limit, including calls made for summarization or by any future sub-agent. Each model call, with its retries, may use only the task's remaining active time, and a response that arrives after the limit, even a final answer, leaves the task `stopped_by_limit`. Stop when either limit is reached and preserve partial results.
+- Apply two hard limits to each task, **active runtime** and **LLM calls**, with the values in [Limits](#limits). Active runtime excludes time spent waiting for the researcher and time spent parsing PDFs; the trace records both separately. The limit exists to stop a model that spins; a PDF parse is not model work, so it has its own timeout per PDF instead. Every model call counts toward the call limit, including calls made for summarization or by any future sub-agent. Each model call, with its retries, may use only the task's remaining active time, and a response that arrives after the limit, even a final answer, leaves the task `stopped_by_limit`. Stop when either limit is reached and preserve partial results.
 - Use the Human Interaction tool for clarification and plan approval. Bind approval to the displayed plan version.
 - Limit writes to the task workspace and the files explicitly permitted in the approved plan.
-- Keep the first release focused on literature-assisted experiment planning and execution. Full paper reproduction, additional simulators, a web interface, and sub-agents are future work.
+- Keep the first release focused on literature-assisted experiment planning and execution. Full paper reproduction, additional simulators (such as BlockEmulator), custom tools, a web interface, sub-agents, and LLM Ops beyond the trace and run statistics (an LLM judge, diagnosis of failed tasks, and release gates) are future work.
 - Deliberately not built: DBLP and IEEE Xplore search, BlockSim's Ethereum model, automatic retry of a failed simulation run (the report shows it as failed), and memory across conversations (a `MEMORY.md` or `USER.md`) or `SKILL.md` files.
+
+## Limits
+
+Every number that bounds a task lives in this table; other documents name the limit and link here. The code holds the same values, and the column "Set in" says where.
+
+| Limit | Value | Set in |
+|---|---|---|
+| Active runtime per task (waiting for the researcher and parsing PDFs excluded) | 2 hours; `--time-limit-seconds` changes it | `execution/limits.py` |
+| LLM calls per task, summary calls included | 500; `--llm-call-limit` changes it | `execution/limits.py` |
+| Output per model reply, thinking included | 65,536 tokens | `agent/model.py`, `agent/context.py` |
+| Soft context limit: compress before an input this large | 106,496 tokens | `agent/context.py` |
+| Hard context limit: input plus one full reply | 180,224 tokens | `agent/context.py` |
+| Reply of the summary call, thinking included | 32,768 tokens | `agent/context.py` |
+| Summary length | 1,500 words | `agent/prompts/compact.md` |
+| One tool result in the context window | 8,192 tokens | `agent/context.py` |
+| Simulation run and sandbox exec container | 2 CPUs, 4 GB of memory; each run's timeout is set by its plan | `execution/runner.py` |
+| PDF parse container | 6 CPUs, 6 GB of memory, 15-minute timeout | `execution/runner.py`, `literature/pdf.py` |
+| Figure script container | the simulation container's CPU and memory, 120-second timeout | `execution/figures.py` |
+| Docker Desktop memory | 12 GB, to parse a PDF beside a simulation run | the researcher's Docker settings |
 
 ## Simulator selection
 
@@ -33,7 +52,7 @@ Each supported simulator has a capability card in the repository. A card lists w
 - The researcher can approve, request changes with comments, or reject. A change request produces a new plan version that needs its own approval. A rejection ends the task without starting any simulator container.
 - The harness writes each decision to the artifact directory with the plan hash and version. The runner and sandbox exec refuse to start unless an approval for the current plan version exists.
 - A change to the simulator, parameters, metrics, permitted edits, validation check, or execution image requires a new plan version and fresh approval. Before the researcher sees a plan, the harness writes the execution image's ID into the plan's `execution_image` field, so the plan version covers the image. The agent cannot set this field. The runner starts only that image ID; if it no longer exists, the harness refuses to run and a new plan version is needed.
-- Retrying one simulation run once after a transient failure, with an unchanged configuration, does not require new approval. The trace records the retry.
+- Retrying one simulation run once after a transient failure, with an unchanged configuration, would not require new approval, and the trace would record the retry. The harness does not retry yet: a failed run is reported as failed.
 
 ## Permitted edits
 

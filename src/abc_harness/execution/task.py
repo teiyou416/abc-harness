@@ -341,7 +341,8 @@ class Task:
 
         timeout = min(plan.run_timeout_seconds, self.budget.remaining_seconds)
         limited_by_budget = timeout < plan.run_timeout_seconds
-        self.trace.event("run_started", run_id=spec.run_id, seed=spec.seed, params=spec.params, timeout_seconds=timeout)
+        self.trace.event("run_started", run_id=spec.run_id, plan_version=plan.version, seed=spec.seed,
+                         params=spec.params, timeout_seconds=timeout)
         image = plan.execution_image
         assert image is not None
         outcome = self.runner.run(image, self.task_id, spec.run_id, run_dir, simulator.command(), timeout)

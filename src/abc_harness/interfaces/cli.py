@@ -129,6 +129,8 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--runs-dir", type=Path, default=Path("runs"))
     summary = trace_sub.add_parser("summary", help="summarize model calls, tokens, tools, and errors")
     summary.add_argument("task_dir", type=Path, help="runs/<task_id>")
+    check = trace_sub.add_parser("check", help="verify execution order and reported metrics from saved artifacts")
+    check.add_argument("task_dir", type=Path, help="runs/<task_id>")
     return parser
 
 
@@ -205,6 +207,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "trace":
+        if args.trace_command == "check":
+            from abc_harness.execution.trace_check import check_task
+
+            verdict, lines = check_task(args.task_dir)
+            print("\n".join(lines))
+            return verdict
         print(json.dumps(summarize_trace(args.task_dir / "trace.jsonl"), indent=2, ensure_ascii=False))
         return 0
 

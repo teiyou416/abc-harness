@@ -21,6 +21,7 @@ Terms such as task, plan version, simulation run, and citation are defined in th
 - Use the Human Interaction tool for clarification and plan approval. Bind approval to the displayed plan version.
 - Limit writes to the task workspace and the files explicitly permitted in the approved plan.
 - Keep the first release focused on literature-assisted experiment planning and execution. Full paper reproduction, additional simulators, a web interface, and sub-agents are future work.
+- Deliberately not built: DBLP and IEEE Xplore search, BlockSim's Ethereum model, automatic retry of a failed simulation run (the report shows it as failed), and memory across conversations (a `MEMORY.md` or `USER.md`) or `SKILL.md` files.
 
 ## Simulator selection
 

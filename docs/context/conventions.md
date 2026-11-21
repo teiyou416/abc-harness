@@ -117,8 +117,8 @@ in `pyproject.toml`.
 | `AGENTS.md` | routing table, definitions, hard rules, checks, commands | 100 lines at most (test). Push detail down into the files below. |
 | `docs/project-spec.md` | goals, MVP boundaries, required behaviour, acceptance criteria | Changes only with a maintainer decision. |
 | `docs/architecture.md` | the system, and which module is which diagram box | Present tense. Fix a sentence in the same commit that makes it false. |
-| `docs/development-plan.md` | milestones in dependency order | Mark a milestone done when its acceptance passes. |
-| `docs/status.md` | what works, what is broken, what is next | Rewritten whole, never appended; 120 lines at most (test). |
+| `docs/development-plan.md` | milestones in dependency order, with what each delivered and how it was accepted | Mark a milestone done when its acceptance passes, and record its demonstration numbers there. |
+| `docs/status.md` | what works, what is broken or not verified, what is next | Rewritten whole, never appended; 120 lines at most (test). Demonstration numbers go to the milestone instead. |
 | `docs/context/conventions.md` | process, code layout, testing, git | Replace, never append. |
 | `docs/context/gotchas.md` | traps someone already stepped on | The only append-only file. Each entry has a date and a `Retire when:` (test); 40 entries at most (test). |
 

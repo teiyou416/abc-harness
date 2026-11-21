@@ -328,11 +328,3 @@ applies them.
   label, and a 120-second timeout.
 - Nothing is installed at runtime. A new dependency means a new image, which
   requires a new plan version and fresh approval.
-
-## Original design sketch
-
-[architecture.png](architecture.png) is the maintainer's first sketch of the
-long-term design, drawn before any code existed. It records directions beyond
-the MVP, such as LLM Ops evaluation and release gates and memory across tasks.
-It is not updated as the code changes: where it differs from this page, this
-page is correct, and the table above lists each box's status.

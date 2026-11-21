@@ -157,7 +157,7 @@ All four pass in `tests/test_context.py`. `make test-live` also forces one real 
 **Acceptance (passed offline and with Docker)**
 
 - `tests/test_pdf.py`: supplied PDFs are cited, table quotes are refused, parse failures end the task, parse time is excluded, and the cache is reused. `tests/test_docker.py` parses a hand-written PDF with the real image and checks the timeout cleanup.
-- Not yet run with the real model; see `docs/status.md`.
+- With the real model (2026-11-19 and 2026-11-20): Claude Opus 5.5, Claude Sonnet 5.5, and both DeepSeek models read `thesis/common_anchestor.pdf`. In task `20261119-225238-2fe4d9` (`deepseek-flash`), all 14 citations of the plan came from the supplied paper, the report labelled each quote as machine-recognized, and two were figure readings of its Figure 5. No table value has been cited from a real PDF yet.
 
 ## M5: Agent-written code in the task workspace (done 2026-11-19)
 
@@ -178,7 +178,33 @@ All four pass in `tests/test_context.py`. `make test-live` also forces one real 
 - Permitted edits: writes outside the permitted files, before approval, or outside the source tree are refused; a change slipped into the edited source behind the harness's back blocks the run; a failed validation check stops the task before any configuration and the report says why. Docker tests confirm that the sandbox cannot write the source, has no network route, and gets no API key.
 - With the real model, real source, and real literature search in `make test-live`, the selfish-mining question now produces a plan instead of a refusal: it permits one file (`Models/Bitcoin/BlockCommit.py`), cites Eyal and Sirer with checked quotes, and validates against their closed form at alpha 0.4 and gamma 0.5 (0.5256 ± 0.02, which a wrong gamma would miss).
 
-**Notes for M6.** The live plan above is a good starting point for the demonstration. Writing and validating the strategy has not yet run end to end with the real model.
+**Notes for M6.** The live plan above is a good starting point for the demonstration. The first end-to-end run with the real model was task `20261119-225238-2fe4d9` (`deepseek-flash`, 2026-11-19): it added the L-stubborn attack and a fork-choice rule to BlockSim, passed its validation check (0.4003 against an expected 0.4 ± 0.02, 5 seeds), ran all 8 configurations, and drew the revenue figure.
+
+## M5.1: Working tools (done 2026-11-20)
+
+Tools and controls added while preparing M6, after real tasks showed they were needed.
+
+**What the researcher can do.** Hold a conversation of tasks in the terminal, watch every step live, choose the model, and get result figures.
+
+**Delivered**
+
+- `tools/search_files.py`: lines by regular expression, or files by name, in the simulator source, the example plans, the task directory, and earlier tasks of the same conversation.
+- `tools/make_figure.py` and the plot image (`docker/plot/`, matplotlib with the `abcplot` helper): after a plan runs, the agent's script draws a static figure from the results; the agent sees the PNG and can redraw, and the report shows each figure with its caption and script.
+- `abc-harness chat` (`interfaces/chat.py`, `agent/session.py`): each request runs as its own task; the next task gets a harness-written account of the earlier ones and can read their files under `previous/`; Ctrl-C stops the running task; `/tasks`, `/paper`, `/model`, and `/new` manage the conversation. The command line moved to `interfaces/`.
+- Custom metrics: a plan with permitted edits can define metrics that the edited code prints as `ABC_METRIC <name>=<value>` lines, and built-in metrics are computed only when a plan asks for them.
+- Models: the list is fixed to `claude-opus-5-5` (default), `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-2`, `deepseek-v4-pro`, and `deepseek-flash`; DeepSeek runs through its Anthropic-compatible API with `DEEPSEEK_API_KEY`.
+- The terminal shows every model call with its thinking summary, tool call, plan decision, PDF parse, and simulation run as it happens, and ends with run statistics, including a cost estimate at list prices (DeepSeek's off-peak prices by the time of each call).
+- The default active-runtime limit is 2 hours instead of 30 minutes.
+
+**Test doubles:** `FakeRunner` gained the plot container and printed custom metrics; the chat loop runs from a scripted input sequence.
+
+**Acceptance (passed)**
+
+- Offline tests cover each item: `tests/test_search_files.py`, `test_figures.py`, `test_chat.py`, `test_metrics.py`, and `test_console.py`. `make test-docker` draws a real figure in the plot image.
+- Chat with the real model: a second task answered from the first one's results, with 8,052 of 8,380 input tokens served from the prompt cache.
+- Custom metrics fixed a real failure: a task that relabelled `orphan_rate` as the attacker's revenue share failed because the unused `t90_ms` could not be computed.
+- DeepSeek with real chat tasks (2026-11-19): 88 `deepseek-flash` calls and 61 `deepseek-v4-pro` calls returned thinking, tool calls, and the cache usage fields the cost estimate reads; `deepseek-v4-pro` averaged about 29 s per call.
+- The 30-minute limit stopped two paper reproductions (tasks `20261119-231750-318e68` and `20261120-102217-6a74bc`); the second had completed 132 of 216 runs.
 
 ## M6: MVP demonstration
 

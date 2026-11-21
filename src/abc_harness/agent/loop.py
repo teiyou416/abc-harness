@@ -153,6 +153,7 @@ class Agent:
 
     def _call_tool(self, tool_use: dict[str, Any]) -> dict[str, Any]:
         name, args = tool_use["name"], tool_use.get("input") or {}
+        self.task.trace.event("tool_started", name=name)
         handler = HANDLERS.get(name)
         started = time.monotonic()
         try:

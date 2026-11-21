@@ -73,8 +73,9 @@ with `--time-limit-seconds` and `--llm-call-limit` (defaults in
 During a task, one status line at the bottom of the terminal says what the
 task is doing now, such as `Thinking`, `Using read_file task/plan.json`, or
 `Running simulation 132/216`, with the task's elapsed time; it is redrawn in
-place, not scrolled. Milestones (plan decisions, the validation result, saved
-figures), retries, errors, and the final answer stay on screen above it. Use
+place, not scrolled. Each tool call (`● read_file task/plan.json`), milestones
+(plan decisions, the validation result, saved figures), retries, errors, and
+the final answer stay on screen above it. Use
 `--quiet` to hide live progress. See `trace.jsonl` and `history.md` for details. At the
 end, `ask` and `run` print the agent's summary and the run statistics: active
 and waiting time, model calls and tokens, an estimated cost at list prices

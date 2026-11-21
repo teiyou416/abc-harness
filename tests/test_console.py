@@ -36,9 +36,10 @@ def test_a_status_line_shows_the_current_action_and_milestones_stay(tmp_path):
         text_turn("Done."),
     ])  # fmt: skip
     assert result.status == "completed", result.stop_reason
-    # Lasting lines: the approval and the final answer, nothing per step.
-    assert len(lines) == 2 and lines[0].startswith("✓ Plan ") and "approved (4 runs)" in lines[0]
-    assert lines[1] == "Done."
+    # Lasting lines: each tool call, the approval, and the final answer; not each model call or run.
+    assert lines[:2] == ["● describe_simulator blocksim", "● propose_plan blocksim"]
+    assert lines[2].startswith("✓ Plan ") and "approved (4 runs)" in lines[2]
+    assert lines[3:] == ["● run_plan", "Done."]
     # The status line is redrawn in place (\r) and says what is happening now.
     drawn = [part.split(" · ")[0][2:] for part in screen.split("\r") if " · " in part]
     states = [s for i, s in enumerate(drawn) if i == 0 or s != drawn[i - 1]]

@@ -93,7 +93,7 @@ checks that every module appears in this table.
 | Entry | `interfaces/__init__.py` | Names the entry points of the package. |
 | Entry | `interfaces/cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `chat`, `trace summary`, `trace check`, `export`; shows plans and questions in the terminal. Holds no task logic. |
 | Entry | `interfaces/chat.py` | The `chat` loop: reads a line (prompt_toolkit, with history), runs slash commands, sends anything else to the chat session, and turns Ctrl-C during a task into stopping that task. |
-| Entry | `interfaces/console.py` | Shows a status line redrawn in place for the current action, with milestones, errors, and the final answer above it (`Console`) and the run statistics at the end of a task (`task_summary`). |
+| Entry | `interfaces/console.py` | Shows a status line redrawn in place for the current action, with each tool call, milestones, errors, and the final answer above it (`Console`) and the run statistics at the end of a task (`task_summary`). |
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
 | Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
 | Agent | `agent/session.py` | A chat session: runs each request as a new task, writes the earlier tasks into the next task's first message from their records, and logs the session in `runs/sessions/<id>/session.jsonl`. |

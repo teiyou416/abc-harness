@@ -233,6 +233,7 @@ class Task:
         path = self.artifact_dir / "plans" / f"{plan.short_version}.json"
         path.write_text(canonical_json(plan.data) + "\n", encoding="utf-8")
         self.trace.event("plan_proposed", plan_version=plan.version, runs=len(plan.runs()),
+                         validation_runs=len(plan.validation_runs()),
                          execution_image=plan.execution_image)  # fmt: skip
 
     def review(self, plan: Plan, decide: DecideFn) -> tuple[str, str]:

@@ -69,10 +69,12 @@ Each task stops at its limits on active runtime and model calls; change them
 with `--time-limit-seconds` and `--llm-call-limit` (defaults in
 [Limits](docs/project-spec.md#limits)).
 
-During a task, the terminal shows one short line when a model call, tool,
-PDF parse, or simulation starts. Retries and errors are shown as they happen.
-The plan review and final answer are shown in full. Use `--quiet` to hide
-live progress. See `trace.jsonl` and `history.md` for details. At the
+During a task, one status line at the bottom of the terminal says what the
+task is doing now, such as `Thinking`, `Using read_file task/plan.json`, or
+`Running simulation 132/216`, with the task's elapsed time; it is redrawn in
+place, not scrolled. Milestones (plan decisions, the validation result, saved
+figures), retries, errors, and the final answer stay on screen above it. Use
+`--quiet` to hide live progress. See `trace.jsonl` and `history.md` for details. At the
 end, `ask` and `run` print the agent's summary and the run statistics: active
 and waiting time, model calls and tokens, an estimated cost at list prices
 (`MODELS` in `src/abc_harness/agent/model.py`, from the official pricing page; not a bill), tool

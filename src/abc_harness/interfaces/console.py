@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
+import threading
+import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from abc_harness.agent.model import price_for
 from abc_harness.execution.trace import read_trace, summarize_trace
@@ -16,74 +19,186 @@ from abc_harness.execution.trace import read_trace, summarize_trace
 Write = Callable[[str], None]
 
 PREVIEW_CHARS = 200
+SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+# The tool argument that best says what a call is about, in this order.
+TARGET_KEYS = ("path", "pattern", "query", "command", "name", "simulator", "paper", "figure")
 
 
 class Console:
-    """Show concise progress from redacted trace events."""
+    """Live progress: one status line, redrawn in place, says what the task is doing now; milestones,
+    errors, and the final answer stay on screen above it. Details stay in trace.jsonl and history.md.
 
-    def __init__(self, write: Write = print, color: bool | None = None) -> None:
+    The status line is drawn only on a terminal (`live`); elsewhere only the lasting lines are written.
+    """
+
+    def __init__(self, write: Write = print, color: bool | None = None, live: bool | None = None,
+                 stream: TextIO | None = None, tick_seconds: float = 0.1) -> None:  # fmt: skip
         self.write = write
-        self.color = sys.stdout.isatty() and "NO_COLOR" not in os.environ if color is None else color
+        tty = sys.stdout.isatty()
+        self.color = tty and "NO_COLOR" not in os.environ if color is None else color
+        self.live = tty if live is None else live
+        self.stream = stream or sys.stdout
+        self.tick_seconds = tick_seconds
+        self.status = ""
+        self._lock = threading.RLock()
+        self._drawn = False
+        self._frame = 0
+        self._ticker: threading.Thread | None = None
+        self._task_started = time.monotonic()
+        self._pending_tools: list[dict[str, Any]] = []
+        self._runs = self._validation_runs = self._started_runs = 0
 
     def __call__(self, event: dict[str, Any]) -> None:
-        for line in describe_event(event):
-            self.print_line(line)
+        status, lines = self._describe(event)
+        with self._lock:
+            self._clear()
+            for line in lines:
+                self.write(self._paint(line))
+            if status is not None:
+                self.status = status
+            self._draw()
+        if self.status and self.live and self.tick_seconds and self._ticker is None:
+            self._ticker = threading.Thread(target=self._tick, daemon=True)
+            self._ticker.start()
 
     def print_line(self, line: str) -> None:
-        self.write(self._paint(line))
+        with self._lock:
+            self._clear()
+            self.write(self._paint(line))
+            self._draw()
+
+    def idle(self) -> None:
+        """Remove the status line, for example before the terminal reads input."""
+        with self._lock:
+            self._clear()
+            self.status = ""
+
+    def _tick(self) -> None:
+        while True:
+            time.sleep(self.tick_seconds)
+            with self._lock:
+                if self.status:
+                    self._frame += 1
+                    self._clear()
+                    self._draw()
+
+    def _clear(self) -> None:
+        if self._drawn:
+            self.stream.write("\r\033[K")
+            self.stream.flush()
+            self._drawn = False
+
+    def _draw(self) -> None:
+        if not (self.live and self.status):
+            return
+        elapsed = int(time.monotonic() - self._task_started)
+        clock = f"{elapsed // 60}m{elapsed % 60:02d}s" if elapsed >= 60 else f"{elapsed}s"
+        text = f"{SPINNER[self._frame % len(SPINNER)]} {self.status} · {clock}"
+        width = max(20, shutil.get_terminal_size().columns - 1)
+        text = text if len(text) <= width else text[: width - 1] + "…"
+        self.stream.write("\r" + (f"\033[36m{text[0]}\033[0m{text[1:]}" if self.color else text))
+        self.stream.flush()
+        self._drawn = True
 
     def _paint(self, line: str) -> str:
         if not self.color:
             return line
-        if line.startswith("PASS:"):
-            return "\033[32mPASS\033[0m" + line[4:]
+        if line.startswith(("PASS:", "✓")):
+            word = "PASS" if line.startswith("PASS:") else "✓"
+            return f"\033[32m{word}\033[0m" + line[len(word):]
         if line.startswith("!"):
             return f"\033[31m{line}\033[0m"
         return line
+
+    def _describe(self, e: dict[str, Any]) -> tuple[str | None, list[str]]:
+        """The new status line (None keeps the current one, "" removes it) and the lines that stay."""
+        kind = e.get("event")
+        if kind == "task_started":
+            self._task_started = time.monotonic()
+            self._pending_tools, self._started_runs = [], 0
+            return None, []
+        if kind in ("human_wait_started", "task_finished"):
+            return "", []
+        if kind == "model_call_started":
+            return ("Summarizing context" if e.get("purpose") == "summary" else "Thinking"), []
+        if kind == "model_retry":
+            return None, [(f"↻ {e.get('reason', '')} Retry {e.get('retry')}/{e.get('max_retries')} "
+                           f"in {e.get('delay_seconds', 0):.1f}s.")]  # fmt: skip
+        if kind == "model_call":
+            self._pending_tools = list(e.get("tool_uses") or [])
+            if e.get("stop_reason") == "end_turn" and not self._pending_tools and e.get("text"):
+                return "", [e["text"].strip()]
+            return None, []
+        if kind == "tool_started":
+            name = e.get("name", "")
+            target = ""
+            if self._pending_tools and self._pending_tools[0].get("name") == name:
+                target = _target(self._pending_tools.pop(0).get("input"))
+            return f"Using {name}" + (f" {target}" if target else ""), []
+        if kind == "tool_call" and e.get("is_error"):
+            return None, [f"! {e.get('tool', '')}: {_short(e.get('result', ''))}"]
+        if kind == "pdf_parse_started":
+            return f"Parsing {Path(str(e.get('pdf', ''))).name}", []
+        if kind == "sandbox_started":
+            return f"Sandbox: {_short(e.get('command', ''), 60)}", []
+        if kind == "sandbox_finished" and (e.get("timed_out") or e.get("exit_code") != 0):
+            reason = "timed out" if e.get("timed_out") else f"exited with code {e.get('exit_code')}"
+            return None, [f"! Sandbox command {reason}"]
+        if kind == "figure_started":
+            return f"Drawing figure {e.get('name', '')}", []
+        if kind == "figure_finished":
+            if e.get("ok"):
+                return None, [f"✓ Figure {e.get('name', '')} saved"]
+            return None, [f"! Figure {e.get('name', '')} failed: {_short(e.get('error', ''))}"]
+        if kind == "plan_proposed":
+            self._runs, self._validation_runs = e.get("runs") or 0, e.get("validation_runs") or 0
+            return None, []
+        if kind == "plan_decision":
+            self._started_runs = 0
+            return None, [_decision_line(e, self._runs, self._validation_runs)]
+        if kind == "run_started":
+            self._started_runs += 1
+            n = self._started_runs
+            if n <= self._validation_runs:
+                return f"Validation run {n}/{self._validation_runs}", []
+            n -= self._validation_runs
+            return (f"Running simulation {n}/{self._runs}" if self._runs else f"Running {e.get('run_id', '')}"), []
+        if kind == "run_finished" and e.get("status") != "completed":
+            detail = f": {_short(e['error'])}" if e.get("error") else ""
+            return None, [f"! Simulation {e.get('run_id', '')} {e.get('status')}{detail}"]
+        if kind == "validation_finished":
+            return None, ["✓ Validation passed" if e.get("passed") else "! Validation failed"]
+        if kind in ("pdf_parse_failed", "error", "cleanup_failed"):
+            return None, [f"! {kind.replace('_', ' ')}: {_short(e.get('error', ''))}"]
+        if kind == "limit_reached":
+            return None, [f"! Limit reached: {_short(e.get('detail', ''))}"]
+        return None, []
+
+
+def _decision_line(e: dict[str, Any], runs: int, validation_runs: int) -> str:
+    plan = f"Plan {str(e.get('plan_version', ''))[:12]}"
+    decision = e.get("decision")
+    if decision == "approve":
+        extra = f", {validation_runs} validation runs" if validation_runs else ""
+        return f"✓ {plan} approved ({runs} runs{extra})"
+    if decision == "revise":
+        return f"↺ {plan} sent back for revision"
+    return f"✗ {plan} {decision or 'rejected'}"
+
+
+def _target(args: Any) -> str:
+    if not isinstance(args, dict):
+        return ""
+    for key in TARGET_KEYS:
+        if isinstance(args.get(key), str) and args[key].strip():
+            return _short(args[key], 60)
+    return ""
 
 
 def _short(value: Any, limit: int = PREVIEW_CHARS) -> str:
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
     text = " ".join(text.split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
-def describe_event(e: dict[str, Any]) -> list[str]:
-    """Show an action when it starts, an error if it fails, and the final answer in full."""
-    kind = e.get("event")
-    if kind == "model_call_started":
-        action = "Summarizing context" if e.get("purpose") == "summary" else "Waiting for the model"
-        cap = e.get("connect_timeout_seconds")
-        if e.get("call") == 1 and cap is not None:
-            action += f" (connect timeout up to {cap:g}s)"
-        return [action]
-    if kind == "model_retry":
-        return [f"{e.get('reason', '')} Retry {e.get('retry')}/{e.get('max_retries')} in {e.get('delay_seconds', 0):.1f}s."]
-    if kind == "model_call" and e.get("stop_reason") == "end_turn" and not e.get("tool_uses") and e.get("text"):
-        return [e["text"].strip()]
-    if kind == "tool_started":
-        return [f"Using {_short(e.get('name', ''))}"]
-    if kind == "tool_call" and e.get("is_error"):
-        return [f"! {_short(e.get('tool', ''))}: {_short(e.get('result', ''))}"]
-    if kind == "pdf_parse_started":
-        return [f"Parsing {_short(e.get('pdf', ''))}"]
-    if kind == "run_started":
-        return [f"Running simulation {_short(e.get('run_id', ''))}"]
-    if kind == "run_finished" and e.get("status") != "completed":
-        detail = f": {_short(e['error'])}" if e.get("error") else ""
-        return [f"! Simulation {_short(e.get('run_id', ''))} {e.get('status')}{detail}"]
-    if kind == "validation_finished":
-        return ["Validation passed" if e.get("passed") else "! Validation failed"]
-    if kind == "sandbox_finished" and (e.get("timed_out") or e.get("exit_code") != 0):
-        reason = "timed out" if e.get("timed_out") else f"exited with code {e.get('exit_code')}"
-        return [f"! Sandbox command {reason}"]
-    if kind == "figure_finished" and not e.get("ok"):
-        return [f"! Figure failed: {_short(e.get('error', ''))}"]
-    if kind in ("pdf_parse_failed", "error", "cleanup_failed"):
-        return [f"! {kind.replace('_', ' ')}: {_short(e.get('error', ''))}"]
-    if kind == "limit_reached":
-        return [f"! Limit reached: {_short(e.get('detail', ''))}"]
-    return []
 
 
 def task_summary(task_dir: Path) -> list[str]:

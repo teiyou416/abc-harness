@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 
 from doubles.fake_runner import FakeRunner
@@ -18,14 +19,16 @@ SECRET = "sk-ant-console-secret"
 
 def run_watched(tmp_path, steps):
     lines: list[str] = []
+    screen = io.StringIO()
     model = ScriptedModel(steps)
+    watcher = console.Console(lines.append, color=False, live=True, stream=screen, tick_seconds=0)
     result = run_agent_task("Compare block intervals.", model, FakeRunner(), lambda q: "", lambda plan: ("approve", ""),
-                            runs_root=tmp_path / "runs", on_event=console.Console(lines.append, color=False))  # fmt: skip
-    return result, lines
+                            runs_root=tmp_path / "runs", on_event=watcher)  # fmt: skip
+    return result, lines, screen.getvalue()
 
 
-def test_console_shows_one_line_per_action_and_keeps_details_in_the_trace(tmp_path):
-    result, lines = run_watched(tmp_path, [
+def test_a_status_line_shows_the_current_action_and_milestones_stay(tmp_path):
+    result, lines, screen = run_watched(tmp_path, [
         tool_turn("describe_simulator", {"simulator": "blocksim"}, text="Checking BlockSim first.",
                   thinking="BlockSim models block intervals directly; check its card."),
         tool_turn("propose_plan", blocksim_plan()),
@@ -33,21 +36,38 @@ def test_console_shows_one_line_per_action_and_keeps_details_in_the_trace(tmp_pa
         text_turn("Done."),
     ])  # fmt: skip
     assert result.status == "completed", result.stop_reason
-    text = "\n".join(lines)
-    assert any("Waiting for the model" in line for line in lines)
-    assert lines.count("Using describe_simulator") == 1
-    assert lines.index("Using propose_plan") < lines.index("Using run_plan")
-    assert lines.index("Using run_plan") < lines.index("Running simulation base__seed-1")
-    assert lines.count("Done.") == 1
+    # Lasting lines: the approval and the final answer, nothing per step.
+    assert len(lines) == 2 and lines[0].startswith("✓ Plan ") and "approved (4 runs)" in lines[0]
+    assert lines[1] == "Done."
+    # The status line is redrawn in place (\r) and says what is happening now.
+    drawn = [part.split(" · ")[0][2:] for part in screen.split("\r") if " · " in part]
+    states = [s for i, s in enumerate(drawn) if i == 0 or s != drawn[i - 1]]
+    assert states[:2] == ["Thinking", "Using describe_simulator blocksim"]
+    assert "Using propose_plan blocksim" in states and "Running simulation 1/4" in states and "Running simulation 4/4" in states
+    assert screen.endswith("\r\033[K")  # removed when the task ends
     trace = (result.artifact_dir / "trace.jsonl").read_text()
     for detail in ("BlockSim models block intervals directly", "Checking BlockSim first.", "stale_rate"):
-        assert detail not in text and detail in trace
-    assert all("tokens" not in line for line in lines)
+        assert detail not in screen + "\n".join(lines) and detail in trace
+
+
+def test_off_a_terminal_only_the_lasting_lines_are_written(tmp_path):
+    lines: list[str] = []
+    run_agent_task("q", ScriptedModel([text_turn("Done.")]), FakeRunner(), lambda q: "", lambda p: ("approve", ""),
+                   runs_root=tmp_path / "runs", on_event=console.Console(lines.append, color=False, live=False))  # fmt: skip
+    assert lines == ["Done."]
+
+
+def test_the_status_line_is_removed_before_the_researcher_is_asked(tmp_path):
+    screen = io.StringIO()
+    watcher = console.Console(lambda line: None, color=False, live=True, stream=screen, tick_seconds=0)
+    watcher({"event": "model_call_started", "call": 1})
+    watcher({"event": "human_wait_started", "reason": "plan_review"})
+    assert screen.getvalue().endswith("\r\033[K") and watcher.status == ""
 
 
 def test_refused_tool_calls_are_marked(tmp_path):
-    _, lines = run_watched(tmp_path, [tool_turn("read_file", {"path": "/etc/passwd"}), text_turn("Stopping.")])
-    assert "Using read_file" in lines
+    _, lines, screen = run_watched(tmp_path, [tool_turn("read_file", {"path": "/etc/passwd"}), text_turn("Stopping.")])
+    assert "Using read_file /etc/passwd" in screen
     assert any(line.startswith("! read_file: ") and line != "! read_file: " for line in lines)
 
 
@@ -72,7 +92,7 @@ def test_summary_lists_run_statistics_not_results(tmp_path, write_plan):
 
 
 def test_agent_summary_counts_model_calls_tokens_and_tools(tmp_path):
-    result, _ = run_watched(tmp_path, [tool_turn("describe_simulator", {"simulator": "blocksim"}), text_turn("Done.")])
+    result, _, _ = run_watched(tmp_path, [tool_turn("describe_simulator", {"simulator": "blocksim"}), text_turn("Done.")])
     summary = "\n".join(console.task_summary(result.artifact_dir))
     assert "Model: 2 calls of 500" in summary and "tokens 200 in" in summary
     assert "Tools: describe_simulator 1; 0 refused or failed" in summary
@@ -102,7 +122,7 @@ def test_estimated_cost_prices_each_call_from_its_usage(tmp_path):
 
 
 def test_unknown_models_are_named_not_guessed(tmp_path):
-    result, _ = run_watched(tmp_path, [text_turn("Done.")])
+    result, _, _ = run_watched(tmp_path, [text_turn("Done.")])
     summary = "\n".join(console.task_summary(result.artifact_dir))
     assert "Estimated cost: unknown (no list price for scripted)" in summary
 

@@ -15,3 +15,5 @@ wheels/
 # Task artifacts and local secrets
 runs/
 .env
+
+thesis/

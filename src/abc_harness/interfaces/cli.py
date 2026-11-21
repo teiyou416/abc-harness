@@ -24,7 +24,7 @@ from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LI
 from abc_harness.execution.runner import DockerRunner, build_image
 from abc_harness.execution.task import TaskResult, run_task
 from abc_harness.execution.trace import summarize_trace
-from abc_harness.interfaces.chat import ModelControl, check_papers, run_chat, terminal_reader
+from abc_harness.interfaces.chat import ModelControl, run_chat, terminal_reader
 from abc_harness.interfaces.console import Console, task_summary
 from abc_harness.literature.pdf import PARSER_IMAGE
 from abc_harness.planning.plan import Plan, PlanError, load_plan
@@ -115,10 +115,8 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--effort", default=DEFAULT_EFFORT, choices=["low", "medium", "high", "xhigh", "max"])
         p.add_argument("--llm-call-limit", type=int, default=DEFAULT_LLM_CALL_LIMIT, help="per task")
         p.add_argument("--env-file", type=Path, default=DEFAULT_ENV_FILE, help="file holding API keys")
-        p.add_argument("--paper", type=Path, action="append", default=[], metavar="PDF",
-                       help="a paper the agent should read, as a PDF file; repeat for several")  # fmt: skip
         p.add_argument("--library", type=Path, default=DEFAULT_LIBRARY_DIR, metavar="DIR",
-                       help="local PDFs the agent may open when needed, parsed on first read (default: papers)")  # fmt: skip
+                       help="the local library: PDFs the agent may open; name a paper in your request to have it read (default: papers)")  # fmt: skip
         task_options(p)
 
     ask = sub.add_parser("ask", help="describe an experiment; the agent drafts a plan for your approval")
@@ -178,7 +176,7 @@ def _chat(
 
     print(f"ABC Harness chat with {model.name}.")
     models = ModelControl(lambda: current["model"].name, switch, available)
-    return run_chat(lambda: ChatSession(args.runs_dir, list(args.paper)), turn, read, show_answers=args.quiet,
+    return run_chat(lambda: ChatSession(args.runs_dir), turn, read, show_answers=args.quiet,
                     models=models)  # fmt: skip
 
 
@@ -234,10 +232,6 @@ def main(argv: list[str] | None = None) -> int:
         from abc_harness.agent.loop import run_agent_task
         from abc_harness.literature import HttpFetcher, Literature
 
-        problem = check_papers(args.paper)
-        if problem:
-            print(f"error: --paper {problem}", file=sys.stderr)
-            return 2
         secrets = Secrets.load(args.env_file, names=(*API_KEY_NAMES, S2_KEY))
 
         def key(name: str) -> str | None:
@@ -262,7 +256,6 @@ def main(argv: list[str] | None = None) -> int:
             redact=secrets.redact,
             literature=literature,
             on_start=_announce,
-            papers=args.paper,
             library_dir=args.library,
             on_event=None if args.quiet else Console(),
         )

@@ -156,7 +156,7 @@ def check_citations(ctx: ToolContext, citations: list[dict[str, str]]) -> list[s
     problems = []
     for c in citations:
         if ctx.library is None or c["paper"] not in ctx.library.papers:
-            problems.append(f"{c['paper']} was not returned by search_papers or supplied by the researcher in this task")
+            problems.append(f"{c['paper']} was not returned by search_papers or listed from the local library in this task")
         elif "figure" in c:
             if ctx.library.figure(c["paper"], c["figure"]) is None:
                 problems.append(f"{c['paper']} has no {c['figure']!r} in its saved full text")

@@ -69,16 +69,12 @@ _Avoid_: plotting container, matplotlib sandbox
 ## Evidence
 
 **Found paper**:
-A paper that a literature search returned during the task. Found papers and supplied papers are the only ones that can be cited.
+A paper that a literature search returned during the task. Found papers and library papers the agent opened are the only ones that can be cited.
 _Avoid_: source, reference
 
-**Supplied paper**:
-A paper the researcher hands to a task as a PDF file. It is parsed before the agent starts and can be cited like a found paper.
-_Avoid_: local paper, uploaded paper, attachment
-
 **Local library**:
-The researcher's folder of PDFs (`papers/` unless `--library` names another). The agent sees every PDF in it listed by file name, and the harness parses one only when the agent opens it. A library paper the agent opened can be cited like a supplied paper. When the researcher asks, or a paper supports an approved plan, the agent can keep a paper it read in the library with `save_paper`, named by its title; the library's `index.json` records its arXiv id and DOI and prevents keeping it twice.
-_Avoid_: paper folder, thesis folder
+The researcher's folder of PDFs (`papers/` unless `--library` names another). The agent sees every PDF in it listed by file name, and the harness parses one only when the agent opens it; the researcher points the agent at a paper by naming it in the request. A library paper the agent opened can be cited like a found paper. When the researcher asks, or a paper supports an approved plan, the agent can keep a paper it read in the library with `save_paper`, named by its title; the library's `index.json` records its arXiv id and DOI and prevents keeping it twice.
+_Avoid_: paper folder, thesis folder, supplied paper
 
 **PDF parser image**:
 The container image that turns one PDF into text, formulas, tables, and cropped figure images, without network. Its parse time does not count toward the task's time limit.
@@ -93,11 +89,11 @@ The venues every literature search starts from: FC, AFT, and ICBC. A broadened s
 _Avoid_: configured sources, default venues
 
 **Citation**:
-An entry in a plan that ties one found or supplied paper to the parameter, assumption, or metric it supports. Every citation rests on either a quote or a figure reading.
+An entry in a plan that ties one found or library paper to the parameter, assumption, or metric it supports. Every citation rests on either a quote or a figure reading.
 _Avoid_: reference, source
 
 **Quote**:
-A passage copied verbatim from a found or supplied paper's abstract or saved full text. The harness confirms it appears there, and refuses one taken from a table of machine-recognized text.
+A passage copied verbatim from a found or library paper's abstract or saved full text. The harness confirms it appears there, and refuses one taken from a table of machine-recognized text.
 _Avoid_: excerpt, snippet, evidence text
 
 **Figure reading**:

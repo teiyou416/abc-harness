@@ -14,7 +14,7 @@ FIRST_LINES = 15
 SPEC: dict[str, Any] = {
     "name": "read_paper",
     "description": "Open the full text of a paper found by search_papers (if it has an arXiv version) or "
-    "supplied by the researcher as a PDF or listed from their local library (parsed on first read). arXiv papers come from arXiv's HTML, or from the arXiv PDF parsed by "
+    "listed from the researcher's local library (a PDF, parsed on first read). arXiv papers come from arXiv's HTML, or from the arXiv PDF parsed by "
     "MinerU when there is no HTML; that can take a few minutes, which do not count toward the task's time limit. "
     "The harness saves the text as task/papers/<id>.txt and returns where it came from, the section outline "
     "with line numbers, and the figures (and, for PDFs, tables) you can view; read sections with read_file "
@@ -42,6 +42,8 @@ def run(ctx: ToolContext, args: dict[str, Any]) -> str:
     except FetchError as e:
         raise ToolError(f"could not fetch the full text: {e}") from e
     except PdfError as e:
+        if paper_id in ctx.library.shelf:
+            raise ToolError(f"the PDF could not be parsed: {e}") from e
         raise ToolError(f"arXiv has no HTML for this paper and its PDF could not be parsed: {e}") from e
     sections = "\n".join(outline(lines)) or "(no section headings found)"
     figures = "\n".join(f"- {f.label} (at line {f.line}): {f.caption[:160]}"

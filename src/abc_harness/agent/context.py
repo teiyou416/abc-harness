@@ -178,7 +178,7 @@ def task_state(task: Task, clarifications: list[tuple[str, str]], library: Libra
         lines += ["", "Clarification questions and the researcher's answers:"]
         lines += [f"- Q: {q}\n  A: {a}" for q, a in clarifications]
     if library is not None and library.papers:
-        lines += ["", "Papers found by search_papers or supplied by the researcher (only these can be cited):"]
+        lines += ["", "Papers found by search_papers or listed from the local library (only these can be cited, once read or found):"]
         for paper in library.papers.values():
             text = f"; full text in task/{library.full_texts[paper.id]}" if paper.id in library.full_texts else ""
             lines.append(f"- `{paper.id}`: {paper.title} ({paper.year}){text}")

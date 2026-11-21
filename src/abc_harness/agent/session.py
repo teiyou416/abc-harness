@@ -44,12 +44,11 @@ class Turn:
 
 
 class ChatSession:
-    def __init__(self, runs_root: Path, papers: list[Path] | None = None) -> None:
+    def __init__(self, runs_root: Path) -> None:
         self.runs_root = runs_root
         self.session_id = new_task_id()
         self.dir = runs_root / "sessions" / self.session_id
         self.dir.mkdir(parents=True)
-        self.papers: list[Path] = list(papers or [])
         self.turns: list[Turn] = []
 
     def run_turn(
@@ -77,7 +76,7 @@ class ChatSession:
         try:
             result = run_agent_task(
                 question, model, runner, ask, review, runs_root=self.runs_root, budget=budget(), redact=redact,
-                literature=literature, on_start=start, papers=self.papers, on_event=on_event,
+                literature=literature, on_start=start, on_event=on_event,
                 preface=self.preface(), previous_tasks={t.task_id: t.artifact_dir for t in self.turns},
                 session_id=self.session_id, library_dir=library_dir,
             )  # fmt: skip

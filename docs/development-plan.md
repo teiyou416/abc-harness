@@ -198,6 +198,7 @@ Tools and controls added while preparing M6, after real tasks showed they were n
 - Added 2026-11-21: `abc-harness trace check` (`execution/trace_check.py`, `execution/recompute.py`) audits a saved task offline: approval and validation before each run, and raw output against `results.json` and `report.md` (`tests/test_trace_check.py`).
 - Added 2026-11-21: each model connection attempt waits at most 5 seconds; transient failures are retried within the remaining task time, and the terminal shows each retry (`tests/test_context.py`).
 - Added 2026-11-21: the local library: PDFs in `papers/` (or `--library`) are listed in the first message and parsed only when the agent opens one with `read_paper` (`tests/test_pdf.py`).
+- Added 2026-11-22: `--paper` and `/paper` are gone; the researcher names a paper in the local library in the request, and the agent opens it with `read_paper`.
 - Added 2026-11-22: `save_paper` keeps a paper the agent read in the local library, optionally in a folder, as a PDF named by its title; `papers/index.json`, keyed by file content, records arXiv id and DOI, follows moved files, and blocks duplicates. Later tasks read a kept arXiv paper from arXiv's HTML; above 100 PDFs the terminal warns (`tests/test_pdf.py`).
 - Added 2026-11-21: the default model is `deepseek-flash`, chosen by the maintainer; `--model` still picks any listed model.
 

@@ -16,15 +16,12 @@ from pathlib import Path
 
 from abc_harness.agent.model import MODELS
 from abc_harness.agent.session import ChatSession, Turn
-from abc_harness.execution.runner import DockerRunner, RunnerError
 from abc_harness.interfaces.console import Write, task_summary
-from abc_harness.literature.pdf import PARSER_IMAGE
 
 Read = Callable[[str], str]
 PROMPT = "› "
 HELP = """Type a research request and press Enter (Alt+Enter for a new line). Each request runs as its own task.
   /tasks          list this conversation's tasks
-  /paper <pdf>    add a paper for the agent to read in every following task
   /model [name]   show the model, or switch the following tasks to another one
   /new            start a new conversation; the agent forgets the earlier tasks
   /help           show this help
@@ -41,28 +38,11 @@ class ModelControl:
     available: Callable[[], list[str]]
 
 
-def check_papers(papers: list[Path], parser_check: Callable[[], None] | None = None) -> str | None:
-    """Why the given PDF files cannot be used, or None. Checked before any task starts."""
-    for path in papers:
-        if not path.is_file():
-            return f"{path}: no such file"
-        with path.open("rb") as f:
-            if f.read(5) != b"%PDF-":
-                return f"{path}: not a PDF file"
-    if papers:
-        try:
-            (parser_check or (lambda: DockerRunner().image_info(PARSER_IMAGE)))()
-        except RunnerError:
-            return f"reading a PDF needs the PDF parser image {PARSER_IMAGE}; run `abc-harness image build --only pdf-parser`"
-    return None
-
-
 def run_chat(
     new_session: Callable[[], ChatSession],
     run_turn: Callable[[ChatSession, str], Turn],
     read: Read,
     write: Write = print,
-    parser_check: Callable[[], None] | None = None,
     show_answers: bool = False,
     models: ModelControl | None = None,
 ) -> int:
@@ -91,17 +71,9 @@ def run_chat(
                 write(_task_list(session))
             elif command == "/new":
                 session = new_session()
-                write(f"New conversation {session.session_id}; earlier tasks are forgotten. Papers are cleared too.")
+                write(f"New conversation {session.session_id}; earlier tasks are forgotten.")
             elif command == "/model":
                 write(_model_command(models, argument.strip()))
-            elif command == "/paper":
-                path = Path(argument.strip()).expanduser()
-                problem = check_papers([path], parser_check) if argument.strip() else "usage: /paper <file.pdf>"
-                if problem:
-                    write(f"! {problem}")
-                else:
-                    session.papers.append(path)
-                    write(f"Added {path.name}; every following task in this conversation reads it.")
             else:
                 write(f"! unknown command {command}; /help lists the commands")
             continue
@@ -123,8 +95,7 @@ def _task_list(session: ChatSession) -> str:
         return "No task yet in this conversation."
     rows = [f"{i}. {t.task_id}  {t.status}  {t.model}  {' '.join(t.question.split())[:60]}"
             for i, t in enumerate(session.turns, 1)]  # fmt: skip
-    papers = f"\nPapers: {', '.join(p.name for p in session.papers)}" if session.papers else ""
-    return "\n".join(rows) + papers
+    return "\n".join(rows)
 
 
 def _model_command(models: ModelControl | None, name: str) -> str:

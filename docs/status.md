@@ -16,15 +16,16 @@ history.
   proposes plans; the approved version runs. [M2, M3]
 - Long tasks compress their context and archive it in `history.md`. [M2.5]
 - The agent searches for papers, reads arXiv full texts, views figures, and
-  reads supplied PDFs parsed by MinerU, and opens papers from the local
-  library (`papers/`) on demand, and keeps papers there with `save_paper`; the harness checks every citation.
+  opens PDFs from the local library (`papers/`) on demand, parsed by
+  MinerU, and keeps papers there with `save_paper`; the harness checks every
+  citation.
   [M4, M4.1, M4.2]
 - With permitted edits, the agent changes simulator source in the sandbox,
   defines custom metrics, and must pass a validation check before any
   configuration runs; `abc-harness export` packages the edited source. [M5]
 - `make_figure` draws result figures in the plot image; `search_files`
   searches the source and task files; `chat` keeps a conversation of tasks
-  with `/tasks`, `/paper`, `/model`, and `/new`. [M5.1]
+  with `/tasks`, `/model`, and `/new`. [M5.1]
 - Six models: four Claude models and two DeepSeek models; `deepseek-flash`
   is the default. [M5.1]
 - The terminal shows a status line for the current action, each tool call,

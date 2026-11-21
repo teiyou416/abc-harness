@@ -59,7 +59,7 @@ flowchart TB
     ENV -->|optional S2 key| LIB
     TOOLS -->|search_papers, read_paper, save_paper, view_figure| LIB
     LIB <-->|HTTPS from the host| ACADEMIC(["OpenAlex, Semantic Scholar, arXiv"])
-    R -->|--paper or /paper PDF| LIB
+    R -->|PDFs in the local library| LIB
     LIB -->|parse a PDF, via the task| RUNNER
     LIB --> FILES
     LLM <-->|Messages API| CLAUDE(["Claude API"])
@@ -91,7 +91,7 @@ checks that every module appears in this table.
 | Layer (high to low) | File | What it does |
 |---|---|---|
 | Entry | `interfaces/__init__.py` | Names the entry points of the package. |
-| Entry | `interfaces/cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `chat`, `trace summary`, `trace check`, `export`; shows plans and questions in the terminal. Holds no task logic. |
+| Entry | `interfaces/cli.py` | Commands `image build`, `run`, `ask`, `chat`, `trace summary`, `trace check`, `export`; shows plans and questions in the terminal. Holds no task logic. |
 | Entry | `interfaces/chat.py` | The `chat` loop: reads a line (prompt_toolkit, with history), runs slash commands, sends anything else to the chat session, and turns Ctrl-C during a task into stopping that task. |
 | Entry | `interfaces/console.py` | Shows a status line redrawn in place for the current action, with each tool call, milestones, errors, and the final answer above it (`Console`) and the run statistics at the end of a task (`task_summary`). |
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
@@ -171,7 +171,7 @@ proposed plan in code before the researcher sees it, records each decision
 itself, and refuses `run_plan` for any plan version without a recorded
 approval. A rejection ends the task without another model call. A plan's
 citations pass only if each paper came from `search_papers` in the same task
-or was supplied by the researcher,
+or was opened from the local library,
 and its quote appears verbatim in the paper's abstract or saved full text or
 its figure reading names a figure the agent viewed, with an uncertainty.
 
@@ -184,9 +184,8 @@ agent remembers of the conversation is a block the harness writes from the
 earlier tasks' records (question, plan, results table, figures, the agent's
 final answer; the latest five in full), added to the new task's first
 message; the earlier artifact directories are readable at
-`previous/<task_id>/`. Papers must be found again in each task before they
-are cited; papers added with `/paper` or `--paper` are parsed into every task
-of the session (the parse cache makes this instant).
+`previous/<task_id>/`. Papers must be found or opened again in each task
+before they are cited; the parse cache makes reopening a library PDF instant.
 
 ## Data flow
 
@@ -200,9 +199,7 @@ of the session (the parse cache makes this instant).
    full texts. The harness performs every request from the host, so the
    execution images stay offline, and records each paper in `literature.json`.
    A full text comes from arXiv's HTML or, when there is none, from the arXiv
-   PDF parsed in the PDF parser image. PDFs the researcher supplies with
-   `ask --paper` are parsed before step 2 and listed in the first message.
-   PDFs in the local library (`--library`, default `papers/`) are listed
+   PDF parsed in the PDF parser image. PDFs in the local library (`--library`, default `papers/`) are listed
    there unparsed, with the title from an earlier parse if the parse cache
    has one; `read_paper` parses one when the agent opens it. Reading keeps
    nothing; `save_paper` copies a read paper's PDF into the library (or a

@@ -7,8 +7,9 @@ The library is the only record of what the agent found. It is saved to
 found paper, and a figure reading only if the agent viewed that figure.
 
 Full text comes from one of two tracks (`sources` records which): arXiv's
-HTML rendering, or a PDF parsed by MinerU. A PDF is either one the researcher
-supplied (`add_local`) or, when arXiv has no HTML for a paper, the arXiv PDF.
+HTML rendering, or a PDF parsed by MinerU. A PDF is either one from the
+researcher's local library (`shelve`, parsed on first read) or, when arXiv has
+no HTML for a paper, the arXiv PDF.
 """
 
 from __future__ import annotations
@@ -258,14 +259,6 @@ class Library:
         if self.notify:
             self.notify("library_paper_added", {"paper": paper_id, "file": path})
         return path, None
-
-    def add_local(self, path: Path) -> Paper:
-        """Add a PDF the researcher supplied: copy it into the task, parse it, and make it citable. Raises PdfError."""
-        if self.convert is None:
-            raise PdfError("this task has no PDF parser")
-        paper = self._register_local(path, path.name, "")
-        self._parse_local(paper.id, path, f"PDF supplied by the researcher ({path.name})")
-        return self.papers[paper.id]
 
     def shelve(self, path: Path, label: str, cached_output: Path | None = None,
                entry: dict[str, Any] | None = None) -> Paper:

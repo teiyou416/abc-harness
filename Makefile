@@ -21,7 +21,7 @@ test-docker:              ## tests that need a Docker daemon
 test-live:                ## tests that call a real model or API
 	uv run pytest -m live
 
-image:                    ## build the execution images of all simulators
+image:                    ## build every image: simulators, PDF parser, plot
 	uv run abc-harness image build
 
 example:                  ## review and run the M1 example plan

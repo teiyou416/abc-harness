@@ -8,6 +8,8 @@ everything that touches the artifact directory.
 from __future__ import annotations
 
 import difflib
+import hashlib
+import json
 import platform
 import secrets
 import shutil
@@ -25,9 +27,18 @@ from abc_harness.execution.report import write_json, write_report
 from abc_harness.execution.runner import Runner, RunnerError, RunOutcome
 from abc_harness.execution.trace import Trace
 from abc_harness.execution.workspace import Workspace
+from abc_harness.literature.pdf import (
+    OUTPUT_FILE,
+    PARSE_TIMEOUT_SECONDS,
+    PARSER_IMAGE,
+    ParseInfo,
+    PdfError,
+    figure_images,
+)
 from abc_harness.planning.approval import NotApproved, read_decisions, record_decision, require_approval
 from abc_harness.planning.plan import Plan, SimulationRunSpec, canonical_json, load_plan
 from abc_harness.simulators import SimulatorError, get_simulator
+from abc_harness.simulators.base import read_custom_metrics
 
 # A decision function shows the plan to the researcher and returns
 # ("approve" | "revise" | "reject", comment).
@@ -61,6 +72,7 @@ class TaskResult:
     status: str
     stop_reason: str
     runs: list[RunRecord]
+    summary: str | None = None  # the agent's final answer, if it wrote one
 
 
 def new_task_id() -> str:
@@ -74,15 +86,20 @@ class Task:
         runs_root: Path = Path("runs"),
         budget: Budget | None = None,
         redact: Callable[[str], str] | None = None,
+        pdf_cache: Path | None = None,
+        on_event: Callable[[dict[str, Any]], None] | None = None,
         **manifest_fields: Any,
     ) -> None:
         self.runner = runner
+        # Parsed PDFs, keyed by parser image and PDF content, shared by all tasks under runs_root.
+        self.pdf_cache = pdf_cache or runs_root / ".cache" / "pdf"
+        self.pdf_parses: list[dict[str, Any]] = []
         self.budget = budget or Budget()
         self.task_id = new_task_id()
         self.artifact_dir = runs_root / self.task_id
         self.artifact_dir.mkdir(parents=True)
         (self.artifact_dir / "plans").mkdir()
-        self.trace = Trace(self.artifact_dir / "trace.jsonl", redact=redact)
+        self.trace = Trace(self.artifact_dir / "trace.jsonl", redact=redact, listener=on_event)
         self.plans: dict[str, Plan] = {}
         self.executed: Plan | None = None
         self.records: list[RunRecord] = []
@@ -90,6 +107,7 @@ class Task:
         self.validation_records: list[RunRecord] = []
         self.validation: dict[str, Any] | None = None
         self.sandbox_calls = 0
+        self.figure_calls = 0
         self.workspace = Workspace(self.artifact_dir, runner)
         self.started_containers = False
         self.manifest: dict[str, Any] = {
@@ -151,12 +169,81 @@ class Task:
             raise LimitReached("time", f"active runtime ran out during sandbox command {self.sandbox_calls}")
         return outcome, str(log)
 
+    def cached_pdf_output(self, pdf: Path) -> Path | None:
+        """The parser output of an earlier parse of this PDF's bytes by the current parser image, if any."""
+        try:
+            image_id = self.runner.image_info(PARSER_IMAGE)["image_id"]
+            digest = hashlib.sha256(pdf.read_bytes()).hexdigest()
+        except (RunnerError, OSError):
+            return None
+        cache = self.pdf_cache / image_id.removeprefix("sha256:")[:16] / digest
+        return cache if (cache / "parse.json").exists() else None
+
+    def convert_pdf(self, pdf: Path, out_dir: Path) -> ParseInfo:
+        """Parse a PDF with the PDF parser image, or reuse an earlier parse of the same bytes by the same image.
+
+        The parse runs outside the active-runtime budget, under its own timeout. Raises PdfError.
+        """
+        try:
+            image_id = self.runner.image_info(PARSER_IMAGE)["image_id"]
+        except RunnerError as e:
+            raise PdfError(f"the PDF parser image {PARSER_IMAGE} is missing; run `abc-harness image build`") from e
+        digest = hashlib.sha256(pdf.read_bytes()).hexdigest()
+        cache = self.pdf_cache / image_id.removeprefix("sha256:")[:16] / digest
+        rel_pdf = _relative(pdf, self.artifact_dir)
+        if (cache / "parse.json").exists():
+            shutil.copytree(cache, out_dir, dirs_exist_ok=True)
+            meta = json.loads((cache / "parse.json").read_text(encoding="utf-8"))
+            info = ParseInfo(image_id, meta["revision"], meta["seconds"], True, digest)
+        else:
+            info = self._parse_pdf(pdf, rel_pdf, out_dir, image_id, digest)
+            _store_in_cache(out_dir, cache)
+        record = {"pdf": rel_pdf, "sha256": digest, "image_id": image_id, "revision": info.revision,
+                  "seconds": round(info.seconds, 3), "cached": info.cached}  # fmt: skip
+        self.pdf_parses.append(record)
+        self.trace.event("pdf_parse_finished", **record)
+        return info
+
+    def _parse_pdf(self, pdf: Path, rel_pdf: str, out_dir: Path, image_id: str, digest: str) -> ParseInfo:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        name = f"pdf-{len(self.pdf_parses) + 1}"
+        self.started_containers = True
+        self.trace.event("pdf_parse_started", pdf=rel_pdf, sha256=digest, image_id=image_id,
+                         timeout_seconds=PARSE_TIMEOUT_SECONDS)  # fmt: skip
+        with self.budget.parsing_pdf():
+            outcome = self.runner.convert_pdf(image_id, self.task_id, name, pdf, out_dir, PARSE_TIMEOUT_SECONDS)
+        (out_dir / "parser.log").write_text(outcome.output, encoding="utf-8")
+        log = _relative(out_dir / "parser.log", self.artifact_dir)
+        error = None
+        if outcome.timed_out:
+            error = f"the PDF parser did not finish within {PARSE_TIMEOUT_SECONDS // 60} minutes"
+        elif outcome.exit_code != 0 or not (out_dir / OUTPUT_FILE).exists():
+            error = f"the PDF parser failed (exit code {outcome.exit_code}); see task/{log}"
+        if error:
+            self.trace.event("pdf_parse_failed", pdf=rel_pdf, error=error,
+                             seconds=round(outcome.duration_seconds, 3))  # fmt: skip
+            raise PdfError(error)
+        try:
+            keep = figure_images(json.loads((out_dir / OUTPUT_FILE).read_text(encoding="utf-8")))
+        except (ValueError, AttributeError) as e:
+            raise PdfError(f"the PDF parser wrote unreadable output: {e}") from e
+        for image in (out_dir / "images").glob("*") if (out_dir / "images").is_dir() else []:
+            if f"images/{image.name}" not in keep:
+                image.unlink()
+        revision = next((line for line in reversed(outcome.output.splitlines()) if line.startswith("mineru ")),
+                        "unknown")  # fmt: skip
+        meta = {"image_id": image_id, "revision": revision, "seconds": round(outcome.duration_seconds, 3),
+                "pdf_sha256": digest}  # fmt: skip
+        (out_dir / "parse.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+        return ParseInfo(image_id, revision, outcome.duration_seconds, False, digest)
+
     def add_plan(self, plan: Plan) -> None:
         """Store a proposed plan version under plans/ so every version stays inspectable."""
         self.plans[plan.version] = plan
         path = self.artifact_dir / "plans" / f"{plan.short_version}.json"
         path.write_text(canonical_json(plan.data) + "\n", encoding="utf-8")
         self.trace.event("plan_proposed", plan_version=plan.version, runs=len(plan.runs()),
+                         validation_runs=len(plan.validation_runs()),
                          execution_image=plan.execution_image)  # fmt: skip
 
     def review(self, plan: Plan, decide: DecideFn) -> tuple[str, str]:
@@ -265,7 +352,8 @@ class Task:
 
         timeout = min(plan.run_timeout_seconds, self.budget.remaining_seconds)
         limited_by_budget = timeout < plan.run_timeout_seconds
-        self.trace.event("run_started", run_id=spec.run_id, seed=spec.seed, params=spec.params, timeout_seconds=timeout)
+        self.trace.event("run_started", run_id=spec.run_id, plan_version=plan.version, seed=spec.seed,
+                         params=spec.params, timeout_seconds=timeout)
         image = plan.execution_image
         assert image is not None
         outcome = self.runner.run(image, self.task_id, spec.run_id, run_dir, simulator.command(), timeout)
@@ -286,7 +374,11 @@ class Task:
             record.status, record.error = "failed", f"exit code {outcome.exit_code}"
         else:
             try:
-                record.metrics = simulator.compute_metrics(raw_dir, spec.params)
+                metrics = simulator.compute_metrics(raw_dir, spec.params, plan.builtin_metrics)
+                custom = [m for m in plan.metrics if m in plan.custom_metrics]
+                if custom and spec.edited:  # the original source cannot print custom metrics
+                    metrics.update(read_custom_metrics(raw_dir / "stdout.txt", custom))
+                record.metrics = metrics
                 record.status = "completed"
             except (SimulatorError, OSError, ValueError) as e:
                 record.status, record.error = "failed", f"output did not parse: {e}"
@@ -305,6 +397,10 @@ class Task:
             self.manifest["cleanup_error"] = error
             self.trace.event("cleanup_failed", error=error)
 
+    def write_results(self) -> None:
+        """Write results.json from the run records so far; figures read it before the task ends."""
+        write_json(self.artifact_dir / "results.json", [asdict(r) for r in self.records])
+
     def close(self, status: str, stop_reason: str) -> TaskResult:
         if self.started_containers:
             self._cleanup()
@@ -313,18 +409,20 @@ class Task:
             stop_reason=stop_reason,
             active_seconds=round(self.budget.active_seconds, 3),
             waiting_seconds=round(self.budget.waiting_seconds, 3),
+            pdf_parse_seconds=round(self.budget.parsing_seconds, 3),
+            pdf_parses=self.pdf_parses,
             limits={"time_limit_seconds": self.budget.time_limit_seconds, "llm_call_limit": self.budget.llm_call_limit},
             llm_calls=self.budget.llm_calls,
             plan_versions=list(self.plans),
         )
         write_json(self.artifact_dir / "manifest.json", self.manifest)
-        write_json(self.artifact_dir / "results.json", [asdict(r) for r in self.records])
+        self.write_results()
         plan = self.executed or (list(self.plans.values())[-1] if self.plans else None)
         write_report(self.artifact_dir, plan, self.records, self.manifest, self.summary)
         self.trace.event("task_finished", status=status, stop_reason=stop_reason,
                          active_seconds=self.budget.active_seconds, llm_calls=self.budget.llm_calls)  # fmt: skip
         self.trace.close()
-        return TaskResult(self.task_id, self.artifact_dir, status, stop_reason, self.records)
+        return TaskResult(self.task_id, self.artifact_dir, status, stop_reason, self.records, self.summary)
 
 
 def run_task(
@@ -334,10 +432,11 @@ def run_task(
     runs_root: Path = Path("runs"),
     budget: Budget | None = None,
     on_start: Callable[[Path], None] | None = None,
+    on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> TaskResult:
-    """Review and run a hand-written plan file (milestone M1)."""
+    """Review and run a hand-written plan file (milestone M1). `on_event` receives every trace event."""
     plan = load_plan(plan_path)
-    task = Task(runner, runs_root, budget, mode="plan_file", plan_file=str(plan_path))
+    task = Task(runner, runs_root, budget, on_event=on_event, mode="plan_file", plan_file=str(plan_path))
     if on_start:
         on_start(task.artifact_dir)
     shutil.copyfile(plan_path, task.artifact_dir / "plan.toml")
@@ -359,6 +458,23 @@ def run_task(
     finally:
         result = task.close(status, stop_reason)
     return result
+
+
+def _relative(path: Path, root: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(root.resolve()))
+    except ValueError:
+        return str(path)
+
+
+def _store_in_cache(out_dir: Path, cache: Path) -> None:
+    """Copy a finished parse into the cache. Another task may store the same parse first; either copy is fine."""
+    staging = cache.with_name(f".{cache.name}.{secrets.token_hex(4)}")
+    shutil.copytree(out_dir, staging)
+    try:
+        staging.rename(cache)
+    except OSError:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def _save_diff(original_root: Path, changed_root: Path, files: list[str], dest: Path) -> str:

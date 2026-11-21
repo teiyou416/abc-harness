@@ -8,12 +8,12 @@ import subprocess
 import pytest
 from doubles.fake_runner import FakeClock, FakeRunner
 
-from abc_harness import cli
 from abc_harness.execution import runner as runner_module
 from abc_harness.execution.limits import Budget
 from abc_harness.execution.runner import RunnerError
 from abc_harness.execution.task import run_task
 from abc_harness.execution.trace import read_trace
+from abc_harness.interfaces import cli
 from abc_harness.planning.approval import NotApproved, read_decisions, require_approval
 from abc_harness.planning.plan import Plan, load_plan
 from abc_harness.simulators.simblock import SimBlock

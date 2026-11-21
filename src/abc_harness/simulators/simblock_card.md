@@ -27,7 +27,7 @@ Paths are relative to the source root, as permitted edits name them. Read them w
 
 ## Cost
 
-- **SB-C1** One simulation run with 300 nodes and 100 blocks takes about 2 seconds in the execution image, including compilation. Run time grows with nodes times blocks. Keep a whole plan well inside the 30-minute task limit, and set `run_timeout_seconds` to a few times the expected run time.
+- **SB-C1** One simulation run with 300 nodes and 100 blocks takes about 2 seconds in the execution image, including compilation. Run time grows with nodes times blocks. Keep a whole plan well inside the task's limits, stated in your first message, and set `run_timeout_seconds` to a few times the expected run time.
 
 ## Metrics
 

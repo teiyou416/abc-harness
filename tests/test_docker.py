@@ -158,3 +158,119 @@ def test_sandbox_timeout_removes_the_container(runner, tmp_path):
     outcome = runner.sandbox(IMAGE, task_id, "sandbox-1", tmp_path / "s", tmp_path, "echo started; sleep 120", 3)
     assert outcome.timed_out
     assert running_containers(task_id) == []
+
+
+@pytest.fixture(scope="module")
+def pdf_runner() -> DockerRunner:
+    from abc_harness.literature.pdf import PARSER_IMAGE
+
+    runner = DockerRunner()
+    try:
+        runner.image_info(PARSER_IMAGE)
+    except (RuntimeError, FileNotFoundError):
+        pytest.skip("PDF parser image missing; run `uv run abc-harness image build --only pdf-parser`")
+    return runner
+
+
+def test_real_pdf_parser_reads_a_pdf_offline_and_is_cached(pdf_runner, tmp_path, monkeypatch):
+    from abc_harness.execution.task import Task
+    from abc_harness.literature import Library
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", SECRET)
+    task = Task(pdf_runner, tmp_path / "runs")
+    library = Library(task.artifact_dir, None, task.convert_pdf)
+    paper = library.add_local(ROOT / "tests" / "fixtures" / "pdf" / "handwritten.pdf")
+    assert paper.title == "A Tiny Paper About Selfish Mining"
+    assert library.locate(paper.id, "Selfish mining lets a pool earn more than its fair share of the blocks.")
+    assert task.pdf_parses[0]["revision"].startswith("mineru 4.2.3; models MinerU-4_models_onnx@")
+    assert running_containers(task.task_id) == []
+    log = (task.artifact_dir / "papers" / "local-handwritten" / "pdf" / "parser.log").read_text()
+    assert SECRET not in log
+    again = Task(pdf_runner, tmp_path / "runs")
+    Library(again.artifact_dir, None, again.convert_pdf).add_local(ROOT / "tests" / "fixtures" / "pdf" / "handwritten.pdf")
+    assert again.pdf_parses[0]["cached"] is True
+
+
+def test_pdf_parser_timeout_removes_the_container(pdf_runner, tmp_path):
+    from abc_harness.literature.pdf import PARSER_IMAGE
+
+    task_id = new_task_id()
+    image = pdf_runner.image_info(PARSER_IMAGE)["image_id"]
+    out = tmp_path / "out"
+    out.mkdir()
+    outcome = pdf_runner.convert_pdf(image, task_id, "pdf-1", ROOT / "tests" / "fixtures" / "pdf" / "handwritten.pdf",
+                                     out, timeout_seconds=1)  # fmt: skip
+    assert outcome.timed_out
+    assert running_containers(task_id) == []
+
+
+@pytest.fixture(scope="module")
+def plot_runner() -> DockerRunner:
+    from abc_harness.execution.figures import PLOT_IMAGE
+
+    runner = DockerRunner()
+    try:
+        runner.image_info(PLOT_IMAGE)
+    except (RuntimeError, FileNotFoundError):
+        pytest.skip("plot image missing; run `uv run abc-harness image build --only plot`")
+    return runner
+
+
+def _task_with_results(runner, tmp_path):
+    from abc_harness.execution.task import RunRecord, Task
+
+    task = Task(runner, tmp_path / "runs")
+    plan = {"configurations": [{"name": "base"}, {"name": "slow", "params": {"delay": 60}}], "baseline": {"delay": 1},
+            "metrics": ["stale_rate"]}  # fmt: skip
+    (task.artifact_dir / "plan.json").write_text(json.dumps(plan))
+    task.records = [RunRecord(f"{c}__seed-{s}", c, s, {}, status="completed", metrics={"stale_rate": v})
+                    for c, s, v in [("base", 1, 0.01), ("base", 2, 0.012), ("slow", 1, 0.05), ("slow", 2, 0.058)]]  # fmt: skip
+    return task
+
+
+def test_real_plot_image_draws_from_the_results(plot_runner, tmp_path):
+    from abc_harness.execution.figures import draw
+    from abc_harness.literature.figures import image_size
+
+    script = """import abcplot
+abcplot.use_style()
+stats = abcplot.summary("stale_rate")
+print(stats)
+fig, ax = abcplot.figure()
+names = list(stats)
+ax.errorbar(range(len(names)), [stats[n][0] for n in names], yerr=[stats[n][1] for n in names], fmt="o")
+ax.set_xticks(range(len(names)), names)
+ax.set_ylabel("Stale rate (fraction of blocks)")
+abcplot.save(fig)
+"""
+    task = _task_with_results(plot_runner, tmp_path)
+    drawn = draw(task, "stale-rate", script, "Stale rate; mean ± sd over 2 seeds.")
+    assert "'base': (0.011" in drawn.output and "'slow': (0.054" in drawn.output and "2)" in drawn.output
+    width, _ = image_size(drawn.png_bytes)
+    assert 600 <= width <= 700  # 3.25 in at 200 dpi, tight bounding box
+    assert (task.artifact_dir / "figures" / "stale-rate.svg").read_text().startswith("<?xml")
+    assert running_containers(task.task_id) == []
+
+
+def test_plot_scripts_cannot_write_data_or_reach_the_network(plot_runner, tmp_path, monkeypatch):
+    from abc_harness.execution.figures import FigureError, draw
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", SECRET)
+    script = """import os, socket
+assert "ANTHROPIC_API_KEY" not in os.environ
+try:
+    open("/data/results.json", "w")
+    raise SystemExit("data was writable")
+except OSError:
+    pass
+try:
+    socket.create_connection(("1.1.1.1", 53), timeout=2)
+    raise SystemExit("network reachable")
+except OSError:
+    pass
+print("sealed")
+"""
+    task = _task_with_results(plot_runner, tmp_path)
+    with pytest.raises(FigureError, match="wrote no /out/figure.png"):
+        draw(task, "probe", script, "probe")
+    assert (task.artifact_dir / "figures" / "probe.log").read_text().strip() == "sealed"

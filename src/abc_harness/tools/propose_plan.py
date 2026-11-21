@@ -23,7 +23,24 @@ PLAN_SCHEMA: dict[str, Any] = {
             "description": "Why this simulator fits, citing capability card entry IDs, plus assumptions and limits.",
         },
         "seeds": {"type": "array", "items": {"type": "integer"}, "description": "Distinct integer seeds."},
-        "metrics": {"type": "array", "items": {"type": "string"}},
+        "metrics": {"type": "array", "items": {"type": "string"}, "description": "Built-in metrics from the "
+                    "capability card, and any custom_metrics you define."},
+        "custom_metrics": {
+            "type": "array",
+            "description": "Only with permitted_edits, when the question needs a quantity no built-in metric "
+            "measures (for example the attacker's revenue share). Each has a new name and a precise definition; "
+            "your edited source prints one line 'ABC_METRIC <name>=<value>' to stdout at the end of each run, and "
+            "the harness reads it. Never give a built-in metric a new meaning instead.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Lowercase letters, digits, _; e.g. attacker_revenue_share."},
+                    "definition": {"type": "string", "description": "What is counted and divided by what, e.g. "
+                                   "'blocks mined by the pool on the final main chain / all main-chain blocks'."},
+                },
+                "required": ["name", "definition"],
+            },
+        },
         "run_timeout_seconds": {"type": "integer", "description": "Timeout for one simulation run."},
         "baseline": {"type": "object", "description": "Parameters shared by every configuration."},
         "permitted_edits": {
@@ -139,13 +156,16 @@ def check_citations(ctx: ToolContext, citations: list[dict[str, str]]) -> list[s
     problems = []
     for c in citations:
         if ctx.library is None or c["paper"] not in ctx.library.papers:
-            problems.append(f"{c['paper']} was not returned by search_papers in this task")
+            problems.append(f"{c['paper']} was not returned by search_papers or supplied by the researcher in this task")
         elif "figure" in c:
             if ctx.library.figure(c["paper"], c["figure"]) is None:
                 problems.append(f"{c['paper']} has no {c['figure']!r} in its saved full text")
             elif not any(label.lower() == c["figure"].strip().lower()
                          for label in ctx.library.viewed.get(c["paper"], {})):  # fmt: skip
                 problems.append(f"{c['figure']} of {c['paper']} was not viewed with view_figure in this task")
+        elif ctx.library.in_pdf_table(c["paper"], c["quote"]):
+            problems.append(f"the quote for {c['paper']} comes from a table recognized from the PDF, whose numbers "
+                            "may be wrong; view the table with view_figure and cite the value as a figure reading")  # fmt: skip
         elif ctx.library.locate(c["paper"], c["quote"]) is None:
             where = "its abstract or saved full text" if c["paper"] in ctx.library.full_texts else "its abstract"
             problems.append(f"the quote for {c['paper']} does not appear verbatim in {where} "

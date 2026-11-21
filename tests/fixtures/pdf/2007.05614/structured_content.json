@@ -1,0 +1,808 @@
+{
+ "pages": [
+  {
+   "page_idx": 0,
+   "blocks": [
+    {
+     "type": "aside_text",
+     "bbox": [
+      0.023,
+      0.264,
+      0.059,
+      0.706
+     ],
+     "content": "arXiv:2007.05614v2 [cs.CR] 15 Sep 2020"
+    },
+    {
+     "type": "doc_title",
+     "bbox": [
+      0.133,
+      0.101,
+      0.866,
+      0.126
+     ],
+     "level": 1,
+     "content": "Efficient MDP Analysis for Selfish-Mining in Blockchains"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.182,
+      0.141,
+      0.283,
+      0.172
+     ],
+     "content": "Roi Bar-Zur Technion"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.459,
+      0.14,
+      0.541,
+      0.173
+     ],
+     "content": "Ittay Eyal Technion"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.72,
+      0.141,
+      0.818,
+      0.173
+     ],
+     "continues_prev": true,
+     "content": "Aviv Tamar Technion"
+    },
+    {
+     "type": "paragraph_title",
+     "bbox": [
+      0.085,
+      0.179,
+      0.186,
+      0.194
+     ],
+     "level": 2,
+     "content": "ABSTRACT"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.198,
+      0.484,
+      0.282
+     ],
+     "content": "A proof of work (PoW) blockchain protocol distributes rewards to its participants, called miners, according to their share of the total computational power. Sufficiently large miners can perform selfish mining – deviate from the protocol to gain more than their fair share. Such systems are thus secure if all miners are smaller than a threshold size so their best response is following the protocol."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.282,
+      0.484,
+      0.379
+     ],
+     "content": "To find the threshold, one has to identify the optimal strategy for miners of different sizes, i.e., solve a Markov Decision Process (MDP). However, because of the PoW difficulty adjustment mechanism, the miners’ utility is a non-linear ratio function. We therefore call this an Average Reward Ratio (ARR) MDP. Sapirshtein et al. were the first to solve ARR MDPs by solving a series of standard MDPs that converge to the ARR MDP solution."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.378,
+      0.485,
+      0.503
+     ],
+     "content": "In this work, we present a novel technique for solving an ARR MDP by solving a single standard MDP. The crux of our approach is to augment the MDP such that it terminates randomly, within an expected number of rounds. We call this Probabilistic Termination Optimization (PTO), and the technique applies to any MDP whose utility is a ratio function. We bound the approximation error of PTO – it is inversely proportional to the expected number of rounds before termination, a parameter that we control. Empirically, PTO’s complexity is an order of magnitude lower than the state of the art."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.084,
+      0.503,
+      0.485,
+      0.532
+     ],
+     "content": "PTO can be easily applied to different blockchains. We use it to tighten the bound on the threshold for selfish mining in Ethereum."
+    },
+    {
+     "type": "paragraph_title",
+     "bbox": [
+      0.085,
+      0.542,
+      0.223,
+      0.557
+     ],
+     "level": 2,
+     "content": "CCS CONCEPTS"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.084,
+      0.561,
+      0.485,
+      0.59
+     ],
+     "content": "• **Security and privacy** → **Distributed systems security**; • **Theory of computation** → **Markov decision processes**."
+    },
+    {
+     "type": "paragraph_title",
+     "bbox": [
+      0.085,
+      0.6,
+      0.192,
+      0.615
+     ],
+     "level": 2,
+     "content": "KEYWORDS"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.084,
+      0.619,
+      0.485,
+      0.648
+     ],
+     "content": "Blockchain, Cryptocurrency, Markov Decision Process, Selfish Mining, Bitcoin, Ethereum, Proof of Work, Optimal Selfish Mining"
+    },
+    {
+     "type": "paragraph_title",
+     "bbox": [
+      0.085,
+      0.652,
+      0.232,
+      0.664
+     ],
+     "level": 2,
+     "content": "ACM Reference Format:"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.664,
+      0.484,
+      0.716
+     ],
+     "content": "Roi Bar-Zur, Ittay Eyal, and Aviv Tamar. 2020. Efficient MDP Analysis for Selfish-Mining in Blockchains. In 2nd ACM Conference on Advances in Financial Technologies (AFT ’20), October 21–23, 2020, New York, NY, USA. ACM, New York, NY, USA, 19 pages. [https://doi.org/10.1145/3419614.3423264](https://doi.org/10.1145/3419614.3423264)"
+    },
+    {
+     "type": "paragraph_title",
+     "bbox": [
+      0.085,
+      0.726,
+      0.258,
+      0.741
+     ],
+     "level": 2,
+     "content": "1 INTRODUCTION"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.084,
+      0.745,
+      0.484,
+      0.775
+     ],
+     "content": "Proof of Work [5, 13] Blockchain Protocols secure about 80% of the cryptocurrency market cap [4], including Bitcoin [15] and"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.181,
+      0.916,
+      0.334
+     ],
+     "continues_prev": true,
+     "content": "Ethereum [2]. The operators of blockchains, called miners, aggregate user transactions in blocks, and order the blocks by forming a block chain. These are decentralized protocols, allowing anyone to join and add blocks by proving she has performed some amount of work – a computational task. We call the rate of work expended by each miner its mining power and normalize the sum of all rates to one. An attacker can thus violate the system guarantees only if she performs more work than all other participants combined, i.e., if its mining power is larger than 50%. With no central enforcement, the security of a PoW blockchain relies critically on the fact that the best response of each miner is to follow the prescribed protocol."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.334,
+      0.916,
+      0.458
+     ],
+     "content": "To incentivize the miners to follow the protocol, it rewards them with cryptocurrency tokens for their efforts. Moreover, the rewards incentivize entities to join the system, become miners, and work for the rewards [6, 21]. To regulate block generation rate, the protocol automatically adjusts the difficulty, i.e., the amount of work necessary to produce each block such that the average block rate remains constant. Therefore, if all miners follow the protocol, they each receive in expectation a fraction of the total reward equal to their mining power."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.458,
+      0.917,
+      0.652
+     ],
+     "content": "The security of a blockchain protocol is thus defined by the minimal (threshold) mining power above which a miner can increase her revenue by deviating from the prescribed protocol [7, 14, 16, 17, 19]. In order to calculate the security threshold, we would like to find the smallest miner size such that its optimal strategy is not the pre-scribed one. A natural approach is to model the system as a Markov Decision Process. This is a Markov Process where in each state the agent (miner) chooses an action, probabilistically transitioning the system into a new state. The utility of the miners is their fraction of the reward ratio due to the difficulty adjustment, i.e., a non-linear utility function. We call this an Average Reward-Ratio MDP (ARR-MDP). Unfortunately, standard MDP solution techniques are not compatible with the non-linear utility in ARR-MDP, calling for new solution methods."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.652,
+      0.916,
+      0.763
+     ],
+     "content": "To the best of our knowledge, Sapirshtein et al. [19] were the first to solve an ARR-MDP (§2). Their approach is to devise a parametrized linear utility function for the original MDP. They perform a binary search for the value of the parameter: For each value they solve the MDP, finding the optimal strategy for the utility function. The search converges towards a parameter for which the optimal strategy for the original ARR utility function coincides with the optimal strategy for the parametrized utility function."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.763,
+      0.918,
+      0.889
+     ],
+     "content": "In this work, we propose a novel technique (§4), called Probabilistic Termination Optimization (PTO), to solve an ARR-MDP by transforming it to a conventional MDP, which we call PT-MDP. The form of the utility in ARR-MDP is a ratio between the miner’s reward and a value determined by the protocol’s adjustment scheme. For example, in Bitcoin, the miner’s reward is the number of her blocks divided by the total number of blocks mined by the whole network [7, 16, 19]. Thus, ARR-MDP can be thought of as a repetitive process divided to epochs, where each epoch contributes a"
+    },
+    {
+     "type": "footer",
+     "bbox": [
+      0.083,
+      0.781,
+      0.483,
+      0.897
+     ],
+     "content": "Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org. AFT ’20, October 21–23, 2020, New York, NY, USA © 2020 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-1-4503-8139-0/20/10. . . \\$15.00 [https://doi.org/10.1145/3419614.3423264](https://doi.org/10.1145/3419614.3423264)"
+    }
+   ]
+  },
+  {
+   "page_idx": 7,
+   "blocks": [
+    {
+     "type": "header",
+     "bbox": [
+      0.084,
+      0.076,
+      0.323,
+      0.088
+     ],
+     "content": "AFT ’20, October 21–23, 2020, New York, NY, USA"
+    },
+    {
+     "type": "header",
+     "bbox": [
+      0.794,
+      0.076,
+      0.915,
+      0.089
+     ],
+     "content": "Bar-Zur, Eyal and Tamar"
+    },
+    {
+     "type": "paragraph_title",
+     "bbox": [
+      0.084,
+      0.106,
+      0.245,
+      0.121
+     ],
+     "level": 2,
+     "content": "6.1 Bitcoin Model"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.082,
+      0.125,
+      0.484,
+      0.167
+     ],
+     "content": "The ARR-MDP for bitcoin is similar to the model of Sapirshtein et al. [19]. We first describe 3 important parameters for the model, then describe the action space, the state space and the transitions."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.167,
+      0.485,
+      0.209
+     ],
+     "content": "As in a general blockchain protocol, there is a rational miner who wants to maximize her revenue. The rest of the network is represented by honest miners who follow the prescribed protocol."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.082,
+      0.208,
+      0.485,
+      0.278
+     ],
+     "content": "We assume the objective function is the ratio between the number of blocks of the rational miner and the total number of blocks of the entire network. Because Bitcoin is a PoW blockchain, the relative mining power determines the probability of the miner to mine a new block. We denote this parameter $\\alpha \\in [ 0 , \\textstyle { \\frac { 1 } { 2 } } )$"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.082,
+      0.277,
+      0.485,
+      0.415
+     ],
+     "content": "The Bitcoin protocol specifies that in the case of a tie in the longest chain rule, the tie is decided in favor of the first chain the miner saw. In case of a tie between the rational miner’s chain and some other chain, we assume the rational miner’s block is received first by a fraction $\\gamma \\in [ 0 ,$ 1] of the network. This is called the rushing level of the miner and determines what fraction of the honest miners will keep mining on top of the rational miner’s chain. This determines the probability that the next block will be mined on top of the miner’s chain and then her chain will be chosen by all."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.082,
+      0.416,
+      0.484,
+      0.485
+     ],
+     "content": "We assume that the miner mines on a single secret chain and that the miner will not choose to challenge blocks before the last fork – the blocks following the last block common to both the miner’s chain and the current public chain, as in [19]. We also assume forks between honest miners never occur as in [7, 16, 19]."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.082,
+      0.485,
+      0.484,
+      0.57
+     ],
+     "content": "Denote by a the length of the miner’s secret chain. Denote by h the number of blocks in the public chain since the last fork. In order to obtain a finite state space MDP, we cannot consider all possible strategies of the rational miner. We assume there is a maximum possible length for both a and h as in [19]. We call this bound the maximum fork length."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.587,
+      0.484,
+      0.615
+     ],
+     "content": "6.1.1 Action Space. We now describe the possible actions the miner can choose."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.101,
+      0.628,
+      0.483,
+      0.656
+     ],
+     "content": "(1) Adopt – The miner chooses to abandon her private chain and accept the current public chain."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.101,
+      0.656,
+      0.484,
+      0.698
+     ],
+     "content": "(2) Override – The miner reveals the first h + 1 blocks from her private chain and overtakes the public chain. This action is possible only when $a > h .$"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.101,
+      0.697,
+      0.484,
+      0.822
+     ],
+     "content": "(3) Match – The miner reveals the first h blocks of her private chain and matches the public chain. This action is possible only when $a   =   h$ and when the last block mined was by someone other than the miner. This symbolizes the case where the miner hears about a newly mined block and then quickly reveals a block of the same height mined in advance. This triggers a split in the network determined by the miner’s rushing level. Each honest miner chooses to mine on the first chain she sees."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.101,
+      0.822,
+      0.484,
+      0.85
+     ],
+     "content": "(4) Wait – The miner does not reveal blocks and keeps mining on her private chain."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.869,
+      0.484,
+      0.897
+     ],
+     "content": "6.1.2 State Space. The match action gives 3 cases for the current state, which need to be differentiated."
+    },
+    {
+     "type": "table",
+     "bbox": [
+      0.545,
+      0.107,
+      0.885,
+      0.229
+     ],
+     "content": "| Power (α) | PTO Revenue (REV<sub>ARR</sub>) | OSM Revenue |\n| --- | --- | --- |\n| 1/3 | 0.337 05 | 0.337 05 |\n| 0 35 | 0 370 77 | 0 370 77 |\n| . | . | . |\n| 0 375 | 0 426 00 | 0 426 00 |\n| . | . | . |\n| 0 4 | 0 488 66 | 0 488 66 |\n| . | . | . |\n| 0 425 | 0 568 09 | 0 568 08 |\n| . | . | . |\n| 0 45 | 0 668 94 | 0 668 91 |\n| . | . | . |\n| 0 475 | 0 801 84 | 0 801 72 |\n| . | . | . |",
+     "captions": [
+      {
+       "bbox": [
+        0.514,
+        0.233,
+        0.915,
+        0.275
+       ],
+       "content": "Table 1: Comparison between PTO with policy iteration and OSM [19] for Bitcoin when limiting the maximum fork length to 95 and using $\\gamma = 0$"
+      }
+     ],
+     "footnotes": [],
+     "image_source": "images/page_7_table_15.jpg"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.532,
+      0.317,
+      0.916,
+      0.36
+     ],
+     "content": "(1) Irrelevant – The last block was mined by the rational miner. Match cannot be performed because the miner just mined a block so she does not have a block prepared in advance."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.532,
+      0.36,
+      0.916,
+      0.387
+     ],
+     "content": "(2) Relevant – The last block was mined by an honest miner. Match can be performed if $a \\geq h .$"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.532,
+      0.387,
+      0.915,
+      0.415
+     ],
+     "content": "(3) Active – Match was already performed and the network is split so match cannot be performed again."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.418,
+      0.916,
+      0.448
+     ],
+     "content": "Denote by fork the state of the system from this list. Then, the states in the MDP are represented by a vector with 3 elements: $( a , h , f _ { } { o r } k )$"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.455,
+      0.915,
+      0.497
+     ],
+     "content": "6.1.3 Transitions. If the miner chooses to wait when fork is not active, either a increases by 1 w.p α or h increases by $1 \\; \\mathrm { w . p } \\; 1 - \\alpha$ and fork is updated to irrelevant or relevant respectively."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.497,
+      0.915,
+      0.552
+     ],
+     "content": "If the miner chooses to adopt, both a and h become 0 and $D _ { t } = h$ as the miner chooses to accept h blocks. Otherwise, if the miner chooses to override, $a \\leftarrow a - h - 1 , h \\leftarrow 0$ and $R _ { t } = D _ { t } = h + 1$ as the miner appends h + 1 blocks to the blockchain."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.552,
+      0.915,
+      0.594
+     ],
+     "content": "If the miner chooses to match, fork ← active as the miner causes a fork in the network. If the miner chooses to wait when fork is active either:"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.532,
+      0.597,
+      0.915,
+      0.625
+     ],
+     "content": "(1) a increases by 1 w.p α as the rational miner mines a new secret block,"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.532,
+      0.625,
+      0.915,
+      0.667
+     ],
+     "content": "(2) $a \\leftarrow a - h , h \\leftarrow 1$ and fork ← relevant w.p αγ as an honest miner mines on top of the rational miner’s chain, thus solving the fork and providing $R _ { t } = D _ { t } = h , \\mathrm { o r }$"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.532,
+      0.667,
+      0.915,
+      0.695
+     ],
+     "content": "(3) h ← h + 1 and fork ← relevant w.p $\\alpha ( 1 - \\gamma )$ as an honest miner mines on top of the public chain."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.698,
+      0.916,
+      0.769
+     ],
+     "content": "In order to enforce the maximum fork length, for certain states we forbid actions which may lead to a or h increasing too much. Note that, blocks mined are counted towards the reward and the difficulty contribution if and when both the rational miner and the rest of the network accept them."
+    },
+    {
+     "type": "paragraph_title",
+     "bbox": [
+      0.515,
+      0.781,
+      0.712,
+      0.797
+     ],
+     "level": 2,
+     "content": "6.2 Optimal Strategies"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.513,
+      0.8,
+      0.916,
+      0.899
+     ],
+     "content": "To validate PTO, we compare the revenue of the optimal strategy found by PTO against the state of the art OSM [19]. We compare for different $\\alpha ^ { \\prime } s$ and $\\gamma   =   0 ,$ with a maximum fork length of 95, similar to OSM. We choose expected horizon to be $H = 1 0 ^ { 6 }$ and we use policy iteration (for SSP) with a stopping threshold of 10<sup>−5</sup>. The stopping threshold is a parameter for policy iteration which specifies the desired approximation error for the algorithm [1]."
+    }
+   ]
+  },
+  {
+   "page_idx": 8,
+   "blocks": [
+    {
+     "type": "header",
+     "bbox": [
+      0.085,
+      0.076,
+      0.358,
+      0.089
+     ],
+     "content": "Efficient MDP Analysis for Selfish-Mining in Blockchains"
+    },
+    {
+     "type": "header",
+     "bbox": [
+      0.676,
+      0.076,
+      0.915,
+      0.088
+     ],
+     "content": "AFT ’20, October 21–23, 2020, New York, NY, USA"
+    },
+    {
+     "type": "chart",
+     "bbox": [
+      0.084,
+      0.104,
+      0.481,
+      0.285
+     ],
+     "content": "",
+     "captions": [
+      {
+       "bbox": [
+        0.083,
+        0.298,
+        0.485,
+        0.354
+       ],
+       "content": "Figure 1: The effect of the expected horizon H. We plot results for Bitcoin with different $\\alpha^{*}s,\\ \\gamma = 0.5$ , and maximum fork of 50, normalized by the maximum revenue achieved for each α."
+      }
+     ],
+     "footnotes": [],
+     "image_source": "images/page_8_chart_2.jpg"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.082,
+      0.387,
+      0.485,
+      0.486
+     ],
+     "content": "Table 1 summarizes the results. As expected, PTO reproduces the results of OSM. Furthermore, some results for PTO are higher than the results for OSM by more than the $1 0 ^ { - 5 }$ approximation error. This is due to a bug in the original OSM code. For these values, OSM stopped by mistake after hitting a hard-coded maximal number of iterations. We removed the redundant stopping condition before comparing the running times."
+    },
+    {
+     "type": "paragraph_title",
+     "bbox": [
+      0.084,
+      0.499,
+      0.274,
+      0.514
+     ],
+     "level": 2,
+     "content": "6.3 Hyperparameters"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.517,
+      0.437,
+      0.532
+     ],
+     "content": "We empirically analyze the effect PTO’s hyperparameters."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.541,
+      0.484,
+      0.596
+     ],
+     "content": "6.3.1 Expected Horizon. We first consider the expected horizon. In order to do so, we experiment with Bitcoin for several values of α, with $\\gamma = 0 . 5$ , with a fixed maximum fork length of 50 and using policy iteration with a stopping threshold of 10− ."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.596,
+      0.484,
+      0.665
+     ],
+     "content": "Figure 1 plots the revenue of the policy found against the horizon length H. The figure shows that as the expected horizon increases, the revenue converges to the revenue of the optimal policy. Since different α’s were considered, all the revenues for each α were normalized by the best revenue achieved by PTO for said α."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.665,
+      0.483,
+      0.707
+     ],
+     "content": "The graph shows that as the expected horizon is increased, the approximate revenue converges quickly to its optimal value, as supported by Theorem 2."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.707,
+      0.484,
+      0.776
+     ],
+     "content": "Intuitively, one might expect that for higher values of α, our method would require higher values of H to converge, since more powerful miners are more capable of creating longer forks, and thus should require more consideration towards future blocks by looking into a further expected horizon."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.776,
+      0.485,
+      0.832
+     ],
+     "content": "Our results in Figure 1 indicate that this is not necessarily the case. We attribute this find to the fact that different values of α have different optimal policies, and thus are affected differently by the expected horizon."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.083,
+      0.841,
+      0.485,
+      0.898
+     ],
+     "content": "Note. A drawback of PTO when compared to OSM is that although the approximation error in PTO is tight and decreases linearly with the expected horizon, it is not known in advance. OSM, on the other hand, takes the approximation error as a parameter and"
+    },
+    {
+     "type": "chart",
+     "bbox": [
+      0.516,
+      0.104,
+      0.914,
+      0.333
+     ],
+     "content": "",
+     "captions": [
+      {
+       "bbox": [
+        0.514,
+        0.345,
+        0.915,
+        0.388
+       ],
+       "content": "Figure 2: The effect of the maximum fork length. We plot results for Bitcoin with different $\\alpha^{\\prime} s, \\gamma = 0.5$ and $H   =   1 0 ^ { 4 }$ normalized by the maximum revenue achieved for each α."
+      }
+     ],
+     "footnotes": [],
+     "image_source": "images/page_8_chart_13.jpg"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.423,
+      0.916,
+      0.466
+     ],
+     "continues_prev": true,
+     "content": "outputs an ε-optimal policy. However, as we see in Figure 1, choosing a reasonable expected horizon such as $1 0 ^ { 6 }$ ensures a negligible approximation error."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.475,
+      0.916,
+      0.628
+     ],
+     "content": "6.3.2 Maximum Fork Length. We next investigate the effect of the maximum fork length. We experiment with Bitcoin for several values of α, with a fixed expected horizon of $1 0 ^ { 4 }$ , and using policy iteration with a stopping threshold of $1 0 ^ { - 5 }$ . The revenues obtained are presented in Figure 2, normalized for different α as above. As the maximum fork is increased, the agent has more possible actions in the game, and thus the revenue is non decreasing, as clearly evident in the figure. In addition, the higher α is, the higher the maximum fork length needed to achieve the same approximation, as evident in the figure by the dependence of the fork length required to reach optimal performance on α."
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.514,
+      0.627,
+      0.918,
+      0.767
+     ],
+     "content": "The maximum fork length enables the model to disregard possible policies which allow forks longer than some threshold. This ensures the state space is finite and enables us to use PTO. Ignoring feasible policies seemingly hurts the optimality of our results. However, we ignore longer forks because the probability of the miner to obtain such a fork declines exponentially with the fork length. Therefore, considering a large enough maximum fork length such as 100 is more than enough to obtain a good approximation; increasing it further yields negligible improvement, as shown empirically in Figure 2."
+    },
+    {
+     "type": "paragraph_title",
+     "bbox": [
+      0.515,
+      0.781,
+      0.681,
+      0.797
+     ],
+     "level": 2,
+     "content": "6.4 Running Time"
+    },
+    {
+     "type": "text",
+     "bbox": [
+      0.513,
+      0.799,
+      0.917,
+      0.899
+     ],
+     "content": "We show that PTO with policy iteration is faster than OSM. We compare the methods for different maximum allowed fork lengths in order to compare the methods for different sizes of the state space. This allows us to conjecture about the efficiency of generalizing the methods to other blockchains with larger state spaces $( \\mathbf { e . g . }$ Ethereum). In order to perform the comparison, we use the OSM code generously shared by Ren Zhang [25]."
+    }
+   ]
+  }
+ ],
+ "metadata": {
+  "file_suffix": "pdf",
+  "producer": {
+   "name": "mineru",
+   "version": "4.2.3"
+  },
+  "document": {
+   "title": "Efficient MDP Analysis for Selfish-Mining in Blockchains",
+   "authors": [
+    "Roi Bar-Zur, Ittay Eyal, and Aviv Tamar"
+   ],
+   "subject": "-  Security and privacy  ->  Distributed systems security.-  Theory of computation  ->  Markov decision processes.",
+   "keywords": [
+    "Blockchain, Cryptocurrency, Markov Decision Process, Selfish Mining, Bitcoin, Ethereum, Proof of Work, Optimal Selfish Mining"
+   ],
+   "languages": [
+    "en"
+   ],
+   "created_at": "2020-09-16T00:59:34Z",
+   "modified_at": "2020-09-16T00:59:34Z",
+   "creator_application": "LaTeX with acmart 2020/04/30 v1.71 Typesetting articles for the Association for Computing Machinery and hyperref 2016/06/24 v6.83q Hypertext links for LaTeX",
+   "producer_application": "pdfTeX-1.40.17",
+   "page_count": 19,
+   "page_count_kind": "physical"
+  }
+ },
+ "is_full_document": true
+}

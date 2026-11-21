@@ -25,7 +25,8 @@ When unsure which tier applies, ask. A question costs less than rework.
 ## 3. Where code goes
 
 The package `src/abc_harness/` has one folder per layer: `agent/`, `tools/`,
-`execution/`, `planning/`, and `simulators/`, with `cli.py` on top. The
+`execution/`, `planning/`, `literature/`, and `simulators/`, with
+`interfaces/` (the command line, its chat mode, and terminal output) on top. The
 [module map](../architecture.md#module-map) says what every file does.
 
 - A module imports only from its own layer or a lower one (order: entry,
@@ -35,8 +36,8 @@ The package `src/abc_harness/` has one folder per layer: `agent/`, `tools/`,
   callback, as `execution/task.py` takes the review function.
 - A new module gets a row in the module map in the same commit.
 - Put a new file in an existing folder. Add a folder only when a group of files
-  shares one job that no folder has; the second entry point, for example,
-  starts `interfaces/` and takes `cli.py` with it.
+  shares one job that no folder has. A new entry point, such as a web page,
+  goes in `interfaces/` next to `cli.py` and `chat.py`.
 
 - A new simulator is an adapter module plus a capability card, not a change to
   the runner.
@@ -116,8 +117,8 @@ in `pyproject.toml`.
 | `AGENTS.md` | routing table, definitions, hard rules, checks, commands | 100 lines at most (test). Push detail down into the files below. |
 | `docs/project-spec.md` | goals, MVP boundaries, required behaviour, acceptance criteria | Changes only with a maintainer decision. |
 | `docs/architecture.md` | the system, and which module is which diagram box | Present tense. Fix a sentence in the same commit that makes it false. |
-| `docs/development-plan.md` | milestones in dependency order | Mark a milestone done when its acceptance passes. |
-| `docs/status.md` | what works, what is broken, what is next | Rewritten whole, never appended; 120 lines at most (test). |
+| `docs/development-plan.md` | milestones in dependency order, with what each delivered and how it was accepted | Mark a milestone done when its acceptance passes, and record its demonstration numbers there. |
+| `docs/status.md` | what works, what is broken or not verified, what is next | Rewritten whole, never appended; 120 lines at most (test). Demonstration numbers go to the milestone instead. |
 | `docs/context/conventions.md` | process, code layout, testing, git | Replace, never append. |
 | `docs/context/gotchas.md` | traps someone already stepped on | The only append-only file. Each entry has a date and a `Retire when:` (test); 40 entries at most (test). |
 

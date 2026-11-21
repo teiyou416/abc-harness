@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
-DEFAULT_TIME_LIMIT_SECONDS = 30 * 60
+DEFAULT_TIME_LIMIT_SECONDS = 2 * 60 * 60
 DEFAULT_LLM_CALL_LIMIT = 500
 
 
@@ -22,7 +22,10 @@ class Budget:
     """Tracks active runtime and LLM calls for one task.
 
     Active runtime excludes time spent inside `waiting_for_human()`, so a
-    researcher who reads a plan slowly does not use up simulation time.
+    researcher who reads a plan slowly does not use up simulation time, and
+    time spent inside `parsing_pdf()`: the limit exists to stop a model that
+    spins, and a PDF parse is not the model working. The parser has its own
+    timeout instead (`literature.pdf.PARSE_TIMEOUT_SECONDS`).
     """
 
     def __init__(
@@ -35,12 +38,13 @@ class Budget:
         self.llm_call_limit = llm_call_limit
         self.llm_calls = 0
         self.waiting_seconds = 0.0
+        self.parsing_seconds = 0.0
         self._clock = clock
         self._started = clock()
 
     @property
     def active_seconds(self) -> float:
-        return self._clock() - self._started - self.waiting_seconds
+        return self._clock() - self._started - self.waiting_seconds - self.parsing_seconds
 
     @property
     def remaining_seconds(self) -> float:
@@ -53,6 +57,14 @@ class Budget:
             yield
         finally:
             self.waiting_seconds += self._clock() - began
+
+    @contextmanager
+    def parsing_pdf(self) -> Iterator[None]:
+        began = self._clock()
+        try:
+            yield
+        finally:
+            self.parsing_seconds += self._clock() - began
 
     def check_time(self) -> None:
         if self.remaining_seconds <= 0:

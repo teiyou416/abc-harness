@@ -152,5 +152,6 @@ def html_to_lines(html: str) -> list[str]:
 
 
 def outline(lines: list[str]) -> list[str]:
-    """Heading lines with their 1-based line numbers, for paging with read_file."""
-    return [f"line {i}: {line}" for i, line in enumerate(lines, start=1) if line.startswith("#")]
+    """Heading lines with their 1-based line numbers, for paging with read_file. The harness's header is skipped."""
+    return [f"line {i}: {line}" for i, line in enumerate(lines, start=1)
+            if line.startswith("#") and not line.startswith(("# Source:", "# Note:"))]  # fmt: skip

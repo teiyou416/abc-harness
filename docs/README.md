@@ -5,8 +5,8 @@ change to the one file that covers it. This folder holds those files.
 
 ## Start here
 
-- [status.md](status.md): what works, what is broken, and what comes next.
-  Rewritten whole rather than appended to.
+- [status.md](status.md): what works, what is broken or not verified, and
+  what comes next. Rewritten whole rather than appended to.
 - [development-plan.md](development-plan.md): milestones in dependency order,
   each with a demonstration and acceptance checks.
 
@@ -17,7 +17,6 @@ change to the one file that covers it. This folder holds those files.
 | [project-spec.md](project-spec.md) | goals, MVP boundaries, required behaviour, acceptance criteria |
 | [architecture.md](architecture.md) | the current architecture diagram, how the system works, and which module is which part |
 | [glossary.md](glossary.md) | the project's terms and the words to avoid |
-| [architecture.png](architecture.png) | the maintainer's original long-term design sketch; not kept current |
 
 ## The rulebook
 

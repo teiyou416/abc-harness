@@ -31,8 +31,11 @@ REQUIRED_FIELDS = {
     "baseline": dict,
     "configurations": list,
 }
-OPTIONAL_FIELDS = {"permitted_edits": list, "validation": dict, "execution_image": str, "citations": list}
+OPTIONAL_FIELDS = {"permitted_edits": list, "validation": dict, "execution_image": str, "citations": list,
+                   "custom_metrics": list}  # fmt: skip
 EDIT_FIELDS = {"path", "purpose"}
+CUSTOM_METRIC_FIELDS = {"name", "definition"}
+CUSTOM_METRIC_NAME = re.compile(r"[a-z][a-z0-9_]{0,47}")
 VALIDATION_FIELDS = {"description", "params", "seeds", "metric", "expected", "tolerance"}
 VALIDATION_CONFIGURATION = "validation"
 # A citation rests on a quote, or on a figure reading: a value with its uncertainty read off a figure.
@@ -76,6 +79,16 @@ class Plan:
     @property
     def metrics(self) -> list[str]:
         return list(self.data["metrics"])
+
+    @property
+    def custom_metrics(self) -> dict[str, str]:
+        """Metrics this plan defines, name -> definition; the edited source prints them as ABC_METRIC lines."""
+        return {m["name"]: m["definition"] for m in self.data.get("custom_metrics", [])}
+
+    @property
+    def builtin_metrics(self) -> list[str]:
+        """The plan's metrics that the simulator adapter computes from the simulator's own output."""
+        return [m for m in self.metrics if m not in self.custom_metrics]
 
     @property
     def execution_image(self) -> str | None:
@@ -145,6 +158,10 @@ class Plan:
             f"Simulation runs: {len(self.runs())} (timeout {d['run_timeout_seconds']}s each)",
             f"Metrics: {', '.join(d['metrics'])}",
         ]
+        if self.custom_metrics:
+            lines.append("Custom metrics (defined by this plan; the edited source prints `ABC_METRIC <name>=<value>` "
+                         "in each run's stdout, and the harness reads that line):")  # fmt: skip
+            lines += [f"  {name}: {definition}" for name, definition in self.custom_metrics.items()]
         if not self.permitted_paths:
             lines.append("Permitted edits beyond parameters and seeds: none")
         else:
@@ -228,11 +245,45 @@ def validate_plan(data: dict[str, Any]) -> Plan:
         if "reading" in citation and "±" not in citation["reading"]:
             raise PlanError("a figure reading must state its uncertainty with ±, for example '0.954 ± 0.003'")
     simulator = get_simulator(data["simulator"])
-    simulator.validate_metrics(data["metrics"])
+    custom = _validate_custom_metrics(data, simulator)
+    simulator.validate_metrics([m for m in data["metrics"] if m not in custom])
     for config in data["configurations"]:
         simulator.validate_params({**data["baseline"], **config.get("params", {})})
     _validate_edits(data, simulator)
     return Plan(data)
+
+
+def _validate_custom_metrics(data: dict[str, Any], simulator: Any) -> set[str]:
+    """Custom metrics need permitted edits, a new name, a definition, and a place in `metrics`.
+
+    A configuration that runs the original source cannot print them, so a plan whose only metrics are custom must
+    run every configuration on the edited source.
+    """
+    entries = data.get("custom_metrics", [])
+    names = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != CUSTOM_METRIC_FIELDS or not all(
+            isinstance(entry[f], str) and entry[f].strip() for f in CUSTOM_METRIC_FIELDS
+        ):
+            raise PlanError("each custom metric needs exactly a name and a definition")
+        if not CUSTOM_METRIC_NAME.fullmatch(entry["name"]):
+            raise PlanError(f"custom metric name {entry['name']!r} must be lowercase letters, digits, and _")
+        if entry["name"] in simulator.supported_metrics:
+            raise PlanError(f"{entry['name']} is a built-in metric of {data['simulator']} with its own definition; "
+                            "give the custom metric a new name instead of redefining it")  # fmt: skip
+        if entry["name"] not in data["metrics"]:
+            raise PlanError(f"custom metric {entry['name']} must also be listed in metrics")
+        names.append(entry["name"])
+    if len(set(names)) != len(names):
+        raise PlanError("custom metric names must be unique")
+    if names and not data.get("permitted_edits"):
+        raise PlanError("custom metrics need permitted edits: only edited source can print them")
+    if names and all(m in names for m in data["metrics"]):
+        original = [c["name"] for c in data["configurations"] if c.get("edits") is False]
+        if original:
+            raise PlanError(f"configurations {', '.join(original)} run the original source, which cannot print "
+                            "custom metrics, and the plan has no built-in metric; run them on the edited source")  # fmt: skip
+    return set(names)
 
 
 def _validate_edits(data: dict[str, Any], simulator: Any) -> None:

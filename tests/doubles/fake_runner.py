@@ -6,11 +6,17 @@ advances an optional fake clock by a fixed number of seconds. Each image tag
 points to a fake image ID; `rebuild` points the tag at a new ID, as
 `abc-harness image build` would. The tag behind an ID selects the fixture set:
 a tag containing "blocksim" gets BlockSim files.
+
+`convert_pdf` stands in for the PDF parser image: it copies a trimmed, recorded
+MinerU output (tests/fixtures/pdf/) whatever the PDF says. `plot` stands in for
+the plot image: it records the script and the data it was given and writes a
+fixed PNG and SVG instead of running matplotlib.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -54,6 +60,16 @@ class FakeRunner:
     sandbox_handler: Callable[[str, Path, Path], RunOutcome] | None = None
     # called with (run_id, workdir) before a run writes its output, so a test can see which source it got
     inspect: Callable[[str, Path], None] | None = None
+    # extra stdout per run, appended after the fixture output; e.g. the ABC_METRIC lines edited code prints
+    stdout_extra: Callable[[str, Path], str] | None = None
+    # the PDF parser: "complete" (default), "fail", "timeout", or "garbage"; and the parser run time per PDF
+    pdf_behaviour: str = "complete"
+    seconds_per_pdf: float = 120.0
+    pdf_calls: list[str] = field(default_factory=list)
+    missing_images: set[str] = field(default_factory=set)  # tags that are not built
+    # the plot image: "complete" (default), "fail", "timeout", or "no_output"; and what each call received
+    plot_behaviour: str = "complete"
+    plot_calls: list[dict[str, object]] = field(default_factory=list)
     tags: dict[str, str] = field(default_factory=dict)  # tag -> current image ID
     built: dict[str, str] = field(default_factory=dict)  # every image ID that exists -> its tag
 
@@ -76,6 +92,8 @@ class FakeRunner:
         return self.built.get(image, image)
 
     def image_info(self, image: str) -> dict[str, str]:
+        if image in self.missing_images:
+            raise RunnerError(f"execution image {image} not found")
         if image.startswith("sha256:"):
             if image not in self.built:
                 raise RunnerError(f"execution image {image} not found")
@@ -107,6 +125,9 @@ class FakeRunner:
             self._write_blocksim(workdir, behaviour)
         else:
             self._write_simblock(workdir, behaviour)
+        if self.stdout_extra:
+            with (workdir / "stdout.txt").open("a") as f:
+                f.write(self.stdout_extra(run_id, workdir))
         return RunOutcome(0, False, self.seconds_per_run)
 
     def sandbox(
@@ -119,6 +140,37 @@ class FakeRunner:
         if self.sandbox_handler:
             return self.sandbox_handler(command, source_dir, scratch_dir)
         return RunOutcome(0, False, self.seconds_per_run, f"ran: {command}\n")
+
+    def convert_pdf(
+        self, image: str, task_id: str, name: str, pdf: Path, out_dir: Path, timeout_seconds: float
+    ) -> RunOutcome:
+        self.pdf_calls.append(pdf.name)
+        if self.clock:
+            self.clock.advance(min(self.seconds_per_pdf, timeout_seconds))
+        if self.pdf_behaviour == "timeout" or self.seconds_per_pdf > timeout_seconds:
+            return RunOutcome(None, True, timeout_seconds, "parsing...\n")
+        if self.pdf_behaviour == "fail":
+            return RunOutcome(1, False, self.seconds_per_pdf, "Traceback: the parser crashed\n")
+        if self.pdf_behaviour == "garbage":
+            (out_dir / "structured_content.json").write_text("not json")
+        else:
+            shutil.copytree(FIXTURES / "pdf" / "2007.05614", out_dir, dirs_exist_ok=True)
+        return RunOutcome(0, False, self.seconds_per_pdf, "Parsed 1 input(s).\nmineru 4.2.3; models fixture\n")
+
+    def plot(self, image: str, task_id: str, name: str, data: list[Path], script: Path, out_dir: Path,
+             timeout_seconds: float) -> RunOutcome:
+        self.plot_calls.append({"script": script.read_text(), "data": sorted(p.name for p in data),
+                                "results": json.loads((next(p for p in data if p.name == "results.json")).read_text())})  # fmt: skip
+        if self.clock:
+            self.clock.advance(min(self.seconds_per_run, timeout_seconds))
+        if self.plot_behaviour == "timeout":
+            return RunOutcome(None, True, timeout_seconds, "drawing...\n")
+        if self.plot_behaviour == "fail":
+            return RunOutcome(1, False, 0.5, "Traceback (most recent call last):\nKeyError: 'stale_rat'\n")
+        if self.plot_behaviour != "no_output":
+            shutil.copyfile(FIXTURES / "literature" / "arxiv_2007.05614v2_expected_horizon.png", out_dir / "figure.png")
+            (out_dir / "figure.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'/>")
+        return RunOutcome(0, False, 0.5, "plotted 2 configurations\n")
 
     def cleanup(self, task_id: str) -> None:
         self.cleanups.append(task_id)

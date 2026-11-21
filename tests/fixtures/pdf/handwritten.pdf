@@ -1,0 +1,42 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 567 >>
+stream
+BT /F2 18 Tf 72 720 Td (A Tiny Paper About Selfish Mining) Tj ET
+BT /F2 13 Tf 72 680 Td (1 Introduction) Tj ET
+BT /F1 11 Tf 72 655 Td (Selfish mining lets a pool earn more than its fair share of the blocks.) Tj ET
+BT /F1 11 Tf 72 638 Td (In our model the honest miners always mine on the longest chain they know.) Tj ET
+BT /F2 13 Tf 72 600 Td (2 Results) Tj ET
+BT /F1 11 Tf 72 575 Td (With a pool of one third of the mining power the revenue share is 0.337.) Tj ET
+BT /F1 11 Tf 72 558 Td (This sentence closes the hand-written test document for the PDF parser.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000000869 00000 n 
+0000000941 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1012
+%%EOF

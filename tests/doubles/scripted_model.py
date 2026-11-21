@@ -11,13 +11,14 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from abc_harness.agent.model import ModelDeadlineExceeded, ModelTurn
+from abc_harness.agent.model import ModelDeadlineExceeded, ModelTurn, RetryNotice
 
 Step = ModelTurn | Callable[[list[dict[str, Any]]], ModelTurn]
 
 
-def tool_turn(name: str, tool_input: dict[str, Any], text: str = "") -> ModelTurn:
-    content: list[dict[str, Any]] = [{"type": "text", "text": text}] if text else []
+def tool_turn(name: str, tool_input: dict[str, Any], text: str = "", thinking: str = "") -> ModelTurn:
+    content: list[dict[str, Any]] = [{"type": "thinking", "thinking": thinking, "signature": "sig"}] if thinking else []
+    content += [{"type": "text", "text": text}] if text else []
     content.append({"type": "tool_use", "id": f"toolu_{name}_{abs(hash(json.dumps(tool_input))) % 10**8}",
                     "name": name, "input": tool_input})  # fmt: skip
     return ModelTurn(content=content, stop_reason="tool_use", model="scripted", usage={"input_tokens": 100})
@@ -57,8 +58,9 @@ class ScriptedModel:
         system: str,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
-        max_tokens: int = 16_384,
+        max_tokens: int = 65_536,
         timeout_seconds: float | None = None,
+        on_retry: RetryNotice | None = None,
     ) -> ModelTurn:
         self.calls.append(json.loads(json.dumps(messages)))
         self.requests.append({"system": system, "tools": [t["name"] for t in tools], "max_tokens": max_tokens,

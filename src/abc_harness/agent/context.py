@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from abc_harness.literature.figures import image_tokens
 
 if TYPE_CHECKING:
+    from abc_harness.execution.limits import Budget
     from abc_harness.execution.task import Task
     from abc_harness.literature.library import Library
 
@@ -34,9 +35,12 @@ CHARS_PER_TOKEN = 3
 @dataclass(frozen=True)
 class ContextLimits:
     soft_limit: int = 106_496
-    hard_limit: int = 131_072
-    max_output_tokens: int = 16_384
-    compact_max_tokens: int = 8_192
+    # Output was 16,384 in the design sketch; thinking shares that cap, and a reply with long thinking plus a
+    # 72-configuration plan was cut off. The hard limit grew by the same amount, so the input room is unchanged.
+    hard_limit: int = 180_224
+    max_output_tokens: int = 65_536
+    # The summary call's reply cap, thinking included; compact.md keeps the summary itself to 1,500 words.
+    compact_max_tokens: int = 32_768
     tool_result_max_tokens: int = 8_192
 
     @property
@@ -106,7 +110,9 @@ class History:
     def assistant(self, content: list[dict[str, Any]]) -> None:
         parts = ["\n### assistant\n"]
         for block in content:
-            if block.get("type") == "text" and block.get("text"):
+            if block.get("type") == "thinking" and block.get("thinking"):
+                parts.append("\n> _thinking (summary):_ " + block["thinking"].strip().replace("\n", "\n> ") + "\n")
+            elif block.get("type") == "text" and block.get("text"):
                 parts.append(f"\n{block['text']}\n")
             elif block.get("type") == "tool_use":
                 args = json.dumps(block.get("input"), ensure_ascii=False, indent=2)
@@ -142,6 +148,16 @@ def render_transcript(messages: list[dict[str, Any]]) -> str:
     return "\n\n".join(lines)
 
 
+def limits_note(budget: Budget) -> str:
+    """The task's limits and how much of them is used, so the agent can size its plan. The limits themselves are
+    set on the command line; this is the only place the agent learns them."""
+    return ("## Limits of this task\n\n"
+            f"- Active runtime: {budget.time_limit_seconds / 60:.0f} minutes, {budget.active_seconds / 60:.0f} used so far "
+            "(waiting for the researcher and parsing PDFs do not count).\n"
+            f"- Model calls: {budget.llm_call_limit}, {budget.llm_calls} used so far.\n\n"
+            "Plan the work, including every simulation run, to finish well inside both.")  # fmt: skip
+
+
 def task_state(task: Task, clarifications: list[tuple[str, str]], library: Library | None = None) -> str:
     """The facts the next window must have exactly, written from the harness's own records."""
     from abc_harness.planning.approval import read_decisions
@@ -162,7 +178,7 @@ def task_state(task: Task, clarifications: list[tuple[str, str]], library: Libra
         lines += ["", "Clarification questions and the researcher's answers:"]
         lines += [f"- Q: {q}\n  A: {a}" for q, a in clarifications]
     if library is not None and library.papers:
-        lines += ["", "Papers found by search_papers (only these can be cited):"]
+        lines += ["", "Papers found by search_papers or supplied by the researcher (only these can be cited):"]
         for paper in library.papers.values():
             text = f"; full text in task/{library.full_texts[paper.id]}" if paper.id in library.full_texts else ""
             lines.append(f"- `{paper.id}`: {paper.title} ({paper.year}){text}")
@@ -177,6 +193,13 @@ def task_state(task: Task, clarifications: list[tuple[str, str]], library: Libra
                   json.dumps(summary["configurations"], ensure_ascii=False, indent=2), "```"]  # fmt: skip
     else:
         lines += ["", "No plan has been executed yet."]
+    from abc_harness.execution.figures import load_index
+
+    drawn = load_index(task.artifact_dir)
+    if drawn:
+        lines += ["", "Figures drawn with make_figure (redraw one by reusing its name):"]
+        lines += [f"- `{name}`: task/{f['png']}, script task/{f['script']}" for name, f in drawn.items()]
+    lines += ["", limits_note(task.budget)]
     return "\n".join(lines)
 
 

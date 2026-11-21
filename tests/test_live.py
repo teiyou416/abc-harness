@@ -16,6 +16,7 @@ from abc_harness.agent.loop import run_agent_task
 from abc_harness.agent.model import AnthropicModel
 from abc_harness.agent.secrets import Secrets
 from abc_harness.execution.limits import Budget
+from abc_harness.execution.trace import read_trace
 
 pytestmark = pytest.mark.live
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +47,9 @@ def test_real_model_drafts_a_valid_plan(tmp_path):
     assert len(reviewed) == 1
     assert reviewed[0].simulator == "simblock"
     assert key not in (result.artifact_dir / "trace.jsonl").read_text()
+    # The model's reasoning summaries reach the saved trace.
+    calls = [e for e in read_trace(result.artifact_dir / "trace.jsonl") if e["event"] == "model_call"]
+    assert any(c.get("thinking") for c in calls)
 
 
 def test_real_model_compresses_and_continues(tmp_path):
@@ -197,3 +201,21 @@ def test_real_model_reads_a_value_off_a_figure(tmp_path):
     value, uncertainty = float(match.group(1)), float(match.group(2))
     assert abs(value - 0.954) <= 0.01
     assert value - uncertainty <= 0.954 <= value + uncertainty
+
+
+@pytest.mark.parametrize("name", ["deepseek-flash", "deepseek-v4-pro"])
+def test_deepseek_answers_a_tool_call_and_reports_usage(name):
+    from abc_harness.agent.model import make_model
+    from abc_harness.tools import TOOLS
+
+    secrets = Secrets.load(ROOT / ".env", names=("DEEPSEEK_API_KEY",))
+    if not secrets.has("DEEPSEEK_API_KEY"):
+        pytest.skip("DEEPSEEK_API_KEY is not set in .env")
+    model = make_model(name, "high", lambda key: secrets.get(key) if secrets.has(key) else None)
+    turn = model.create("You plan blockchain simulations. Use the tools.",
+                        [{"role": "user", "content": "Read the SimBlock capability card."}], TOOLS,
+                        max_tokens=4000, timeout_seconds=120)  # fmt: skip
+    assert turn.stop_reason == "tool_use", (turn.stop_reason, turn.text())
+    assert turn.tool_uses()[0]["name"] == "describe_simulator"
+    assert turn.usage.get("input_tokens", 0) + turn.usage.get("cache_read_input_tokens", 0) > 0
+    assert turn.usage.get("output_tokens", 0) > 0

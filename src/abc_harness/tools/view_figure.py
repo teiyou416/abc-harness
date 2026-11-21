@@ -11,12 +11,14 @@ SPEC: dict[str, Any] = {
     "name": "view_figure",
     "description": "Show one figure of a paper you opened with read_paper, as an image with its caption. The "
     "outline from read_paper lists the figures. Only a figure you viewed can support a figure reading in a "
-    "plan. Tables are text in the saved full text; read them with read_file instead.",
+    "plan. For arXiv HTML, tables are text in the saved full text; read them with read_file. For a paper parsed "
+    "from PDF, tables are listed too (label 'Table 1'): view a table before using its numbers, because the "
+    "recognized text may be wrong, and cite them as a figure reading.",
     "input_schema": {
         "type": "object",
         "properties": {
             "paper": {"type": "string", "description": "The paper id from search_papers."},
-            "figure": {"type": "string", "description": "The figure label from the outline, e.g. 'Figure 3'."},
+            "figure": {"type": "string", "description": "The label from read_paper, e.g. 'Figure 3' or 'Table 1'."},
         },
         "required": ["paper", "figure"],
     },
@@ -24,6 +26,9 @@ SPEC: dict[str, Any] = {
 
 
 def run(ctx: ToolContext, args: dict[str, Any]) -> ToolOutput:
+    if not ctx.sees_images:
+        raise ToolError("the model running this task cannot see images, so it cannot read a figure; use the "
+                        "caption and the text, and do not cite a figure reading")  # fmt: skip
     if ctx.library is None:
         raise ToolError("literature search is not configured for this task")
     paper_id, label = str(args.get("paper", "")), str(args.get("figure", ""))

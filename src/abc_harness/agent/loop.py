@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Sequence
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -21,16 +22,18 @@ from abc_harness.agent.context import (
     cap_text,
     estimate_tokens,
     latest_tool_results,
+    limits_note,
     new_window_message,
     render_transcript,
     task_state,
 )
-from abc_harness.agent.model import ModelClient, ModelDeadlineExceeded, ModelTurn
+from abc_harness.agent.model import CONNECT_TIMEOUT_SECONDS, MAX_RETRIES, ModelClient, ModelDeadlineExceeded, ModelTurn
 from abc_harness.execution.limits import Budget, LimitReached
-from abc_harness.execution.runner import Runner
+from abc_harness.execution.runner import Runner, RunnerError
 from abc_harness.execution.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
 from abc_harness.literature.figures import media_type
 from abc_harness.literature.library import Library, Literature
+from abc_harness.literature.pdf import PARSER_IMAGE, PdfError
 from abc_harness.tools import HANDLERS, TOOLS, EndTask, ToolContext, ToolError, ToolOutput
 from abc_harness.tools.base import AskFn
 
@@ -64,12 +67,14 @@ class Agent:
 
     # ----- the loop -----
 
-    def run(self, question: str) -> tuple[str, str]:
+    def run(self, question: str, preface: str = "") -> tuple[str, str]:
+        """Run the loop. `preface` is harness text added after the question, e.g. the papers the researcher supplied."""
         self.question = question
         system = system_prompt()
-        messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
+        first = "\n\n".join(p for p in (question, preface, limits_note(self.task.budget)) if p)
+        messages: list[dict[str, Any]] = [{"role": "user", "content": first}]
         self.history.start_window("The task starts.")
-        self.history.user_text(question)
+        self.history.user_text(first)
         next_input = self._estimate(system, messages)
         while True:
             if next_input > self.limits.soft_limit:
@@ -90,6 +95,7 @@ class Agent:
                 estimated_input_tokens=next_input,
                 latency_seconds=turn.latency_seconds,
                 request_id=turn.request_id,
+                thinking=turn.thinking(),
                 text=turn.text(),
                 tool_uses=[{"name": t["name"], "input": t["input"]} for t in turn.tool_uses()],
             )
@@ -128,9 +134,17 @@ class Agent:
         budget = self.task.budget
         budget.check_time()
         budget.count_llm_call()
+
+        def report_retry(reason: str, retry: int, delay: float) -> None:
+            self.task.trace.event("model_retry", call=budget.llm_calls, reason=reason, retry=retry,
+                                  max_retries=MAX_RETRIES, delay_seconds=delay)
+
+        self.task.trace.event("model_call_started", call=budget.llm_calls, window=self.history.window,
+                              connect_timeout_seconds=min(CONNECT_TIMEOUT_SECONDS, budget.remaining_seconds),
+                              purpose="agent" if tools else "summary")  # fmt: skip
         try:
             return self.model.create(system, messages, tools, max_tokens=max_tokens,
-                                     timeout_seconds=budget.remaining_seconds)  # fmt: skip
+                                     timeout_seconds=budget.remaining_seconds, on_retry=report_retry)  # fmt: skip
         except ModelDeadlineExceeded as e:
             raise LimitReached("time", f"{e} (call {budget.llm_calls})") from e
 
@@ -139,7 +153,9 @@ class Agent:
 
     def _call_tool(self, tool_use: dict[str, Any]) -> dict[str, Any]:
         name, args = tool_use["name"], tool_use.get("input") or {}
+        self.task.trace.event("tool_started", name=name)
         handler = HANDLERS.get(name)
+        started = time.monotonic()
         try:
             if handler is None:
                 raise ToolError(f"unknown tool {name!r}")
@@ -153,7 +169,8 @@ class Agent:
         where = f"task/history.md (tool result id {tool_use['id']})"
         text = cap_text(full, self.limits.tool_result_max_tokens, where)
         self.task.trace.event("tool_call", tool=name, input=args, is_error=is_error, result=record[:2000],
-                              result_chars=len(full), cut=text != full, images=[rel for rel, _ in images])  # fmt: skip
+                              result_chars=len(full), cut=text != full, images=[rel for rel, _ in images],
+                              duration_seconds=round(time.monotonic() - started, 3))  # fmt: skip
         content: str | list[dict[str, Any]] = text
         if images:
             content = [{"type": "text", "text": text}] + [
@@ -204,19 +221,45 @@ def run_agent_task(
     limits: ContextLimits | None = None,
     literature: Literature | None = None,
     on_start: Callable[[Path], None] | None = None,
+    papers: Sequence[Path] = (),
+    on_event: Callable[[dict[str, Any]], None] | None = None,
+    preface: str = "",
+    previous_tasks: dict[str, Path] | None = None,
+    session_id: str | None = None,
+    library_dir: Path | None = None,
 ) -> TaskResult:
+    """Run one agent task.
+
+    `papers` are PDFs the researcher supplied; they are parsed before the first model call. In a chat session,
+    `preface` is the harness's account of the earlier tasks, added to the first message, and `previous_tasks`
+    are their artifact directories, which the agent may read. PDFs under `library_dir`, the researcher's local
+    library, are listed for the agent and parsed only when it reads one.
+    """
+    previous_tasks = previous_tasks or {}
     limits = limits or ContextLimits()
-    task = Task(runner, runs_root, budget, redact=redact, mode="agent", question=question, model=model.name,
+    task = Task(runner, runs_root, budget, redact=redact, on_event=on_event, mode="agent", question=question, model=model.name,
                 prompts=prompt_hashes(), context_limits=limits.__dict__,
-                literature_services=literature.services if literature else [])  # fmt: skip
+                literature_services=literature.services if literature else [],
+                supplied_papers=[p.name for p in papers], session_id=session_id,
+                previous_tasks=list(previous_tasks), local_library=str(library_dir) if library_dir else None)  # fmt: skip
     if on_start:
         on_start(task.artifact_dir)
     agent = Agent(task, model, ask, review, limits)
-    if literature is not None:
-        agent.tools.library = Library(task.artifact_dir, literature)
+    agent.tools.previous_tasks = dict(previous_tasks)
+    agent.tools.sees_images = getattr(model, "sees_images", True)
+    try:
+        runner.image_info(PARSER_IMAGE)
+        convert = task.convert_pdf
+    except RunnerError:
+        convert = None  # without the parser image, PDFs cannot be read; arXiv HTML still can
+    shelf = local_library_pdfs(library_dir, papers)
+    if literature is not None or papers or shelf:
+        agent.tools.library = Library(task.artifact_dir, literature, convert)
     status, stop_reason = FAILED, "unknown"
     try:
-        status, stop_reason = agent.run(question)
+        parts = [_supply_papers(agent.tools.library, papers) if papers else "",
+                 _shelve_papers(agent.tools.library, shelf, library_dir, task) if shelf else "", preface]
+        status, stop_reason = agent.run(question, "\n\n".join(p for p in parts if p))
     except EndTask as e:
         status, stop_reason = e.status, e.reason
     except LimitReached as e:
@@ -239,6 +282,45 @@ def run_agent_task(
         task.manifest["context_windows"] = agent.history.window
         result = task.close(status, stop_reason)
     return result
+
+
+def _supply_papers(library: Library | None, papers: Sequence[Path]) -> str:
+    """Parse the researcher's PDFs into the library and say so to the agent. A PDF that fails ends the task."""
+    assert library is not None
+    added = []
+    for path in papers:
+        try:
+            added.append(library.add_local(path))
+        except PdfError as e:
+            raise EndTask(FAILED, f"could not parse the supplied paper {path.name}: {e}") from e
+    lines = [("The researcher supplied these papers as PDFs. The harness has parsed them; open one with read_paper. "
+             "They can be cited like papers found by search_papers.")]  # fmt: skip
+    lines += [f"- `{p.id}`: {p.title}" for p in added]
+    return "\n".join(lines)
+
+
+def local_library_pdfs(library_dir: Path | None, supplied: Sequence[Path] = ()) -> list[Path]:
+    """The PDFs under the local library directory, minus any also supplied with --paper."""
+    if library_dir is None or not library_dir.is_dir():
+        return []
+    skip = {p.resolve() for p in supplied}
+    return sorted(p for p in library_dir.rglob("*") if p.suffix.lower() == ".pdf" and p.is_file() and p.resolve() not in skip)
+
+
+def _shelve_papers(library: Library | None, pdfs: Sequence[Path], library_dir: Path | None, task: Task) -> str:
+    """List the local library for the agent; nothing is parsed until it reads a paper."""
+    assert library is not None and library_dir is not None
+    lines = [(f"The researcher keeps these papers as PDFs in a local library ({library_dir}/). They are not parsed "
+              "yet: open one with read_paper only if you need it (the first parse takes 1 to 6 minutes, outside "
+              "the time limit). Before searching online, check this list; if a paper you need is here, read it "
+              "instead of searching for it. Once read, it can be cited like papers found by search_papers.")]  # fmt: skip
+    for path in pdfs:
+        label = f"{library_dir.name}/{path.relative_to(library_dir)}"
+        paper = library.shelve(path, label, task.cached_pdf_output(path))
+        first = paper.abstract.split(". ")[0].strip()
+        title = f" ({paper.title})" if paper.title != path.stem else ""
+        lines.append(f"- `{paper.id}`: {label}{title}" + (f". {first[:200]}" if first else ""))
+    return "\n".join(lines)
 
 
 __all__ = ["TOOLS", "Agent", "run_agent_task"]

@@ -159,7 +159,7 @@ def test_anthropic_request_enables_caching_and_omits_empty_tools():
     assert sent[0]["cache_control"] == {"type": "ephemeral"}
     assert "tools" not in sent[0]
     assert sent[1]["tools"] is TOOLS and sent[1]["max_tokens"] == 500
-    assert sent[0]["max_tokens"] == 16_384
+    assert sent[0]["max_tokens"] == 65_536
 
 
 @pytest.mark.parametrize("text", ["short", "x" * 10_000])
@@ -167,47 +167,117 @@ def test_estimate_errs_high(text):
     assert estimate_tokens(text) >= len(text) / 4
 
 
-class _FlakyMessages:
-    def __init__(self, failures, error):
-        self.failures, self.error, self.timeouts = failures, error, []
-
-    def create(self, **kwargs):
-        if self.failures:
-            self.failures -= 1
-            raise self.error
-        block = SimpleNamespace(to_dict=lambda: {"type": "text", "text": "hi"})
-        usage = SimpleNamespace(to_dict=lambda: {"input_tokens": 1})
-        return SimpleNamespace(content=[block], stop_reason="end_turn", model="m", usage=usage)
-
-
 def _flaky_model(failures, monkeypatch):
     import anthropic
+    import httpx2
 
-    # Only the type matters to the retry rule; skip the constructor's HTTP request object.
-    error = anthropic.APIConnectionError.__new__(anthropic.APIConnectionError)
-    messages = _FlakyMessages(failures, error)
+    timeouts = []
+
+    def handle(request):
+        timeouts.append(request.extensions["timeout"])
+        if len(timeouts) <= failures:
+            raise httpx2.ConnectTimeout("timed out", request=request)
+        return httpx2.Response(200, json={
+            "id": "test", "type": "message", "role": "assistant", "model": "m", "stop_reason": "end_turn",
+            "content": [{"type": "text", "text": "hi"}], "usage": {"input_tokens": 1, "output_tokens": 1},
+        })
+
     model = AnthropicModel("sk-test-not-used")
-
-    def with_options(timeout):
-        messages.timeouts.append(timeout)
-        return SimpleNamespace(beta=SimpleNamespace(messages=messages))
-
-    model._client = SimpleNamespace(with_options=with_options)
+    model._client = anthropic.Anthropic(api_key="sk-test-not-used", max_retries=0,
+                                        http_client=httpx2.Client(transport=httpx2.MockTransport(handle)))
     monkeypatch.setattr(model_module.time, "sleep", lambda s: None)
-    return model, messages
+    return model, timeouts
 
 
-def test_retries_happen_inside_the_deadline(monkeypatch):
-    model, messages = _flaky_model(2, monkeypatch)
-    assert model.create("s", [{"role": "user", "content": "q"}], [], timeout_seconds=30).text() == "hi"
-    assert len(messages.timeouts) == 3
-    assert all(0 < t <= 30 for t in messages.timeouts)
+@pytest.mark.parametrize("budget", [2, 30, None])
+def test_connection_timeout_is_independent_of_response_timeout(monkeypatch, budget):
+    model, timeouts = _flaky_model(2, monkeypatch)
+    assert model.create("s", [{"role": "user", "content": "q"}], [], max_tokens=100, timeout_seconds=budget).text() == "hi"
+    assert len(timeouts) == 3
+    for timeout in timeouts:
+        assert timeout["connect"] == min(5, timeout["read"])
+        if budget:
+            assert budget - 1 < timeout["read"] <= budget
+
+
+def test_terminal_reports_retries_and_exhausted_connection_is_a_failure(tmp_path, monkeypatch):
+    from abc_harness.interfaces.console import Console
+
+    model, timeouts = _flaky_model(10, monkeypatch)
+    lines = []
+    result = run_agent_task("q", model, FakeRunner(), lambda q: "", lambda p: ("reject", ""),
+                            runs_root=tmp_path, on_event=Console(lines.append, color=False))
+    assert result.status == "failed"
+    assert len(timeouts) == 4
+    for retry, delay in enumerate([0.5, 1.0, 2.0], start=1):
+        assert any(f"Connection timed out. Retry {retry}/3 in {delay:.1f}s." in line for line in lines)
 
 
 def test_a_call_that_outlives_the_deadline_raises(monkeypatch):
-    model, messages = _flaky_model(10, monkeypatch)
+    model, timeouts = _flaky_model(10, monkeypatch)
+    # Keep SDK clock reads independent from the task's fake clock.
     clock = iter(range(0, 1000, 20))
-    monkeypatch.setattr(model_module.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(model_module, "time", SimpleNamespace(monotonic=lambda: next(clock), sleep=lambda s: None))
     with pytest.raises(ModelDeadlineExceeded):
         model.create("s", [{"role": "user", "content": "q"}], [], timeout_seconds=30)
-    assert len(messages.timeouts) == 1
+    assert len(timeouts) == 1
+
+
+def _capturing(model):
+    """Point the model's client at fake beta and plain endpoints; return what each received."""
+    sent = {"beta": [], "plain": []}
+
+    def endpoint(kind):
+        def create(**kwargs):
+            sent[kind].append(kwargs)
+            block = SimpleNamespace(to_dict=lambda: {"type": "text", "text": "hi"})
+            usage = SimpleNamespace(to_dict=lambda: {"input_tokens": 3, "output_tokens": 1})
+            return SimpleNamespace(content=[block], stop_reason="end_turn", model=model.name, usage=usage)
+
+        return SimpleNamespace(create=create)
+
+    model._client = SimpleNamespace(beta=SimpleNamespace(messages=endpoint("beta")), messages=endpoint("plain"))
+    return sent
+
+
+def test_make_model_takes_listed_models_with_their_provider_key():
+    from abc_harness.agent.model import DEEPSEEK, ModelUnavailable, make_model
+
+    keys = {"ANTHROPIC_API_KEY": "sk-ant-x", "DEEPSEEK_API_KEY": "sk-ds-x"}
+    opus = make_model("claude-opus-5-5", "high", keys.get)
+    assert opus.provider.name == "Anthropic" and opus.sees_images
+    pro = make_model("deepseek-v4-pro", "high", keys.get)
+    assert pro.provider is DEEPSEEK and not pro.sees_images
+    assert str(pro._client.base_url).startswith("https://api.deepseek.com/anthropic")
+    assert make_model("deepseek-flash", "high", keys.get).sees_images
+    with pytest.raises(ModelUnavailable, match="not one of the models the harness supports"):
+        make_model("claude-opus-4-5", "high", keys.get)
+    with pytest.raises(ModelUnavailable, match="needs DEEPSEEK_API_KEY in .env"):
+        make_model("deepseek-flash", "high", {"ANTHROPIC_API_KEY": "sk-ant-x"}.get)
+
+
+def test_deepseek_requests_leave_out_the_anthropic_only_extras():
+    from abc_harness.agent.model import make_model
+
+    keys = {"ANTHROPIC_API_KEY": "a", "DEEPSEEK_API_KEY": "d"}
+    claude, deepseek = make_model("claude-opus-5-5", "high", keys.get), make_model("deepseek-flash", "high", keys.get)
+    sent_claude, sent_deepseek = _capturing(claude), _capturing(deepseek)
+    claude.create("s", [{"role": "user", "content": "q"}], [])
+    deepseek.create("s", [{"role": "user", "content": "q"}], [])
+    (claude_request,), (deepseek_request,) = sent_claude["beta"], sent_deepseek["plain"]
+    assert sent_claude["plain"] == [] and sent_deepseek["beta"] == []
+    assert claude_request["thinking"] == {"type": "adaptive", "display": "summarized"}
+    assert claude_request["betas"] and claude_request["fallbacks"] == "default"
+    assert deepseek_request["thinking"] == {"type": "adaptive"}
+    assert "betas" not in deepseek_request and "fallbacks" not in deepseek_request
+    assert deepseek_request["output_config"] == {"effort": "high"} and deepseek_request["model"] == "deepseek-flash"
+
+
+
+def test_the_agent_learns_the_task_limits_from_the_harness(tmp_path):
+    """The limits are set on the command line, so the prompts cannot state them; the first message does."""
+    model = ScriptedModel([text_turn("No plan.")])
+    run(model, tmp_path, small_limits(soft_limit=10**6), budget=Budget(time_limit_seconds=5400, llm_call_limit=40))
+    first = model.calls[0][0]["content"]
+    assert "- Active runtime: 90 minutes, 0 used so far" in first
+    assert "- Model calls: 40, 0 used so far." in first

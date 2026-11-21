@@ -97,7 +97,7 @@ checks that every module appears in this table.
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
 | Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
 | Agent | `agent/session.py` | A chat session: runs each request as a new task, writes the earlier tasks into the next task's first message from their records, and logs the session in `runs/sessions/<id>/session.jsonl`. |
-| Agent | `agent/model.py` | The model client for Anthropic's Messages API and DeepSeek's Anthropic-compatible one; the list of supported models with their provider, list price, and whether they see images; the only code that receives a model API key. Bounds each call by the remaining time. |
+| Agent | `agent/model.py` | The model client for Anthropic's Messages API and DeepSeek's Anthropic-compatible one; the list of supported models with their provider, list price, and whether they see images; the only code that receives a model API key. Caps connection attempts at 5 seconds and retries transient failures up to three times within the remaining task time. The terminal shows each retry and its delay. |
 | Agent | `agent/context.py` | Token estimates, `history.md`, and the message that starts a new window. |
 | Agent | `agent/secrets.py` | Reads API keys from `.env` and redacts them from traces. |
 | Agent | `agent/prompts/` | `SOUL.md` (identity), `rules.md` (workflow), `compact.md` (summary instructions). |

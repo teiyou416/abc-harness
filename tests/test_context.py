@@ -167,50 +167,61 @@ def test_estimate_errs_high(text):
     assert estimate_tokens(text) >= len(text) / 4
 
 
-class _FlakyMessages:
-    def __init__(self, failures, error):
-        self.failures, self.error, self.timeouts = failures, error, []
-
-    def create(self, **kwargs):
-        if self.failures:
-            self.failures -= 1
-            raise self.error
-        block = SimpleNamespace(to_dict=lambda: {"type": "text", "text": "hi"})
-        usage = SimpleNamespace(to_dict=lambda: {"input_tokens": 1})
-        return SimpleNamespace(content=[block], stop_reason="end_turn", model="m", usage=usage)
-
-
 def _flaky_model(failures, monkeypatch):
     import anthropic
+    import httpx2
 
-    # Only the type matters to the retry rule; skip the constructor's HTTP request object.
-    error = anthropic.APIConnectionError.__new__(anthropic.APIConnectionError)
-    messages = _FlakyMessages(failures, error)
+    timeouts = []
+
+    def handle(request):
+        timeouts.append(request.extensions["timeout"])
+        if len(timeouts) <= failures:
+            raise httpx2.ConnectTimeout("timed out", request=request)
+        return httpx2.Response(200, json={
+            "id": "test", "type": "message", "role": "assistant", "model": "m", "stop_reason": "end_turn",
+            "content": [{"type": "text", "text": "hi"}], "usage": {"input_tokens": 1, "output_tokens": 1},
+        })
+
     model = AnthropicModel("sk-test-not-used")
-
-    def with_options(timeout):
-        messages.timeouts.append(timeout)
-        return SimpleNamespace(beta=SimpleNamespace(messages=messages))
-
-    model._client = SimpleNamespace(with_options=with_options)
+    model._client = anthropic.Anthropic(api_key="sk-test-not-used", max_retries=0,
+                                        http_client=httpx2.Client(transport=httpx2.MockTransport(handle)))
     monkeypatch.setattr(model_module.time, "sleep", lambda s: None)
-    return model, messages
+    return model, timeouts
 
 
-def test_retries_happen_inside_the_deadline(monkeypatch):
-    model, messages = _flaky_model(2, monkeypatch)
-    assert model.create("s", [{"role": "user", "content": "q"}], [], timeout_seconds=30).text() == "hi"
-    assert len(messages.timeouts) == 3
-    assert all(0 < t <= 30 for t in messages.timeouts)
+@pytest.mark.parametrize("budget", [2, 30, None])
+def test_connection_timeout_is_independent_of_response_timeout(monkeypatch, budget):
+    model, timeouts = _flaky_model(2, monkeypatch)
+    assert model.create("s", [{"role": "user", "content": "q"}], [], max_tokens=100, timeout_seconds=budget).text() == "hi"
+    assert len(timeouts) == 3
+    for timeout in timeouts:
+        assert timeout["connect"] == min(5, timeout["read"])
+        if budget:
+            assert budget - 1 < timeout["read"] <= budget
+
+
+def test_terminal_reports_retries_and_exhausted_connection_is_a_failure(tmp_path, monkeypatch):
+    from abc_harness.interfaces.console import Console
+
+    model, timeouts = _flaky_model(10, monkeypatch)
+    lines = []
+    result = run_agent_task("q", model, FakeRunner(), lambda q: "", lambda p: ("reject", ""),
+                            runs_root=tmp_path, on_event=Console(lines.append, color=False))
+    assert result.status == "failed"
+    assert len(timeouts) == 4
+    assert any("connect timeout up to 5s" in line for line in lines)
+    for retry, delay in enumerate([0.5, 1.0, 2.0], start=1):
+        assert any(f"Connection timed out. Retry {retry}/3 in {delay:.1f}s." in line for line in lines)
 
 
 def test_a_call_that_outlives_the_deadline_raises(monkeypatch):
-    model, messages = _flaky_model(10, monkeypatch)
+    model, timeouts = _flaky_model(10, monkeypatch)
+    # Keep SDK clock reads independent from the task's fake clock.
     clock = iter(range(0, 1000, 20))
-    monkeypatch.setattr(model_module.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(model_module, "time", SimpleNamespace(monotonic=lambda: next(clock), sleep=lambda s: None))
     with pytest.raises(ModelDeadlineExceeded):
         model.create("s", [{"role": "user", "content": "q"}], [], timeout_seconds=30)
-    assert len(messages.timeouts) == 1
+    assert len(timeouts) == 1
 
 
 def _capturing(model):

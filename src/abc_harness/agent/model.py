@@ -21,8 +21,12 @@ MAX_OUTPUT_TOKENS = 65_536
 # On a safety decline the Anthropic API reruns the request on a fallback model chosen
 # by refusal category, inside the same call.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+CONNECT_TIMEOUT_SECONDS = 5.0
 MAX_RETRIES = 3
 RETRY_STATUS = {408, 409, 429}  # plus every 5xx, as the SDK's own retry rule
+
+
+RetryNotice = Callable[[str, int, float], None]
 
 
 @dataclass(frozen=True)
@@ -145,6 +149,7 @@ class ModelClient(Protocol):
         tools: list[dict[str, Any]],
         max_tokens: int = MAX_OUTPUT_TOKENS,
         timeout_seconds: float | None = None,
+        on_retry: RetryNotice | None = None,
     ) -> ModelTurn:
         """Return one model turn. With `timeout_seconds`, raise ModelDeadlineExceeded once that much time
         has passed, counting every retry."""
@@ -190,6 +195,7 @@ class AnthropicModel:
         tools: list[dict[str, Any]],
         max_tokens: int = MAX_OUTPUT_TOKENS,
         timeout_seconds: float | None = None,
+        on_retry: RetryNotice | None = None,
     ) -> ModelTurn:
         started = time.monotonic()
         deadline = None if timeout_seconds is None else started + timeout_seconds
@@ -212,7 +218,7 @@ class AnthropicModel:
             # trace. Thinking is always on for these models; this only makes its text visible.
             request.update(thinking={"type": "adaptive", "display": "summarized"}, betas=[FALLBACK_BETA],
                            fallbacks="default")  # fmt: skip
-        response = self._send(request, deadline)
+        response = self._send(request, deadline, on_retry)
         usage = {k: v for k, v in response.usage.to_dict().items() if isinstance(v, int)}
         return ModelTurn(
             content=[block.to_dict() for block in response.content],
@@ -223,25 +229,40 @@ class AnthropicModel:
             request_id=getattr(response, "_request_id", None),
         )
 
-    def _send(self, request: dict[str, Any], deadline: float | None) -> Any:
+    def _send(self, request: dict[str, Any], deadline: float | None, on_retry: RetryNotice | None) -> Any:
+        from httpx2 import ConnectTimeout
+
         errors = self._anthropic
         for attempt in range(MAX_RETRIES + 1):
             left = None if deadline is None else deadline - time.monotonic()
             if left is not None and left <= 0:
                 raise ModelDeadlineExceeded("the task's active time ran out before the model answered")
             try:
-                client = self._client if left is None else self._client.with_options(timeout=left)
-                messages = client.beta.messages if self.provider.anthropic_extras else client.messages
+                if left is not None:
+                    request["timeout"] = errors.Timeout(left, connect=min(CONNECT_TIMEOUT_SECONDS, left))
+                messages = self._client.beta.messages if self.provider.anthropic_extras else self._client.messages
                 return messages.create(**request)
             except (errors.APIConnectionError, errors.APIStatusError) as e:
                 status = getattr(e, "status_code", None)
                 retryable = status is None or status in RETRY_STATUS or status >= 500
+                remaining = None if deadline is None else deadline - time.monotonic()
+                if retryable and remaining is not None and remaining <= 0:
+                    raise ModelDeadlineExceeded("the task's active time ran out during a model call") from e
                 if not retryable or attempt == MAX_RETRIES:
-                    if isinstance(e, errors.APITimeoutError) and deadline is not None:
-                        raise ModelDeadlineExceeded("the task's active time ran out during a model call") from e
                     raise
-                pause = min(0.5 * 2**attempt, 8.0)
-                if deadline is not None:
-                    pause = min(pause, max(0.0, deadline - time.monotonic()))
+                pause = 0.5 * 2**attempt
+                if remaining is not None and remaining <= pause:
+                    time.sleep(remaining)
+                    raise ModelDeadlineExceeded("the task's active time ran out before the next retry") from e
+                if on_retry:
+                    if status is not None:
+                        reason = f"Model API returned HTTP {status}."
+                    elif isinstance(e.__cause__, ConnectTimeout):
+                        reason = "Connection timed out."
+                    elif isinstance(e, errors.APITimeoutError):
+                        reason = "Model request timed out."
+                    else:
+                        reason = "Connection failed."
+                    on_retry(reason, attempt + 1, pause)
                 time.sleep(pause)
         raise AssertionError("unreachable")

@@ -104,7 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--time-limit-seconds", type=float, default=DEFAULT_TIME_LIMIT_SECONDS,
                        help="active runtime limit per task (default: 7200)")  # fmt: skip
         p.add_argument("--quiet", action="store_true",
-                       help="do not print each model call, tool call, and run as it happens")  # fmt: skip
+                       help="hide live progress: the status line and the line kept for each tool call")  # fmt: skip
 
     run = sub.add_parser("run", help="review a plan file (TOML or plan.json) and run it after approval")
     run.add_argument("plan", type=Path)

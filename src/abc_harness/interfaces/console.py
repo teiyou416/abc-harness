@@ -32,11 +32,16 @@ class Console:
 
     def __call__(self, event: dict[str, Any]) -> None:
         for line in describe_event(event):
-            self.write(self._paint(line))
+            self.print_line(line)
+
+    def print_line(self, line: str) -> None:
+        self.write(self._paint(line))
 
     def _paint(self, line: str) -> str:
         if not self.color:
             return line
+        if line.startswith("PASS:"):
+            return "\033[32mPASS\033[0m" + line[4:]
         if line.startswith("  thinking:"):
             return f"\033[2m{line}\033[0m"
         if line.startswith("!"):

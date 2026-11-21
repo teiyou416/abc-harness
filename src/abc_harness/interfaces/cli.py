@@ -211,7 +211,9 @@ def main(argv: list[str] | None = None) -> int:
             from abc_harness.execution.trace_check import check_task
 
             verdict, lines = check_task(args.task_dir)
-            print("\n".join(lines))
+            console = Console()
+            for line in lines:
+                console.print_line(line)
             return verdict
         print(json.dumps(summarize_trace(args.task_dir / "trace.jsonl"), indent=2, ensure_ascii=False))
         return 0

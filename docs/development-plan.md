@@ -197,6 +197,7 @@ Tools and controls added while preparing M6, after real tasks showed they were n
 - The default active-runtime limit is 2 hours instead of 30 minutes.
 - Added 2026-11-21: `abc-harness trace check` (`execution/trace_check.py`, `execution/recompute.py`) audits a saved task offline: approval and validation before each run, and raw output against `results.json` and `report.md` (`tests/test_trace_check.py`).
 - Added 2026-11-21: each model connection attempt waits at most 5 seconds; transient failures are retried within the remaining task time, and the terminal shows each retry (`tests/test_context.py`).
+- Added 2026-11-21: the default model is `deepseek-flash`, chosen by the maintainer; `--model` still picks any listed model.
 
 **Test doubles:** `FakeRunner` gained the plot container and printed custom metrics; the chat loop runs from a scripted input sequence.
 

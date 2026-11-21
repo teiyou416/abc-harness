@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_MODEL = "deepseek-flash"  # what --model chooses when not given
 DEFAULT_EFFORT = "high"
 # Thinking counts toward this cap, so it leaves room for long reasoning plus a large tool input such as a plan.
 MAX_OUTPUT_TOKENS = 65_536
@@ -176,7 +176,7 @@ class AnthropicModel:
     """
 
     def __init__(
-        self, api_key: str, model: str = DEFAULT_MODEL, effort: str = DEFAULT_EFFORT, provider: Provider = ANTHROPIC
+        self, api_key: str, model: str = "claude-opus-5-5", effort: str = DEFAULT_EFFORT, provider: Provider = ANTHROPIC
     ) -> None:
         import anthropic
 

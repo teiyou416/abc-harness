@@ -24,7 +24,7 @@ def run_watched(tmp_path, steps):
     return result, lines
 
 
-def test_console_shows_thinking_tool_calls_results_and_runs(tmp_path):
+def test_console_shows_one_line_per_action_and_keeps_details_in_the_trace(tmp_path):
     result, lines = run_watched(tmp_path, [
         tool_turn("describe_simulator", {"simulator": "blocksim"}, text="Checking BlockSim first.",
                   thinking="BlockSim models block intervals directly; check its card."),
@@ -34,21 +34,21 @@ def test_console_shows_thinking_tool_calls_results_and_runs(tmp_path):
     ])  # fmt: skip
     assert result.status == "completed", result.stop_reason
     text = "\n".join(lines)
-    assert "… model call 1: waiting for the model" in text
-    assert "◆ model call 1:" in text
-    assert "  thinking: BlockSim models block intervals directly; check its card." in text
-    assert "  says: Checking BlockSim first." in text
-    assert '  → describe_simulator {"simulator": "blocksim"}' in text
-    assert "  ← describe_simulator ok (" in text
-    assert "▣ researcher decided approve" in text
-    assert "▶ simulation run base__seed-1 started" in text
-    assert "base__seed-1: completed in" in text and "stale_rate=" in text
-    assert text.index("thinking:") < text.index("← describe_simulator")
+    assert any("Waiting for the model" in line for line in lines)
+    assert lines.count("Using describe_simulator") == 1
+    assert lines.index("Using propose_plan") < lines.index("Using run_plan")
+    assert lines.index("Using run_plan") < lines.index("Running simulation base__seed-1")
+    assert lines.count("Done.") == 1
+    trace = (result.artifact_dir / "trace.jsonl").read_text()
+    for detail in ("BlockSim models block intervals directly", "Checking BlockSim first.", "stale_rate"):
+        assert detail not in text and detail in trace
+    assert all("tokens" not in line for line in lines)
 
 
 def test_refused_tool_calls_are_marked(tmp_path):
     _, lines = run_watched(tmp_path, [tool_turn("read_file", {"path": "/etc/passwd"}), text_turn("Stopping.")])
-    assert any(line.startswith("! ← read_file error") for line in lines)
+    assert "Using read_file" in lines
+    assert any(line.startswith("! read_file: ") and line != "! read_file: " for line in lines)
 
 
 def test_the_listener_sees_events_after_redaction(tmp_path):

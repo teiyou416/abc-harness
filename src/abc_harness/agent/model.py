@@ -214,8 +214,7 @@ class AnthropicModel:
         if tools:
             request["tools"] = tools
         if self.provider.anthropic_extras:
-            # Summaries of the model's reasoning, so the researcher can follow it in the terminal and the
-            # trace. Thinking is always on for these models; this only makes its text visible.
+            # Request reasoning summaries for the saved trace.
             request.update(thinking={"type": "adaptive", "display": "summarized"}, betas=[FALLBACK_BETA],
                            fallbacks="default")  # fmt: skip
         response = self._send(request, deadline, on_retry)

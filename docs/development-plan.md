@@ -193,7 +193,7 @@ Tools and controls added while preparing M6, after real tasks showed they were n
 - `abc-harness chat` (`interfaces/chat.py`, `agent/session.py`): each request runs as its own task; the next task gets a harness-written account of the earlier ones and can read their files under `previous/`; Ctrl-C stops the running task; `/tasks`, `/paper`, `/model`, and `/new` manage the conversation. The command line moved to `interfaces/`.
 - Custom metrics: a plan with permitted edits can define metrics that the edited code prints as `ABC_METRIC <name>=<value>` lines, and built-in metrics are computed only when a plan asks for them.
 - Models: the list is fixed to `claude-opus-5-5` (default), `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-2`, `deepseek-v4-pro`, and `deepseek-flash`; DeepSeek runs through its Anthropic-compatible API with `DEEPSEEK_API_KEY`.
-- The terminal shows every model call with its thinking summary, tool call, plan decision, PDF parse, and simulation run as it happens, and ends with run statistics, including a cost estimate at list prices (DeepSeek's off-peak prices by the time of each call).
+- The terminal shows model calls, tool starts, PDF parses, and simulation runs in one line per action, and ends with run statistics, including a cost estimate at list prices (DeepSeek's off-peak prices by the time of each call).
 - The default active-runtime limit is 2 hours instead of 30 minutes.
 
 **Test doubles:** `FakeRunner` gained the plot container and printed custom metrics; the chat loop runs from a scripted input sequence.

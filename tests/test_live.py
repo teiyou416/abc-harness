@@ -47,7 +47,7 @@ def test_real_model_drafts_a_valid_plan(tmp_path):
     assert len(reviewed) == 1
     assert reviewed[0].simulator == "simblock"
     assert key not in (result.artifact_dir / "trace.jsonl").read_text()
-    # The model's reasoning summaries reach the trace, for the live terminal output.
+    # The model's reasoning summaries reach the saved trace.
     calls = [e for e in read_trace(result.artifact_dir / "trace.jsonl") if e["event"] == "model_call"]
     assert any(c.get("thinking") for c in calls)
 

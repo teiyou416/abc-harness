@@ -19,12 +19,7 @@ PREVIEW_CHARS = 200
 
 
 class Console:
-    """Prints each trace event as it happens, so the researcher can follow the agent and the runs.
-
-    It receives events after redaction (see `Trace`), so it can print nothing the trace would not hold.
-    Thinking is the model's summarized reasoning, shown dimmed; tool inputs and results are shortened,
-    and the full text is in `trace.jsonl` and `history.md`.
-    """
+    """Show concise progress from redacted trace events."""
 
     def __init__(self, write: Write = print, color: bool | None = None) -> None:
         self.write = write
@@ -42,12 +37,8 @@ class Console:
             return line
         if line.startswith("PASS:"):
             return "\033[32mPASS\033[0m" + line[4:]
-        if line.startswith("  thinking:"):
-            return f"\033[2m{line}\033[0m"
         if line.startswith("!"):
             return f"\033[31m{line}\033[0m"
-        if line.startswith(("◆", "▣")):
-            return f"\033[1m{line}\033[0m"
         return line
 
 
@@ -57,91 +48,41 @@ def _short(value: Any, limit: int = PREVIEW_CHARS) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def _indent(label: str, text: str) -> list[str]:
-    lines = text.strip().splitlines() or [""]
-    pad = " " * (len(label) + 4)
-    return [f"  {label}: {lines[0]}"] + [pad + line for line in lines[1:]]
-
-
 def describe_event(e: dict[str, Any]) -> list[str]:
-    """Terminal lines for one trace event; events with nothing to show give no lines."""
+    """Show an action when it starts, an error if it fails, and the final answer in full."""
     kind = e.get("event")
     if kind == "model_call_started":
-        what = "summarizing the context window" if e.get("purpose") == "summary" else "waiting for the model"
+        action = "Summarizing context" if e.get("purpose") == "summary" else "Waiting for the model"
         cap = e.get("connect_timeout_seconds")
-        detail = f" (connect timeout up to {cap:g}s)" if cap is not None else ""
-        return [f"… model call {e.get('call')}: {what}{detail}"]
+        if e.get("call") == 1 and cap is not None:
+            action += f" (connect timeout up to {cap:g}s)"
+        return [action]
     if kind == "model_retry":
-        retry = f"Retry {e['retry']}/{e['max_retries']} in {e['delay_seconds']:.1f}s."
-        return [f"  Model call {e['call']}: {e['reason']} {retry}"]
-    if kind == "model_call":
-        usage = e.get("usage") or {}
-        tokens_in = sum(usage.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens",
-                                                   "cache_creation_input_tokens"))  # fmt: skip
-        lines = [(f"◆ model call {e.get('call')}: {e.get('latency_seconds', 0):.1f}s, "
-                 f"{tokens_in:,} tokens in, {usage.get('output_tokens', 0):,} out")]  # fmt: skip
-        for thought in e.get("thinking") or []:
-            lines += _indent("thinking", thought)
-        final = not e.get("tool_uses") and e.get("stop_reason") == "end_turn"
-        if e.get("text") and final:
-            lines += ["", e["text"].strip(), ""]  # the agent's answer, shown once and unindented
-        elif e.get("text"):
-            lines += _indent("says", e["text"])
-        lines += [f"  → {t['name']} {_short(t.get('input'))}" for t in e.get("tool_uses") or []]
-        return lines
-    if kind == "tool_call":
-        status = "error" if e.get("is_error") else "ok"
-        mark = "!" if e.get("is_error") else " "
-        images = f" [{len(e['images'])} image(s)]" if e.get("images") else ""
-        return [(f"{mark} ← {e.get('tool')} {status} ({e.get('duration_seconds', 0):.1f}s){images}: "
-                f"{_short(e.get('result', ''))}")]  # fmt: skip
-    if kind == "compaction":
-        return [(f"⟳ context compressed after window {e.get('from_window')} "
-                f"(about {e.get('estimated_input_tokens', 0):,} tokens)")]  # fmt: skip
-    if kind == "plan_proposed":
-        return [f"▣ plan {str(e.get('plan_version'))[:12]} proposed: {e.get('runs')} simulation runs"]
-    if kind == "plan_decision":
-        comment = f": {e['comment']}" if e.get("comment") else ""
-        return [f"▣ researcher decided {e.get('decision')}{comment}"]
-    if kind == "researcher_answer":
-        return [f"  researcher answered: {_short(e.get('answer', ''))}"]
-    if kind in ("file_written", "file_edited"):
-        return [f"  ✎ {'wrote' if kind == 'file_written' else 'edited'} {e.get('path')}"]
-    if kind == "sandbox_started":
-        return [f"  $ {_short(e.get('command', ''))}"]
-    if kind == "sandbox_finished":
-        result = "timed out" if e.get("timed_out") else f"exit {e.get('exit_code')}"
-        return [f"{'!' if result != 'exit 0' else ' '}   {result} ({e.get('duration_seconds', 0):.1f}s), log {e.get('log')}"]
-    if kind == "edits_frozen":
-        return [f"▣ edits frozen: {', '.join(e.get('files') or []) or 'no file changed'}"]
-    if kind == "validation_finished":
-        verdict = "passed" if e.get("passed") else "FAILED"
-        mark = "▣" if e.get("passed") else "!"
-        return [(f"{mark} validation check {verdict}: mean {e.get('mean')} over {e.get('n')} runs, "
-                f"required {e.get('expected')} ± {e.get('tolerance')}")]  # fmt: skip
-    if kind == "run_started":
-        return [f"▶ simulation run {e.get('run_id')} started"]
-    if kind == "run_finished":
-        metrics = " ".join(f"{k}={v:.6g}" for k, v in (e.get("metrics") or {}).items())
-        error = f" ({e['error']})" if e.get("error") else ""
-        mark = " " if e.get("status") == "completed" else "!"
-        return [f"{mark}   {e.get('run_id')}: {e.get('status')}{error} in {e.get('duration_seconds') or 0:.1f}s {metrics}"]
-    if kind == "figure_started":
-        return [f"  drawing figure {e.get('name')} in the plot image"]
-    if kind == "figure_finished":
-        if e.get("ok"):
-            return [f"  figure {e.get('name')}: saved {e.get('png')} ({e.get('duration_seconds', 0):.1f}s)"]
-        return [f"! figure {e.get('name')} failed: {_short(e.get('error', ''))}"]
+        return [f"{e['reason']} Retry {e['retry']}/{e['max_retries']} in {e['delay_seconds']:.1f}s."]
+    if kind == "model_call" and e.get("stop_reason") == "end_turn" and not e.get("tool_uses") and e.get("text"):
+        return [e["text"].strip()]
+    if kind == "tool_started":
+        return [f"Using {_short(e['name'])}"]
+    if kind == "tool_call" and e.get("is_error"):
+        return [f"! {_short(e['tool'])}: {_short(e['result'])}"]
     if kind == "pdf_parse_started":
-        return [(f"  parsing {e.get('pdf')} with the PDF parser (up to {e.get('timeout_seconds', 0) // 60:.0f} min, "
-                "not counted toward the time limit)")]  # fmt: skip
-    if kind == "pdf_parse_finished":
-        how = "reused from the cache" if e.get("cached") else f"parsed in {e.get('seconds', 0):.0f}s"
-        return [f"  {e.get('pdf')}: {how}"]
+        return [f"Parsing {_short(e['pdf'])}"]
+    if kind == "run_started":
+        return [f"Running simulation {_short(e['run_id'])}"]
+    if kind == "run_finished" and e.get("status") != "completed":
+        detail = f": {_short(e['error'])}" if e.get("error") else ""
+        return [f"! Simulation {_short(e['run_id'])} {e.get('status')}{detail}"]
+    if kind == "validation_finished":
+        return ["Validation passed" if e.get("passed") else "! Validation failed"]
+    if kind == "sandbox_finished" and (e.get("timed_out") or e.get("exit_code") != 0):
+        reason = "timed out" if e.get("timed_out") else f"exited with code {e.get('exit_code')}"
+        return [f"! Sandbox command {reason}"]
+    if kind == "figure_finished" and not e.get("ok"):
+        return [f"! Figure failed: {_short(e.get('error', ''))}"]
     if kind in ("pdf_parse_failed", "error", "cleanup_failed"):
-        return [f"! {kind.replace('_', ' ')}: {e.get('error')}"]
+        return [f"! {kind.replace('_', ' ')}: {_short(e.get('error', ''))}"]
     if kind == "limit_reached":
-        return [f"! limit reached: {e.get('detail')}"]
+        return [f"! Limit reached: {_short(e.get('detail', ''))}"]
     return []
 
 

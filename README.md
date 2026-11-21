@@ -82,13 +82,13 @@ and waiting time, model calls and tokens, an estimated cost at list prices
 (`MODELS` in `src/abc_harness/agent/model.py`, from the official pricing page; not a bill), tool
 calls, and completed simulation runs. The experiment's results are in `report.md`.
 
-To have the agent read a paper you choose, pass the PDF; repeat `--paper` for
-several. The harness parses each one before the agent starts (1 to 6 minutes
-for a 20-page paper, not counted toward the task's time limit, and cached for
-the next task), and the agent can cite them:
+To have the agent read a paper you choose, put its PDF in `papers/` and name
+it in the request. The harness parses a PDF when the agent opens it (1 to 6
+minutes for a 20-page paper, not counted toward the task's time limit, and
+cached for the next task), and the agent can cite it:
 
 ```bash
-uv run abc-harness ask "Reproduce Figure 2 of this paper." --paper ~/papers/selfish-mining.pdf
+uv run abc-harness ask "Reproduce Figure 2 of papers/selfish-mining.pdf."
 ```
 
 Papers you keep for reference go in `papers/` (another folder with
@@ -119,7 +119,7 @@ experiment from a paper and draws a comparison figure.
 For follow-up questions, start a conversation instead:
 
 ```bash
-uv run abc-harness chat [--paper paper.pdf]
+uv run abc-harness chat
 ```
 
 Type a request and press Enter (Alt+Enter, or Esc then Enter, for a new
@@ -130,7 +130,7 @@ remembers the earlier tasks of the conversation: the harness gives it each
 one's question, plan, results, figures, and final answer, and it can read
 their files. Ctrl-C during a task stops that task and returns to the prompt;
 Ctrl-C or Ctrl-D at an empty prompt leaves. Commands: `/tasks` lists the
-conversation's tasks, `/paper <pdf>` adds a paper for every following task,
+conversation's tasks,
 `/model` shows the model and the available ones and `/model <name>` switches
 the following tasks to another listed model,
 `/new` starts over, `/help`, and `/quit`. The conversation's log is
@@ -174,7 +174,7 @@ entry in `runs/<task_id>/results.json`. For a BlockSim run, leave out
 | `trace.jsonl` | every event, with active and waiting time and the stop reason |
 | `history.md` | (agent tasks) every message of every context window, with full tool results |
 | `figures/` | (agent tasks) each figure the agent drew: PNG, SVG, the script that drew it, its output, and `index.json` with the captions; the report shows them |
-| `literature.json`, `papers/` | (agent tasks) searches, found and supplied papers, full texts, PDFs and their parser output, viewed figures |
+| `literature.json`, `papers/` | (agent tasks) searches, found and opened library papers, full texts, PDFs and their parser output, viewed figures |
 | `manifest.json` | simulator commit, image ID, command, limits, PDF parses, and task status |
 | `results.json`, `report.md` | per-run status and metrics, and the readable report |
 | `raw/<run_id>/` | the simulator's own output: `stdout.txt`, `blockList.txt`, `static.json` from SimBlock; `result.xlsx` and one CSV per sheet from BlockSim |

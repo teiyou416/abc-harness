@@ -48,7 +48,7 @@ def chat(tmp_path, model, inputs, runner=None, show_answers=True):
     def turn(session, text):
         return session.run_turn(text, model, runner, lambda q: inputs(f"Q: {q} "), review)
 
-    status = run_chat(new_session, turn, inputs, out.append, parser_check=lambda: None, show_answers=show_answers)
+    status = run_chat(new_session, turn, inputs, out.append, show_answers=show_answers)
     return status, out, sessions
 
 
@@ -114,22 +114,15 @@ def test_only_the_latest_tasks_are_shown_in_full(tmp_path):
 
 
 def test_slash_commands(tmp_path):
-    pdf = tmp_path / "paper.pdf"
-    pdf.write_bytes(b"%PDF-1.4\n")
-    text = tmp_path / "notes.pdf"
-    text.write_text("not a pdf")
     model = ScriptedModel([text_turn("Hi.")])
-    inputs = Inputs("/help", "/tasks", f"/paper {pdf}", f"/paper {text}", "/paper", "/bogus", "hello", "/tasks",
-                    "/new", "/tasks", "/exit")  # fmt: skip
+    inputs = Inputs("/help", "/tasks", "/paper x.pdf", "/bogus", "hello", "/tasks", "/new", "/tasks", "/exit")
     status, out, sessions = chat(tmp_path, model, inputs)
     assert status == 0 and len(sessions) == 2
     joined = "\n".join(out)
-    assert HELP in out and "No task yet in this conversation." in out
-    assert "Added paper.pdf; every following task in this conversation reads it." in out
-    assert "not a PDF file" in joined and "usage: /paper <file.pdf>" in joined and "unknown command /bogus" in joined
-    assert "1. " in joined and "not_executed  scripted-model  hello" in joined and "Papers: paper.pdf" in joined
-    assert sessions[1].turns == [] and sessions[1].papers == []
-    assert sessions[0].turns[0].artifact_dir.joinpath("papers", "local-paper.pdf").exists()
+    assert HELP in out and "No task yet in this conversation." in out and "/paper" not in HELP
+    assert "unknown command /paper" in joined and "unknown command /bogus" in joined  # papers come from the library
+    assert "1. " in joined and "not_executed  scripted-model  hello" in joined
+    assert sessions[1].turns == []
 
 
 def test_ctrl_c_during_a_task_stops_it_and_the_chat_continues(tmp_path):

@@ -179,7 +179,9 @@ def test_real_pdf_parser_reads_a_pdf_offline_and_is_cached(pdf_runner, tmp_path,
     monkeypatch.setenv("ANTHROPIC_API_KEY", SECRET)
     task = Task(pdf_runner, tmp_path / "runs")
     library = Library(task.artifact_dir, None, task.convert_pdf)
-    paper = library.add_local(ROOT / "tests" / "fixtures" / "pdf" / "handwritten.pdf")
+    pdf = ROOT / "tests" / "fixtures" / "pdf" / "handwritten.pdf"
+    paper = library.shelve(pdf, "papers/handwritten.pdf")
+    library.read(paper.id, time_left=900)
     assert paper.title == "A Tiny Paper About Selfish Mining"
     assert library.locate(paper.id, "Selfish mining lets a pool earn more than its fair share of the blocks.")
     assert task.pdf_parses[0]["revision"].startswith("mineru 4.2.3; models MinerU-4_models_onnx@")
@@ -187,7 +189,8 @@ def test_real_pdf_parser_reads_a_pdf_offline_and_is_cached(pdf_runner, tmp_path,
     log = (task.artifact_dir / "papers" / "local-handwritten" / "pdf" / "parser.log").read_text()
     assert SECRET not in log
     again = Task(pdf_runner, tmp_path / "runs")
-    Library(again.artifact_dir, None, again.convert_pdf).add_local(ROOT / "tests" / "fixtures" / "pdf" / "handwritten.pdf")
+    second = Library(again.artifact_dir, None, again.convert_pdf)
+    second.read(second.shelve(pdf, "papers/handwritten.pdf").id, time_left=900)
     assert again.pdf_parses[0]["cached"] is True
 
 

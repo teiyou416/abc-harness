@@ -89,4 +89,4 @@ model client.
 
 `make check` (lint + offline tests) · `make test` · `make test-docker` · `make test-live` · `make lint` · `make fmt`
 `make image` (build every image) · `make example` / `make example-blocksim` (review and run an example plan)
-`uv run abc-harness ask "<question>" [--paper paper.pdf]` (agent drafts a plan) · `uv run abc-harness chat` (conversation, one task per request) · `uv run abc-harness trace summary runs/<task_id>` · `uv run abc-harness export runs/<task_id>`
+`uv run abc-harness ask "<question>"` (agent drafts a plan) · `uv run abc-harness chat` (conversation, one task per request) · `uv run abc-harness trace summary runs/<task_id>` · `uv run abc-harness export runs/<task_id>`

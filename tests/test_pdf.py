@@ -299,3 +299,71 @@ def test_a_supplied_paper_is_not_listed_again_and_a_missing_library_is_ignored(t
     model = ScriptedModel([text_turn("Done.")])
     run_with_library(model, tmp_path, tmp_path / "absent", FakeRunner())
     assert "local library" not in model.calls[0][0]["content"]
+
+
+# ----- keeping opened papers in the local library -----
+
+ARXIV_TITLE = "Efficient MDP Analysis for Selfish-Mining in Blockchains"
+
+
+def read_from_arxiv(tmp_path, library, runner, literature):
+    model = ScriptedModel([
+        tool_turn("search_papers", {"query": "selfish mining", "limit": 3}),
+        tool_turn("read_paper", {"paper": "arxiv:2007.05614"}),
+        text_turn("Done."),
+    ])  # fmt: skip
+    lines: list[str] = []
+    result = run_agent_task("q", model, runner, lambda q: "", lambda p: ("approve", ""), runs_root=tmp_path / "runs",
+                            literature=literature, library_dir=library,
+                            on_event=cli.Console(lines.append, color=False, live=False))  # fmt: skip
+    return result, model, lines
+
+
+def test_an_opened_arxiv_paper_is_kept_in_the_library_and_read_from_arxiv_later(tmp_path, monkeypatch):
+    monkeypatch.setitem(RECORDED, "https://arxiv.org/pdf/2007.05614", "../pdf/handwritten.pdf")
+    library, runner = tmp_path / "papers", FakeRunner()
+    literature, fetcher = recorded_literature()
+    result, _, lines = read_from_arxiv(tmp_path, library, runner, literature)
+    assert result.status == "not_executed", result.stop_reason
+    kept = library / f"{ARXIV_TITLE}.pdf"
+    assert kept.read_bytes().startswith(b"%PDF")
+    index = json.loads((library / "index.json").read_text())
+    assert index[kept.name]["arxiv_id"] == "2007.05614" and index[kept.name]["title"] == ARXIV_TITLE
+    assert f"✓ Saved to the local library: {kept.name}" in lines
+    saved = json.loads((result.artifact_dir / "literature.json").read_text())
+    assert saved["kept_in_library"] == {"arxiv:2007.05614": kept.name}
+
+    # The next task lists it with its title and arXiv id, reads it from arXiv's HTML, and does not keep it again.
+    model = ScriptedModel([tool_turn("read_paper", {"paper": "local:efficient-mdp-analysis-for-selfish-minin"}),
+                           text_turn("Done.")])  # fmt: skip
+    literature, fetcher = recorded_literature()
+    run_agent_task("q", model, runner, lambda q: "", lambda p: ("approve", ""), runs_root=tmp_path / "runs",
+                   literature=literature, library_dir=library)  # fmt: skip
+    first = model.calls[0][0]["content"]
+    assert f"papers/{kept.name} [arXiv 2007.05614]" in first
+    opened = model.calls[1][-1]["content"][0]["content"]
+    assert "# Source: https://arxiv.org/html/2007.05614" in opened
+    assert runner.pdf_calls == [] and not any("/pdf/" in url for url, _ in fetcher.requests)
+    assert sorted(p.name for p in library.iterdir()) == [kept.name, "index.json"]
+
+
+def test_a_paper_that_cannot_be_kept_is_still_read(tmp_path):
+    library = tmp_path / "papers"
+    literature, _ = recorded_literature()  # no recorded PDF: the download fails with 404
+    result, model, _ = read_from_arxiv(tmp_path, library, FakeRunner(), literature)
+    assert "# Source: https://arxiv.org/html/2007.05614" in model.calls[2][-1]["content"][0]["content"]
+    saved = json.loads((result.artifact_dir / "literature.json").read_text())
+    assert saved["kept_in_library"] == {} and "404" in saved["keep_errors"]["arxiv:2007.05614"]
+    assert not list(library.glob("*.pdf"))
+
+
+def test_a_large_library_is_reported(tmp_path):
+    library = tmp_path / "papers"
+    library.mkdir()
+    for i in range(101):
+        (library / f"Paper {i}.pdf").write_bytes(b"%PDF-1.4\n")
+    lines: list[str] = []
+    run_agent_task("q", ScriptedModel([text_turn("Done.")]), FakeRunner(), lambda q: "", lambda p: ("approve", ""),
+                   runs_root=tmp_path / "runs", library_dir=library,
+                   on_event=cli.Console(lines.append, color=False, live=False))  # fmt: skip
+    assert any(line.startswith("! The local library ") and "holds 101 PDFs, more than 100" in line for line in lines)

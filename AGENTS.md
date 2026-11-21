@@ -45,11 +45,13 @@ as defined there, and add a term there before using a new one.
    check, or execution image requires a new plan version and fresh approval.
 4. **Enforce limits in code.** Write only inside the task workspace. There,
    change simulator source only in the files the approved plan permits, and
-   put builds and tests in `scratch/`. Enforce two limits per task, with the
-   values in [Limits](docs/project-spec.md#limits): active runtime,
-   excluding time spent waiting for the researcher or parsing PDFs (the PDF
-   parser has its own timeout), and LLM calls. At either limit, stop active
-   work, remove the task's containers, and preserve partial results.
+   put builds and tests in `scratch/`. The harness itself may add an arXiv
+   paper the agent opened to the local library; the agent never writes there.
+   Enforce two limits per task, with the values in
+   [Limits](docs/project-spec.md#limits): active runtime, excluding time
+   spent waiting for the researcher or parsing PDFs (the PDF parser has its
+   own timeout), and LLM calls. At either limit, stop active work, remove the
+   task's containers, and preserve partial results.
 5. **Keep credentials private.** Every API key lives in `.env` (gitignored;
    `.env.example` lists the names). Pass each key only to the client that needs
    it, never through `os.environ`. Keep keys out of containers, traces,

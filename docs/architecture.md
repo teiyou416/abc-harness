@@ -203,7 +203,10 @@ of the session (the parse cache makes this instant).
    `ask --paper` are parsed before step 2 and listed in the first message.
    PDFs in the local library (`--library`, default `papers/`) are listed
    there unparsed, with the title from an earlier parse if the parse cache
-   has one; `read_paper` parses one when the agent opens it.
+   has one; `read_paper` parses one when the agent opens it. An arXiv paper
+   the agent opens is copied into the library as a PDF named by its title,
+   with its arXiv id in the library's `index.json`, so later tasks list it
+   and read it from arXiv's HTML.
 5. The model drafts a plan. The harness checks its citations, pins the execution image's ID into
    it, the Human Interaction tool shows it to the researcher, and the harness
    records the decision for that plan version.

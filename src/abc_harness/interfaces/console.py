@@ -174,6 +174,11 @@ class Console:
             return None, ["✓ Validation passed" if e.get("passed") else "! Validation failed"]
         if kind in ("pdf_parse_failed", "error", "cleanup_failed"):
             return None, [f"! {kind.replace('_', ' ')}: {_short(e.get('error', ''))}"]
+        if kind == "library_paper_added":
+            return None, [f"✓ Saved to the local library: {e.get('file', '')}"]
+        if kind == "library_large":
+            return None, [(f"! The local library {e.get('library')}/ holds {e.get('papers')} PDFs, more than "
+                           f"{e.get('threshold')}; every task lists them all, so consider removing some.")]
         if kind == "limit_reached":
             return None, [f"! Limit reached: {_short(e.get('detail', ''))}"]
         return None, []

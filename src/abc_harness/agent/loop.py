@@ -32,7 +32,7 @@ from abc_harness.execution.limits import Budget, LimitReached
 from abc_harness.execution.runner import Runner, RunnerError
 from abc_harness.execution.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
 from abc_harness.literature.figures import media_type
-from abc_harness.literature.library import Library, Literature
+from abc_harness.literature.library import Library, Literature, read_index
 from abc_harness.literature.pdf import PARSER_IMAGE, PdfError
 from abc_harness.tools import HANDLERS, TOOLS, EndTask, ToolContext, ToolError, ToolOutput
 from abc_harness.tools.base import AskFn
@@ -253,8 +253,11 @@ def run_agent_task(
     except RunnerError:
         convert = None  # without the parser image, PDFs cannot be read; arXiv HTML still can
     shelf = local_library_pdfs(library_dir, papers)
+    if len(shelf) > LIBRARY_WARN_PAPERS:
+        task.trace.event("library_large", library=str(library_dir), papers=len(shelf), threshold=LIBRARY_WARN_PAPERS)
     if literature is not None or papers or shelf:
-        agent.tools.library = Library(task.artifact_dir, literature, convert)
+        agent.tools.library = Library(task.artifact_dir, literature, convert, library_dir=library_dir,
+                                      notify=lambda kind, fields: task.trace.event(kind, **fields))  # fmt: skip
     status, stop_reason = FAILED, "unknown"
     try:
         parts = [_supply_papers(agent.tools.library, papers) if papers else "",
@@ -299,6 +302,9 @@ def _supply_papers(library: Library | None, papers: Sequence[Path]) -> str:
     return "\n".join(lines)
 
 
+LIBRARY_WARN_PAPERS = 100  # above this, the terminal suggests tidying the local library
+
+
 def local_library_pdfs(library_dir: Path | None, supplied: Sequence[Path] = ()) -> list[Path]:
     """The PDFs under the local library directory, minus any also supplied with --paper."""
     if library_dir is None or not library_dir.is_dir():
@@ -313,13 +319,17 @@ def _shelve_papers(library: Library | None, pdfs: Sequence[Path], library_dir: P
     lines = [(f"The researcher keeps these papers as PDFs in a local library ({library_dir}/). They are not parsed "
               "yet: open one with read_paper only if you need it (the first parse takes 1 to 6 minutes, outside "
               "the time limit). Before searching online, check this list; if a paper you need is here, read it "
-              "instead of searching for it. Once read, it can be cited like papers found by search_papers.")]  # fmt: skip
+              "instead of searching for it. Once read, it can be cited like papers found by search_papers. Papers you "
+              "open from arXiv are added to this library for later tasks.")]  # fmt: skip
+    index = read_index(library_dir)
     for path in pdfs:
-        label = f"{library_dir.name}/{path.relative_to(library_dir)}"
-        paper = library.shelve(path, label, task.cached_pdf_output(path))
+        relative = str(path.relative_to(library_dir))
+        label = f"{library_dir.name}/{relative}"
+        paper = library.shelve(path, label, task.cached_pdf_output(path), index.get(relative))
         first = paper.abstract.split(". ")[0].strip()
         title = f" ({paper.title})" if paper.title != path.stem else ""
-        lines.append(f"- `{paper.id}`: {label}{title}" + (f". {first[:200]}" if first else ""))
+        arxiv = f" [arXiv {paper.arxiv_id}]" if paper.arxiv_id else ""
+        lines.append(f"- `{paper.id}`: {label}{title}{arxiv}" + (f". {first[:200]}" if first else ""))
     return "\n".join(lines)
 
 

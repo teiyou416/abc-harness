@@ -16,7 +16,8 @@ history.
   proposes plans; the approved version runs. [M2, M3]
 - Long tasks compress their context and archive it in `history.md`. [M2.5]
 - The agent searches for papers, reads arXiv full texts, views figures, and
-  reads supplied PDFs parsed by MinerU; the harness checks every citation.
+  reads supplied PDFs parsed by MinerU, and opens papers from the local
+  library (`thesis/`) on demand; the harness checks every citation.
   [M4, M4.1, M4.2]
 - With permitted edits, the agent changes simulator source in the sandbox,
   defines custom metrics, and must pass a validation check before any

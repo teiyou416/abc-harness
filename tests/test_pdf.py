@@ -246,3 +246,56 @@ def test_parse_error_message_names_the_missing_image(tmp_path, supplied_pdf):
     task = Task(FakeRunner(missing_images={PARSER_IMAGE}), tmp_path / "runs")
     with pytest.raises(PdfError, match="abc-harness image build"):
         task.convert_pdf(supplied_pdf, tmp_path / "out")
+
+
+# ----- local library -----
+
+
+def run_with_library(model, tmp_path, library, runner, papers=()):
+    return run_agent_task("Reproduce Table 1.", model, runner, lambda q: "", lambda plan: ("approve", ""),
+                          runs_root=tmp_path / "runs", papers=list(papers), library_dir=library)  # fmt: skip
+
+
+def test_the_local_library_is_listed_and_only_the_paper_read_is_parsed(tmp_path):
+    library = tmp_path / "thesis"
+    (library / "older").mkdir(parents=True)
+    for name in ("My Paper.pdf", "older/Other Paper.pdf"):
+        (library / name).write_bytes(f"%PDF-1.4\n{name}\n".encode())
+    (library / "notes.txt").write_text("not a paper")
+    runner = FakeRunner()
+    citations = [{"paper": PAPER, "supports": "PTO is exact", "quote": TEXT_QUOTE}]
+    model = ScriptedModel([
+        tool_turn("read_paper", {"paper": PAPER}),
+        tool_turn("propose_plan", blocksim_plan(citations=citations)),
+        run_last_proposed,
+        text_turn("Done."),
+    ])  # fmt: skip
+    result = run_with_library(model, tmp_path, library, runner)
+    assert result.status == "completed", result.stop_reason  # a library paper can be cited once read
+    first = model.calls[0][0]["content"]
+    assert f"- `{PAPER}`: thesis/My Paper.pdf\n" in first and "`local:other-paper`: thesis/older/Other Paper.pdf" in first
+    assert "notes.txt" not in first and "Before searching online, check this list" in first
+    assert runner.pdf_calls == ["local-my-paper.pdf"]  # the other one was never parsed
+    saved = json.loads((result.artifact_dir / "literature.json").read_text())
+    assert saved["local_library"] == {PAPER: "thesis/My Paper.pdf", "local:other-paper": "thesis/older/Other Paper.pdf"}
+    assert saved["papers"][0]["title"] == "Efficient MDP Analysis for Selfish-Mining in Blockchains"
+
+    # The next task sees the parsed paper's own title and abstract, from the parse cache, without parsing again.
+    model = ScriptedModel([text_turn("Done.")])
+    run_with_library(model, tmp_path, library, runner)
+    first = model.calls[0][0]["content"]
+    assert (f"- `{PAPER}`: thesis/My Paper.pdf (Efficient MDP Analysis for Selfish-Mining in Blockchains). "
+            "A proof of work (PoW) blockchain protocol") in first  # fmt: skip
+    assert runner.pdf_calls == ["local-my-paper.pdf"]
+
+
+def test_a_supplied_paper_is_not_listed_again_and_a_missing_library_is_ignored(tmp_path):
+    library = tmp_path / "thesis"
+    library.mkdir()
+    (library / "My Paper.pdf").write_bytes(b"%PDF-1.4\n")
+    model = ScriptedModel([text_turn("Done.")])
+    run_with_library(model, tmp_path, library, FakeRunner(), papers=[library / "My Paper.pdf"])
+    assert "local library" not in model.calls[0][0]["content"]
+    model = ScriptedModel([text_turn("Done.")])
+    run_with_library(model, tmp_path, tmp_path / "absent", FakeRunner())
+    assert "local library" not in model.calls[0][0]["content"]

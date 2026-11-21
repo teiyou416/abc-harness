@@ -169,6 +169,16 @@ class Task:
             raise LimitReached("time", f"active runtime ran out during sandbox command {self.sandbox_calls}")
         return outcome, str(log)
 
+    def cached_pdf_output(self, pdf: Path) -> Path | None:
+        """The parser output of an earlier parse of this PDF's bytes by the current parser image, if any."""
+        try:
+            image_id = self.runner.image_info(PARSER_IMAGE)["image_id"]
+            digest = hashlib.sha256(pdf.read_bytes()).hexdigest()
+        except (RunnerError, OSError):
+            return None
+        cache = self.pdf_cache / image_id.removeprefix("sha256:")[:16] / digest
+        return cache if (cache / "parse.json").exists() else None
+
     def convert_pdf(self, pdf: Path, out_dir: Path) -> ParseInfo:
         """Parse a PDF with the PDF parser image, or reuse an earlier parse of the same bytes by the same image.
 

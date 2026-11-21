@@ -109,7 +109,7 @@ class ChatSession:
             ("Each earlier request ran as its own task. Their files are read-only under `previous/<task_id>/`, "
             "for example `previous/<task_id>/report.md`; read them with read_file when you need a detail. "
             "This request is a new task: propose a new plan if it needs a simulation, and find a paper again "
-            "with search_papers before you cite it here."),
+            "with search_papers, or open it from the local library, before you cite it here."),
         ]
         older = self.turns[:-FULL_TASKS]
         if older:

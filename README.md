@@ -52,9 +52,10 @@ example the same way.
 
 ## Ask the agent
 
-Copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY`. The harness reads
-the key from this file and passes it only to the Claude client; it never
-enters a container, a trace, or git.
+Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY` for the default
+model, or `ANTHROPIC_API_KEY` for a Claude model (see [Models](#models)). The
+harness reads each key from this file and passes it only to that provider's
+client; it never enters a container, a trace, or git.
 
 ```bash
 cp .env.example .env   # then edit .env
@@ -89,9 +90,9 @@ uv run abc-harness ask "Reproduce Figure 2 of this paper." --paper ~/papers/self
 
 ### Models
 
-`--model` (and `/model` in chat) takes one of: `claude-opus-5-5` (default),
-`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-2`, `deepseek-v4-pro`,
-and `deepseek-flash`. The DeepSeek models need `DEEPSEEK_API_KEY` in `.env`
+`--model` (and `/model` in chat) takes one of: `deepseek-flash` (default),
+`deepseek-v4-pro`, `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`,
+and `claude-fable-5-2`. The DeepSeek models need `DEEPSEEK_API_KEY` in `.env`
 and send your question, papers, and results to DeepSeek's servers.
 `deepseek-v4-pro` cannot see images, so it cannot read figures in papers or
 check the figures it draws.

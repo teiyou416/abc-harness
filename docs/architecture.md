@@ -91,7 +91,7 @@ checks that every module appears in this table.
 | Layer (high to low) | File | What it does |
 |---|---|---|
 | Entry | `interfaces/__init__.py` | Names the entry points of the package. |
-| Entry | `interfaces/cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `chat`, `trace summary`, `export`; shows plans and questions in the terminal. Holds no task logic. |
+| Entry | `interfaces/cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `chat`, `trace summary`, `trace check`, `export`; shows plans and questions in the terminal. Holds no task logic. |
 | Entry | `interfaces/chat.py` | The `chat` loop: reads a line (prompt_toolkit, with history), runs slash commands, sends anything else to the chat session, and turns Ctrl-C during a task into stopping that task. |
 | Entry | `interfaces/console.py` | Prints every trace event live (`Console`) and the run statistics at the end of a task (`task_summary`). |
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
@@ -125,6 +125,8 @@ checks that every module appears in this table.
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
 | Execution | `execution/limits.py` | The active-time and model-call limits; waiting for the researcher and PDF parsing do not count. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl`, passes each redacted event to an optional listener (the live terminal output), and summarises it. |
+| Execution | `execution/trace_check.py` | Audits approval and validation order and checks saved result tables offline. |
+| Execution | `execution/recompute.py` | Independent standard-library metric calculations, also available as the standalone recomputation script. |
 | Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
 | Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |
 | Planning | `planning/approval.py` | Records decisions in `approvals.jsonl` and refuses unapproved versions. |

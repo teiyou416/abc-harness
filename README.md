@@ -126,6 +126,13 @@ the following tasks to another listed model,
 `uv run abc-harness trace summary runs/<task_id>` counts the task's model
 calls, tokens, tool calls, and errors.
 
+Run `uv run abc-harness trace check runs/<task_id>` to audit saved evidence offline.
+It compares run starts with the plan version and approval records, checks that edited plans passed
+validation before formal runs, and checks completed runs against raw output, results.json, and the two
+metric tables in report.md. Custom metrics are checked against printed values only.
+Exit codes: 0 for consistent evidence, 1 for a contradiction, 2 for insufficient evidence
+(including older run starts without a plan version). It does not grade the agent's prose.
+
 ## Check a result
 
 Open `runs/<task_id>/report.md`. It lists planned versus completed runs, the

@@ -25,8 +25,9 @@ TARGET_KEYS = ("path", "pattern", "query", "command", "name", "simulator", "pape
 
 
 class Console:
-    """Live progress: one status line, redrawn in place, says what the task is doing now; milestones,
-    errors, and the final answer stay on screen above it. Details stay in trace.jsonl and history.md.
+    """Live progress: one status line, redrawn in place, says what the task is doing now; each tool call,
+    milestones, errors, and the final answer stay on screen above it. Details stay in trace.jsonl and
+    history.md.
 
     The status line is drawn only on a terminal (`live`); elsewhere only the lasting lines are written.
     """
@@ -108,6 +109,8 @@ class Console:
             return f"\033[32m{word}\033[0m" + line[len(word):]
         if line.startswith("!"):
             return f"\033[31m{line}\033[0m"
+        if line.startswith("●"):
+            return f"\033[36m●\033[0m{line[1:]}"
         return line
 
     def _describe(self, e: dict[str, Any]) -> tuple[str | None, list[str]]:
@@ -134,7 +137,8 @@ class Console:
             target = ""
             if self._pending_tools and self._pending_tools[0].get("name") == name:
                 target = _target(self._pending_tools.pop(0).get("input"))
-            return f"Using {name}" + (f" {target}" if target else ""), []
+            action = name + (f" {target}" if target else "")
+            return f"Using {action}", [f"● {action}"]
         if kind == "tool_call" and e.get("is_error"):
             return None, [f"! {e.get('tool', '')}: {_short(e.get('result', ''))}"]
         if kind == "pdf_parse_started":

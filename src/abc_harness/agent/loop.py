@@ -27,7 +27,7 @@ from abc_harness.agent.context import (
     render_transcript,
     task_state,
 )
-from abc_harness.agent.model import ModelClient, ModelDeadlineExceeded, ModelTurn
+from abc_harness.agent.model import CONNECT_TIMEOUT_SECONDS, MAX_RETRIES, ModelClient, ModelDeadlineExceeded, ModelTurn
 from abc_harness.execution.limits import Budget, LimitReached
 from abc_harness.execution.runner import Runner, RunnerError
 from abc_harness.execution.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
@@ -134,11 +134,17 @@ class Agent:
         budget = self.task.budget
         budget.check_time()
         budget.count_llm_call()
+
+        def report_retry(reason: str, retry: int, delay: float) -> None:
+            self.task.trace.event("model_retry", call=budget.llm_calls, reason=reason, retry=retry,
+                                  max_retries=MAX_RETRIES, delay_seconds=delay)
+
         self.task.trace.event("model_call_started", call=budget.llm_calls, window=self.history.window,
+                              connect_timeout_seconds=min(CONNECT_TIMEOUT_SECONDS, budget.remaining_seconds),
                               purpose="agent" if tools else "summary")  # fmt: skip
         try:
             return self.model.create(system, messages, tools, max_tokens=max_tokens,
-                                     timeout_seconds=budget.remaining_seconds)  # fmt: skip
+                                     timeout_seconds=budget.remaining_seconds, on_retry=report_retry)  # fmt: skip
         except ModelDeadlineExceeded as e:
             raise LimitReached("time", f"{e} (call {budget.llm_calls})") from e
 

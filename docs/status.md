@@ -31,7 +31,7 @@ history.
   `--time-limit-seconds` and `--llm-call-limit`
   ([values](project-spec.md#limits)).
 - `trace check` audits saved approval, validation order, and reported metrics offline.
-- `make check` runs ruff and 225 offline tests; `make test-docker` runs 11
+- `make check` runs ruff and 228 offline tests; `make test-docker` runs 11
   Docker tests and `make test-live` runs 9 tests against the model APIs and
   literature services.
 

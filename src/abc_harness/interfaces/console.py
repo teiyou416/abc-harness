@@ -68,7 +68,12 @@ def describe_event(e: dict[str, Any]) -> list[str]:
     kind = e.get("event")
     if kind == "model_call_started":
         what = "summarizing the context window" if e.get("purpose") == "summary" else "waiting for the model"
-        return [f"… model call {e.get('call')}: {what}"]
+        cap = e.get("connect_timeout_seconds")
+        detail = f" (connect timeout up to {cap:g}s)" if cap is not None else ""
+        return [f"… model call {e.get('call')}: {what}{detail}"]
+    if kind == "model_retry":
+        retry = f"Retry {e['retry']}/{e['max_retries']} in {e['delay_seconds']:.1f}s."
+        return [f"  Model call {e['call']}: {e['reason']} {retry}"]
     if kind == "model_call":
         usage = e.get("usage") or {}
         tokens_in = sum(usage.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens",

@@ -11,7 +11,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from abc_harness.agent.model import ModelDeadlineExceeded, ModelTurn
+from abc_harness.agent.model import ModelDeadlineExceeded, ModelTurn, RetryNotice
 
 Step = ModelTurn | Callable[[list[dict[str, Any]]], ModelTurn]
 
@@ -60,6 +60,7 @@ class ScriptedModel:
         tools: list[dict[str, Any]],
         max_tokens: int = 65_536,
         timeout_seconds: float | None = None,
+        on_retry: RetryNotice | None = None,
     ) -> ModelTurn:
         self.calls.append(json.loads(json.dumps(messages)))
         self.requests.append({"system": system, "tools": [t["name"] for t in tools], "max_tokens": max_tokens,

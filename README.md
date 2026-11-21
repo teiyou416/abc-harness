@@ -94,9 +94,11 @@ uv run abc-harness ask "Reproduce Figure 2 of this paper." --paper ~/papers/self
 Papers you keep for reference go in `papers/` (another folder with
 `--library DIR`), named by their titles. The agent sees the list, checks it
 before searching online, and parses only the papers it opens; a parsed paper's
-own title appears in the list from then on. Each arXiv paper the agent opens
-is saved there too, named by its title (`papers/index.json` records its arXiv
-id), so later tasks need not search for it. Above 100 PDFs, the terminal
+own title appears in the list from then on. Ask the agent to keep papers it
+found ("save these in a folder called security") and it saves their PDFs
+there, named by title; `papers/index.json` records each one's arXiv id and DOI
+and stops the same paper being saved twice. You can move or rename the files;
+the index follows them. Above 100 PDFs, the terminal
 suggests removing some.
 
 ### Models

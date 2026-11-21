@@ -17,8 +17,7 @@ history.
 - Long tasks compress their context and archive it in `history.md`. [M2.5]
 - The agent searches for papers, reads arXiv full texts, views figures, and
   reads supplied PDFs parsed by MinerU, and opens papers from the local
-  library (`papers/`) on demand, which also keeps every arXiv paper the agent
-  opens; the harness checks every citation.
+  library (`papers/`) on demand, and keeps papers there with `save_paper`; the harness checks every citation.
   [M4, M4.1, M4.2]
 - With permitted edits, the agent changes simulator source in the sandbox,
   defines custom metrics, and must pass a validation check before any

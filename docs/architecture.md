@@ -18,7 +18,7 @@ flowchart TB
     subgraph LOOP["Agent: agent/"]
         CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft and hard context limits"]
         LLM["Model client: agent/model.py<br/>only holder of the API keys<br/>Claude or DeepSeek"]
-        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_files, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan,<br/>make_figure"]
+        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_files, search_papers, read_paper,<br/>save_paper, view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan,<br/>make_figure"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
     end
 
@@ -57,7 +57,7 @@ flowchart TB
 
     ENV[(".env")] -->|keys| LLM
     ENV -->|optional S2 key| LIB
-    TOOLS -->|search_papers, read_paper, view_figure| LIB
+    TOOLS -->|search_papers, read_paper, save_paper, view_figure| LIB
     LIB <-->|HTTPS from the host| ACADEMIC(["OpenAlex, Semantic Scholar, arXiv"])
     R -->|--paper or /paper PDF| LIB
     LIB -->|parse a PDF, via the task| RUNNER
@@ -105,6 +105,7 @@ checks that every module appears in this table.
 | Tools | `tools/base.py` | `ToolContext` (shared task state), `ToolOutput` (a result with images), `ToolError` (refusal), `EndTask` (ends the task). |
 | Tools | `tools/describe_simulator.py` | Returns a simulator's capability card. |
 | Tools | `tools/search_papers.py` | Searches the first-round venues, or everything when broadened. |
+| Tools | `tools/save_paper.py` | Keeps a paper the agent read in the local library, optionally in a folder, after checking the library index for the same file, arXiv id, DOI, or title. |
 | Tools | `tools/read_paper.py` | Opens a paper's full text (arXiv HTML, or a PDF parsed by MinerU) in `papers/` and returns its source, outline, and figure and table list. |
 | Tools | `tools/view_figure.py` | Shows the model one figure (or, for a PDF, a table) as an image and records that it was viewed. |
 | Tools | `tools/read_file.py` | Reads lines of a file, or lists a folder, under the roots in `tools/paths.py`, nothing else. |
@@ -157,7 +158,7 @@ interfaces/cli.py -> agent/loop.py <-> agent/model.py
 ## Agent tools
 
 The agent has thirteen tools, one module each in `tools/`: `describe_simulator`,
-`read_file`, `search_files`, `search_papers`, `read_paper`, `view_figure`, `ask_researcher`,
+`read_file`, `search_files`, `search_papers`, `read_paper`, `save_paper`, `view_figure`, `ask_researcher`,
 `propose_plan`, `write_file`, `edit_file`, `run_command` (sandbox exec),
 `run_plan`, and `make_figure`. The three code tools work only after the researcher approved a plan
 with permitted edits; `make_figure` works only after a plan ran, needs no
@@ -203,10 +204,12 @@ of the session (the parse cache makes this instant).
    `ask --paper` are parsed before step 2 and listed in the first message.
    PDFs in the local library (`--library`, default `papers/`) are listed
    there unparsed, with the title from an earlier parse if the parse cache
-   has one; `read_paper` parses one when the agent opens it. An arXiv paper
-   the agent opens is copied into the library as a PDF named by its title,
-   with its arXiv id in the library's `index.json`, so later tasks list it
-   and read it from arXiv's HTML.
+   has one; `read_paper` parses one when the agent opens it. Reading keeps
+   nothing; `save_paper` copies a read paper's PDF into the library (or a
+   folder of it), named by its title. The library's `index.json` maps each
+   file's SHA-256 to its path, title, arXiv id, and DOI, follows files the
+   researcher moves, and is checked before saving so no paper is kept twice.
+   Later tasks read a kept arXiv paper from arXiv's HTML.
 5. The model drafts a plan. The harness checks its citations, pins the execution image's ID into
    it, the Human Interaction tool shows it to the researcher, and the harness
    records the decision for that plan version.

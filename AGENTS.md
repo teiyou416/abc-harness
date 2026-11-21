@@ -45,8 +45,9 @@ as defined there, and add a term there before using a new one.
    check, or execution image requires a new plan version and fresh approval.
 4. **Enforce limits in code.** Write only inside the task workspace. There,
    change simulator source only in the files the approved plan permits, and
-   put builds and tests in `scratch/`. The harness itself may add an arXiv
-   paper the agent opened to the local library; the agent never writes there.
+   put builds and tests in `scratch/`. The harness itself may save a paper the
+   agent read to the local library through `save_paper`; the agent never
+   writes there.
    Enforce two limits per task, with the values in
    [Limits](docs/project-spec.md#limits): active runtime, excluding time
    spent waiting for the researcher or parsing PDFs (the PDF parser has its

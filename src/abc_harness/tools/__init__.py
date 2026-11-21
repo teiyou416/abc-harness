@@ -19,6 +19,7 @@ from abc_harness.tools import (
     read_paper,
     run_command,
     run_plan,
+    save_paper,
     search_files,
     search_papers,
     view_figure,
@@ -27,7 +28,7 @@ from abc_harness.tools import (
 from abc_harness.tools.base import EndTask, ToolContext, ToolError, ToolOutput, ToolRun
 
 _MODULES = (
-    describe_simulator, read_file, search_files, search_papers, read_paper, view_figure, ask_researcher, propose_plan,
+    describe_simulator, read_file, search_files, search_papers, read_paper, save_paper, view_figure, ask_researcher, propose_plan,
     write_file, edit_file, run_command, run_plan, make_figure,
 )  # fmt: skip
 

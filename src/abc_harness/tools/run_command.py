@@ -19,10 +19,15 @@ OUTPUT_CHARS = 9000  # the model sees the end of the output; the log keeps all o
 
 SPEC: dict[str, Any] = {
     "name": "run_command",
-    "description": f"Run a shell command in the simulator's execution image to build or test your code. The "
-    f"edited source is read-only at {SANDBOX_SOURCE}; the working directory {SANDBOX_SCRATCH} (scratch/) is "
-    "writable, so compile into it, for example `javac -d classes ...` or `python /work/scratch/test.py`. No "
-    "network. Only after approval of a plan with permitted edits. The output is for your own checks; it never "
+    "description": f"Run a shell command in the simulator's execution image to build or test your code. Each "
+    f"command runs in a new container and starts in {SANDBOX_SCRATCH}, so no `cd` is needed. What lasts between "
+    f"commands: files in {SANDBOX_SCRATCH} (scratch/), such as compiled classes and test scripts. What does not: "
+    "the current directory, environment variables, background processes, and files anywhere else. The container "
+    f"holds only {SANDBOX_SOURCE} (your edited source, read-only) and {SANDBOX_SCRATCH} (writable); the plan, "
+    "papers, and results are not in it, so read them with read_file or search_files. The image has the "
+    "simulator's own toolchain (SimBlock: JDK 21 and a POSIX shell, no Python; BlockSim: Python 3.11 with pandas) and no network, so "
+    "nothing can be installed. Long output is cut to its last part; the whole of it is in the log the result "
+    "names. Only after approval of a plan with permitted edits. The output is for your own checks; it never "
     "counts as a result.",
     "input_schema": {
         "type": "object",

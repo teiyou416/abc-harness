@@ -42,12 +42,13 @@ as defined there, and add a term there before using a new one.
    a simulation, the harness records approval for the specific plan version. A
    change to the simulator, parameters, metrics, permitted edits, validation
    check, or execution image requires a new plan version and fresh approval.
-4. **Enforce limits in code.** Restrict writes to the task workspace and the
-   files the approved plan permits. Enforce two limits per task, with the
+4. **Enforce limits in code.** Write only inside the task workspace. There,
+   change simulator source only in the files the approved plan permits, and
+   put builds and tests in `scratch/`. Enforce two limits per task, with the
    values in [Limits](docs/project-spec.md#limits): active runtime,
    excluding time spent waiting for the researcher or parsing PDFs (the PDF
-   parser has its own timeout), and LLM calls. At either limit, stop active work, remove the task's containers, and
-   preserve partial results.
+   parser has its own timeout), and LLM calls. At either limit, stop active
+   work, remove the task's containers, and preserve partial results.
 5. **Keep credentials private.** Every API key lives in `.env` (gitignored;
    `.env.example` lists the names). Pass each key only to the client that needs
    it, never through `os.environ`. Keep keys out of containers, traces,

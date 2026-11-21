@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from abc_harness.literature.figures import image_tokens
 
 if TYPE_CHECKING:
+    from abc_harness.execution.limits import Budget
     from abc_harness.execution.task import Task
     from abc_harness.literature.library import Library
 
@@ -147,6 +148,16 @@ def render_transcript(messages: list[dict[str, Any]]) -> str:
     return "\n\n".join(lines)
 
 
+def limits_note(budget: Budget) -> str:
+    """The task's limits and how much of them is used, so the agent can size its plan. The limits themselves are
+    set on the command line; this is the only place the agent learns them."""
+    return ("## Limits of this task\n\n"
+            f"- Active runtime: {budget.time_limit_seconds / 60:.0f} minutes, {budget.active_seconds / 60:.0f} used so far "
+            "(waiting for the researcher and parsing PDFs do not count).\n"
+            f"- Model calls: {budget.llm_call_limit}, {budget.llm_calls} used so far.\n\n"
+            "Plan the work, including every simulation run, to finish well inside both.")  # fmt: skip
+
+
 def task_state(task: Task, clarifications: list[tuple[str, str]], library: Library | None = None) -> str:
     """The facts the next window must have exactly, written from the harness's own records."""
     from abc_harness.planning.approval import read_decisions
@@ -188,6 +199,7 @@ def task_state(task: Task, clarifications: list[tuple[str, str]], library: Libra
     if drawn:
         lines += ["", "Figures drawn with make_figure (redraw one by reusing its name):"]
         lines += [f"- `{name}`: task/{f['png']}, script task/{f['script']}" for name, f in drawn.items()]
+    lines += ["", limits_note(task.budget)]
     return "\n".join(lines)
 
 

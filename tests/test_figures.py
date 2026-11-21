@@ -136,7 +136,7 @@ def test_the_task_state_lists_drawn_figures(tmp_path):
     result, _, _ = run(tmp_path, after_run(figure_call(), text_turn("Done.")))
 
     class Done:
-        artifact_dir, plans, executed = result.artifact_dir, {}, None
+        artifact_dir, plans, executed, budget = result.artifact_dir, {}, None, Budget()
 
     state = task_state(Done(), [])  # type: ignore[arg-type]
     assert "- `stale-rate`: task/figures/stale-rate.png, script task/figures/stale-rate.py" in state

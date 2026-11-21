@@ -262,3 +262,12 @@ def test_deepseek_requests_leave_out_the_anthropic_only_extras():
     assert "betas" not in deepseek_request and "fallbacks" not in deepseek_request
     assert deepseek_request["output_config"] == {"effort": "high"} and deepseek_request["model"] == "deepseek-flash"
 
+
+
+def test_the_agent_learns_the_task_limits_from_the_harness(tmp_path):
+    """The limits are set on the command line, so the prompts cannot state them; the first message does."""
+    model = ScriptedModel([text_turn("No plan.")])
+    run(model, tmp_path, small_limits(soft_limit=10**6), budget=Budget(time_limit_seconds=5400, llm_call_limit=40))
+    first = model.calls[0][0]["content"]
+    assert "- Active runtime: 90 minutes, 0 used so far" in first
+    assert "- Model calls: 40, 0 used so far." in first

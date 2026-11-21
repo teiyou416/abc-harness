@@ -6,28 +6,30 @@ import math
 import statistics
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 from abc_harness.execution import recompute
-from abc_harness.execution.report import _fmt
+from abc_harness.execution.report import format_value
 from abc_harness.execution.trace import read_trace
 from abc_harness.planning.approval import read_decisions
-from abc_harness.planning.plan import load_plan
+from abc_harness.planning.plan import Plan, SimulationRunSpec, load_plan
 
 
 class Findings:
-    def __init__(self):
-        self.lines = []
-        self.status = set()
+    def __init__(self) -> None:
+        self.lines: list[str] = []
+        self.status: set[str] = set()
 
-    def add(self, status, message):
+    def add(self, status: str, message: str) -> None:
         self.status.add(status)
         self.lines.append(f"{status}: {message}")
 
 
-def _order(root, plan, events, findings):
+def _order(root: Path, plan: Plan | None, events: list[dict[str, Any]], findings: Findings) -> set[str]:
     decisions = [(d.plan_version, d.decision) for d in read_decisions(root)]
-    traced = []
-    starts = set()
+    traced: list[tuple[str, str]] = []
+    starts: set[str] = set()
+    unversioned = 0
     version = plan.version if plan else None
     validation_ids = {s.run_id for s in plan.validation_runs()} if plan else set()
     config_ids = {s.run_id for s in plan.runs()} if plan else set()
@@ -50,11 +52,13 @@ def _order(root, plan, events, findings):
             elif traced[-1][1] != "approve" or (version and traced[-1][0] != version):
                 findings.add("FAIL", f"{where}: latest decision does not approve this plan")
             if not event.get("plan_version") or not version:
-                findings.add("INSUFFICIENT", f"{where}: missing run version or plan.json")
+                unversioned += 1
             elif event["plan_version"] != version or rid not in planned_ids:
                 findings.add("FAIL", f"{where}: run does not match plan.json")
             if plan and plan.validation and rid in config_ids and passed is not True:
                 findings.add("FAIL" if passed is False else "INSUFFICIENT", f"{where}: no prior passing validation")
+    if unversioned:
+        findings.add("INSUFFICIENT", f"trace.jsonl: {unversioned} run start(s) without a plan version, or no plan.json")
     if traced != decisions:
         findings.add("FAIL" if decisions and traced else "INSUFFICIENT",
                      "approvals.jsonl and trace.jsonl do not corroborate the same decisions")
@@ -63,7 +67,7 @@ def _order(root, plan, events, findings):
     return starts
 
 
-def _value(name, raw, spec, custom):
+def _value(name: str, raw: Path, spec: SimulationRunSpec, custom: dict[str, str]) -> float:
     if name in custom:
         return recompute.custom_metrics(raw / "stdout.txt")[name]
     if name == "t90_ms":
@@ -76,7 +80,7 @@ def _value(name, raw, spec, custom):
     return func(raw / filename)
 
 
-def _table(report, heading):
+def _table(report: str, heading: str) -> list[list[str]]:
     """Read the first Markdown table in the named report section."""
     sections = report.split(f"\n## {heading}\n")
     if len(sections) != 2:
@@ -88,7 +92,7 @@ def _table(report, heading):
     return [[cell.strip() for cell in row] for row in rows]
 
 
-def _metrics(root, plan, records, starts, findings):
+def _metrics(root: Path, plan: Plan, records: list[dict[str, Any]], starts: set[str], findings: Findings) -> None:
     expected = {s.run_id: s for s in plan.runs()}
     rows = {r["run_id"]: r for r in records}
     if len(rows) != len(records) or rows.keys() != expected.keys():
@@ -105,8 +109,8 @@ def _metrics(root, plan, records, starts, findings):
     if len(cells) != len(detail[2:]) or cells.keys() != expected.keys():
         findings.add("FAIL", "report.md: simulation run rows differ from plan.json")
         return
-    values = defaultdict(list)
-    incomplete = set()
+    values: defaultdict[tuple[str, str], list[float]] = defaultdict(list)
+    incomplete: set[tuple[str, str]] = set()
     count = 0
     before = len(findings.lines)
     for rid, spec in expected.items():
@@ -141,7 +145,7 @@ def _metrics(root, plan, records, starts, findings):
             saved = row["metrics"].get(name)
             if not isinstance(saved, (float, int)) or not math.isclose(value, saved, rel_tol=1e-12, abs_tol=1e-12):
                 findings.add("FAIL", f"{where}: raw value {value} differs from results.json ({saved})")
-            if cells[rid][idx] != _fmt(value):
+            if cells[rid][idx] != format_value(value):
                 findings.add("FAIL", f"{where}: report.md differs from raw value {value}")
     groups = {c["name"] for c in plan.data["configurations"]}
     if {r[0] for r in totals[2:]} != groups or len(totals[2:]) != len(groups):
@@ -154,8 +158,8 @@ def _metrics(root, plan, records, starts, findings):
             vs = values[key]
             expected_cell = "no data"
             if vs:
-                mean = _fmt(statistics.fmean(vs))
-                sd = f" ± {_fmt(statistics.stdev(vs))}" if len(vs) > 1 else ""
+                mean = format_value(statistics.fmean(vs))
+                sd = f" ± {format_value(statistics.stdev(vs))}" if len(vs) > 1 else ""
                 expected_cell = f"{mean}{sd} (n={len(vs)})"
             if cell != expected_cell:
                 findings.add("FAIL", f"report.md Results: {row[0]}/{name}: expected {expected_cell}, found {cell}")

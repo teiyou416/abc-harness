@@ -58,20 +58,20 @@ def describe_event(e: dict[str, Any]) -> list[str]:
             action += f" (connect timeout up to {cap:g}s)"
         return [action]
     if kind == "model_retry":
-        return [f"{e['reason']} Retry {e['retry']}/{e['max_retries']} in {e['delay_seconds']:.1f}s."]
+        return [f"{e.get('reason', '')} Retry {e.get('retry')}/{e.get('max_retries')} in {e.get('delay_seconds', 0):.1f}s."]
     if kind == "model_call" and e.get("stop_reason") == "end_turn" and not e.get("tool_uses") and e.get("text"):
         return [e["text"].strip()]
     if kind == "tool_started":
-        return [f"Using {_short(e['name'])}"]
+        return [f"Using {_short(e.get('name', ''))}"]
     if kind == "tool_call" and e.get("is_error"):
-        return [f"! {_short(e['tool'])}: {_short(e['result'])}"]
+        return [f"! {_short(e.get('tool', ''))}: {_short(e.get('result', ''))}"]
     if kind == "pdf_parse_started":
-        return [f"Parsing {_short(e['pdf'])}"]
+        return [f"Parsing {_short(e.get('pdf', ''))}"]
     if kind == "run_started":
-        return [f"Running simulation {_short(e['run_id'])}"]
+        return [f"Running simulation {_short(e.get('run_id', ''))}"]
     if kind == "run_finished" and e.get("status") != "completed":
         detail = f": {_short(e['error'])}" if e.get("error") else ""
-        return [f"! Simulation {_short(e['run_id'])} {e.get('status')}{detail}"]
+        return [f"! Simulation {_short(e.get('run_id', ''))} {e.get('status')}{detail}"]
     if kind == "validation_finished":
         return ["Validation passed" if e.get("passed") else "! Validation failed"]
     if kind == "sandbox_finished" and (e.get("timed_out") or e.get("exit_code") != 0):

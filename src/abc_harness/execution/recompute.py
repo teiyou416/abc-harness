@@ -1,8 +1,10 @@
 """Recalculate a simulation run's metrics from its raw output.
 
-This script deliberately imports nothing from abc_harness, so it checks the
-harness's numbers instead of repeating its code. It uses only the standard
-library. It recognises the simulator from the files in the raw directory.
+It shares no code with execution/metrics.py and imports only the standard
+library, so it checks the harness's numbers instead of repeating its code.
+`abc-harness trace check` imports it; scripts/recompute_metric.py is a link to
+this file, so it also runs as a standalone script without the harness
+installed. It recognises the simulator from the files in the raw directory.
 
 Usage:
     python3 scripts/recompute_metric.py runs/<task_id>/raw/<run_id> --nodes 300   # SimBlock

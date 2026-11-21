@@ -23,7 +23,7 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
 
 
-def _fmt(value: float) -> str:
+def format_value(value: float) -> str:
     return f"{value:.4f}" if abs(value) < 1 else f"{value:.1f}"
 
 
@@ -99,7 +99,7 @@ def write_report(
     lines += ["", "## Simulation runs", "", "| Run | Status | " + " | ".join(plan.metrics) + " | Raw output | Changes |"]
     lines.append("|---|---|" + "---|" * len(plan.metrics) + "---|---|")
     for r in records:
-        metric_cells = [_fmt(r.metrics[m]) if m in r.metrics else "-" for m in plan.metrics]
+        metric_cells = [format_value(r.metrics[m]) if m in r.metrics else "-" for m in plan.metrics]
         status = r.status if not r.error else f"{r.status}: {r.error}"
         raw = ", ".join(f"[{Path(f).name}]({f})" for f in r.raw_files) or "-"
         diff = f"[diff]({r.diff_file})" if r.diff_file else "-"
@@ -139,9 +139,9 @@ def metric_rows(records: list[RunRecord], metrics: list[str]) -> list[tuple[str,
             if not values:
                 cells.append("no data")
             elif len(values) == 1:
-                cells.append(f"{_fmt(values[0])} (n=1)")
+                cells.append(f"{format_value(values[0])} (n=1)")
             else:
-                cells.append(f"{_fmt(statistics.fmean(values))} ± {_fmt(statistics.stdev(values))} (n={len(values)})")
+                cells.append(f"{format_value(statistics.fmean(values))} ± {format_value(statistics.stdev(values))} (n={len(values)})")
         rows.append((name, cells))
     return rows
 
@@ -249,7 +249,7 @@ def _code_changes(artifact_dir: Path, plan: Plan, manifest: dict[str, Any]) -> l
     lines += ["", f"Validation check: {check.get('description', '')}"]
     if result_path.exists():
         result = json.loads(result_path.read_text(encoding="utf-8"))
-        mean = "no data" if result["mean"] is None else _fmt(result["mean"])
+        mean = "no data" if result["mean"] is None else format_value(result["mean"])
         verdict = "**passed**" if result["passed"] else "**failed; no configuration was run**"
         lines += ["", (f"Mean {result['metric']} over {result['n']} of {result['planned']} validation runs: {mean}; "
                        f"required {result['expected']} ± {result['tolerance']}: {verdict}. "

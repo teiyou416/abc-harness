@@ -94,7 +94,10 @@ uv run abc-harness ask "Reproduce Figure 2 of this paper." --paper ~/papers/self
 Papers you keep for reference go in `papers/` (another folder with
 `--library DIR`), named by their titles. The agent sees the list, checks it
 before searching online, and parses only the papers it opens; a parsed paper's
-own title appears in the list from then on.
+own title appears in the list from then on. Each arXiv paper the agent opens
+is saved there too, named by its title (`papers/index.json` records its arXiv
+id), so later tasks need not search for it. Above 100 PDFs, the terminal
+suggests removing some.
 
 ### Models
 

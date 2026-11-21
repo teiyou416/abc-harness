@@ -38,8 +38,15 @@ def test_missing_key_raises(tmp_path, monkeypatch):
 
 
 def test_redact_skips_short_values():
-    secrets = Secrets({"A": "sk-long-secret-value", "B": "x"})
+    secrets = Secrets({"A_KEY": "sk-long-secret-value", "B_KEY": "x"})
     assert secrets.redact("key sk-long-secret-value and x") == "key [REDACTED] and x"
+
+
+def test_redact_scrubs_credentials_but_not_settings():
+    secrets = Secrets({"DEEPSEEK_API_KEY": "sk-deepseek-secret", "GITHUB_TOKEN": "ghp-long-token",
+                       "OTHER_PROVIDER": "deepseek"})  # fmt: skip
+    text = "model deepseek-flash, key sk-deepseek-secret, token ghp-long-token"
+    assert secrets.redact(text) == "model deepseek-flash, key [REDACTED], token [REDACTED]"
 
 
 def test_ask_without_a_key_exits_before_any_task(tmp_path, monkeypatch, capsys):

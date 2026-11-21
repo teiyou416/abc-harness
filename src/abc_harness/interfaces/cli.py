@@ -43,7 +43,7 @@ TOOL_IMAGES = {
     PLOT: (Path(__file__).resolve().parents[3] / "docker" / "plot", PLOT_IMAGE),
 }
 
-DEFAULT_LIBRARY_DIR = Path("thesis")  # the researcher's local papers, read on demand
+DEFAULT_LIBRARY_DIR = Path("papers")  # the researcher's local papers, read on demand
 
 
 def prompt_decision(
@@ -118,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--paper", type=Path, action="append", default=[], metavar="PDF",
                        help="a paper the agent should read, as a PDF file; repeat for several")  # fmt: skip
         p.add_argument("--library", type=Path, default=DEFAULT_LIBRARY_DIR, metavar="DIR",
-                       help="local PDFs the agent may open when needed, parsed on first read (default: thesis)")  # fmt: skip
+                       help="local PDFs the agent may open when needed, parsed on first read (default: papers)")  # fmt: skip
         task_options(p)
 
     ask = sub.add_parser("ask", help="describe an experiment; the agent drafts a plan for your approval")

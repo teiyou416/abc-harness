@@ -192,7 +192,7 @@ class Library:
     def shelve(self, path: Path, label: str, cached_output: Path | None = None) -> Paper:
         """List a PDF from the researcher's local library without parsing it; `read` parses it on first use.
 
-        `label` is how the agent sees the file (e.g. thesis/Some Title.pdf). With `cached_output`, an earlier
+        `label` is how the agent sees the file (e.g. papers/Some Title.pdf). With `cached_output`, an earlier
         parse of the same bytes, the entry shows the paper's own title and first abstract sentence.
         """
         title, abstract = path.stem, ""

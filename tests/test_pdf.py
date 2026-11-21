@@ -257,7 +257,7 @@ def run_with_library(model, tmp_path, library, runner, papers=()):
 
 
 def test_the_local_library_is_listed_and_only_the_paper_read_is_parsed(tmp_path):
-    library = tmp_path / "thesis"
+    library = tmp_path / "papers"
     (library / "older").mkdir(parents=True)
     for name in ("My Paper.pdf", "older/Other Paper.pdf"):
         (library / name).write_bytes(f"%PDF-1.4\n{name}\n".encode())
@@ -273,24 +273,24 @@ def test_the_local_library_is_listed_and_only_the_paper_read_is_parsed(tmp_path)
     result = run_with_library(model, tmp_path, library, runner)
     assert result.status == "completed", result.stop_reason  # a library paper can be cited once read
     first = model.calls[0][0]["content"]
-    assert f"- `{PAPER}`: thesis/My Paper.pdf\n" in first and "`local:other-paper`: thesis/older/Other Paper.pdf" in first
+    assert f"- `{PAPER}`: papers/My Paper.pdf\n" in first and "`local:other-paper`: papers/older/Other Paper.pdf" in first
     assert "notes.txt" not in first and "Before searching online, check this list" in first
     assert runner.pdf_calls == ["local-my-paper.pdf"]  # the other one was never parsed
     saved = json.loads((result.artifact_dir / "literature.json").read_text())
-    assert saved["local_library"] == {PAPER: "thesis/My Paper.pdf", "local:other-paper": "thesis/older/Other Paper.pdf"}
+    assert saved["local_library"] == {PAPER: "papers/My Paper.pdf", "local:other-paper": "papers/older/Other Paper.pdf"}
     assert saved["papers"][0]["title"] == "Efficient MDP Analysis for Selfish-Mining in Blockchains"
 
     # The next task sees the parsed paper's own title and abstract, from the parse cache, without parsing again.
     model = ScriptedModel([text_turn("Done.")])
     run_with_library(model, tmp_path, library, runner)
     first = model.calls[0][0]["content"]
-    assert (f"- `{PAPER}`: thesis/My Paper.pdf (Efficient MDP Analysis for Selfish-Mining in Blockchains). "
+    assert (f"- `{PAPER}`: papers/My Paper.pdf (Efficient MDP Analysis for Selfish-Mining in Blockchains). "
             "A proof of work (PoW) blockchain protocol") in first  # fmt: skip
     assert runner.pdf_calls == ["local-my-paper.pdf"]
 
 
 def test_a_supplied_paper_is_not_listed_again_and_a_missing_library_is_ignored(tmp_path):
-    library = tmp_path / "thesis"
+    library = tmp_path / "papers"
     library.mkdir()
     (library / "My Paper.pdf").write_bytes(b"%PDF-1.4\n")
     model = ScriptedModel([text_turn("Done.")])

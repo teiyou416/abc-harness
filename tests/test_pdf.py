@@ -21,6 +21,7 @@ from abc_harness.execution.trace import read_trace
 from abc_harness.interfaces import cli
 from abc_harness.literature import Library
 from abc_harness.literature.http import FetchError
+from abc_harness.literature.library import library_pdfs
 from abc_harness.literature.pdf import NOTE, PARSER_IMAGE, TABLE_WARNING, PdfError, parse_structured
 
 FIXTURE = "tests/fixtures/pdf"
@@ -301,63 +302,102 @@ def test_a_supplied_paper_is_not_listed_again_and_a_missing_library_is_ignored(t
     assert "local library" not in model.calls[0][0]["content"]
 
 
-# ----- keeping opened papers in the local library -----
+# ----- keeping papers in the local library (save_paper) -----
 
 ARXIV_TITLE = "Efficient MDP Analysis for Selfish-Mining in Blockchains"
+ARXIV_FILE = "Efficient MDP Analysis for Selfish-Mining in Blockchains.pdf"
 
 
-def read_from_arxiv(tmp_path, library, runner, literature):
-    model = ScriptedModel([
-        tool_turn("search_papers", {"query": "selfish mining", "limit": 3}),
-        tool_turn("read_paper", {"paper": "arxiv:2007.05614"}),
-        text_turn("Done."),
-    ])  # fmt: skip
+def agent_with_library(tmp_path, library, steps, literature=None, runner=None):
+    model = ScriptedModel(steps)
     lines: list[str] = []
-    result = run_agent_task("q", model, runner, lambda q: "", lambda p: ("approve", ""), runs_root=tmp_path / "runs",
-                            literature=literature, library_dir=library,
+    result = run_agent_task("q", model, runner or FakeRunner(), lambda q: "", lambda p: ("approve", ""),
+                            runs_root=tmp_path / "runs", literature=literature, library_dir=library,
                             on_event=cli.Console(lines.append, color=False, live=False))  # fmt: skip
     return result, model, lines
 
 
-def test_an_opened_arxiv_paper_is_kept_in_the_library_and_read_from_arxiv_later(tmp_path, monkeypatch):
+def said(model, call):
+    return model.calls[call][-1]["content"][0]["content"]
+
+
+SEARCH_AND_READ = [tool_turn("search_papers", {"query": "selfish mining", "limit": 3}),
+                   tool_turn("read_paper", {"paper": "arxiv:2007.05614"})]  # fmt: skip
+
+
+def test_reading_a_paper_keeps_nothing(tmp_path):
+    library = tmp_path / "papers"
+    literature, _ = recorded_literature()
+    agent_with_library(tmp_path, library, [*SEARCH_AND_READ, text_turn("Done.")], literature)
+    assert library_pdfs(library) == []
+
+
+def test_save_paper_keeps_a_read_paper_in_a_folder_and_indexes_it(tmp_path, monkeypatch):
     monkeypatch.setitem(RECORDED, "https://arxiv.org/pdf/2007.05614", "../pdf/handwritten.pdf")
     library, runner = tmp_path / "papers", FakeRunner()
-    literature, fetcher = recorded_literature()
-    result, first_model, lines = read_from_arxiv(tmp_path, library, runner, literature)
-    assert result.status == "not_executed", result.stop_reason
-    kept = library / f"{ARXIV_TITLE}.pdf"
+    literature, _ = recorded_literature()
+    result, model, lines = agent_with_library(tmp_path, library, [
+        *SEARCH_AND_READ,
+        tool_turn("save_paper", {"paper": "arxiv:2007.05614", "folder": "security"}),
+        tool_turn("save_paper", {"paper": "arxiv:2007.05614"}),
+        text_turn("Done."),
+    ], literature, runner)  # fmt: skip
+    kept = library / "security" / ARXIV_FILE
     assert kept.read_bytes().startswith(b"%PDF")
+    assert said(model, 3) == f"Saved in the researcher's local library as papers/security/{ARXIV_FILE}; the library index records it."
+    assert said(model, 4) == f"Not saved: the same arXiv id is already there, as papers/security/{ARXIV_FILE}."
     index = json.loads((library / "index.json").read_text())
-    assert index[kept.name]["arxiv_id"] == "2007.05614" and index[kept.name]["title"] == ARXIV_TITLE
-    assert f"✓ Saved to the local library: {kept.name}" in lines
+    (entry,) = index.values()
+    assert entry["path"] == f"security/{ARXIV_FILE}" and entry["arxiv_id"] == "2007.05614"
+    assert entry["title"] == ARXIV_TITLE and entry["added_by_task"] == result.artifact_dir.name
+    assert f"✓ Saved to the local library: security/{ARXIV_FILE}" in lines
     saved = json.loads((result.artifact_dir / "literature.json").read_text())
-    assert saved["kept_in_library"] == {"arxiv:2007.05614": kept.name}
-    told = first_model.calls[2][-1]["content"][0]["content"]
-    assert f"# Kept: the harness also saved this paper's PDF in the researcher's local library as papers/{kept.name}." in told
+    assert saved["kept_in_library"] == {"arxiv:2007.05614": f"security/{ARXIV_FILE}"}
 
-    # The next task lists it with its title and arXiv id, reads it from arXiv's HTML, and does not keep it again.
-    model = ScriptedModel([tool_turn("read_paper", {"paper": "local:efficient-mdp-analysis-for-selfish-minin"}),
-                           text_turn("Done.")])  # fmt: skip
+    # The researcher moves the file; the index follows it by content, and the next task reads it from arXiv.
+    moved = library / "mining" / "mdp.pdf"
+    moved.parent.mkdir()
+    kept.rename(moved)
     literature, fetcher = recorded_literature()
-    run_agent_task("q", model, runner, lambda q: "", lambda p: ("approve", ""), runs_root=tmp_path / "runs",
-                   literature=literature, library_dir=library)  # fmt: skip
-    first = model.calls[0][0]["content"]
-    assert f"papers/{kept.name} [arXiv 2007.05614]" in first
-    opened = model.calls[1][-1]["content"][0]["content"]
-    assert "# Source: https://arxiv.org/html/2007.05614" in opened
+    _, model, _ = agent_with_library(tmp_path, library, [
+        tool_turn("read_paper", {"paper": "local:mdp"}), text_turn("Done.")], literature, runner)  # fmt: skip
+    assert f"`local:mdp`: papers/mining/mdp.pdf ({ARXIV_TITLE}) [arXiv 2007.05614]" in model.calls[0][0]["content"]
+    assert "# Source: https://arxiv.org/html/2007.05614" in said(model, 1)
     assert runner.pdf_calls == [] and not any("/pdf/" in url for url, _ in fetcher.requests)
-    assert sorted(p.name for p in library.iterdir()) == [kept.name, "index.json"]
+    (entry,) = json.loads((library / "index.json").read_text()).values()
+    assert entry["path"] == "mining/mdp.pdf" and entry["arxiv_id"] == "2007.05614"
 
 
-def test_a_paper_that_cannot_be_kept_is_still_read(tmp_path):
+def test_a_paper_already_kept_by_hand_is_found_by_its_title(tmp_path, monkeypatch):
+    monkeypatch.setitem(RECORDED, "https://arxiv.org/pdf/2007.05614", "../pdf/handwritten.pdf")
+    library = tmp_path / "papers"
+    library.mkdir()
+    (library / "Efficient MDP analysis for selfish mining in blockchains.pdf").write_bytes(b"%PDF-1.4\nmine\n")
+    literature, _ = recorded_literature()
+    _, model, _ = agent_with_library(tmp_path, library, [
+        *SEARCH_AND_READ, tool_turn("save_paper", {"paper": "arxiv:2007.05614"}), text_turn("Done.")], literature)  # fmt: skip
+    assert said(model, 3).startswith("Not saved: a paper with the same title is already there")
+    assert len(library_pdfs(library)) == 1
+
+
+@pytest.mark.parametrize(("args", "message"), [
+    ({"paper": "arxiv:2007.05614", "folder": "../outside"}, "folder must be"),
+    ({"paper": "doi:10.1109/icbc48266.2020.9169446"}, "read doi:10.1109/icbc48266.2020.9169446 with read_paper first"),
+])  # fmt: skip
+def test_save_paper_refuses_unsafe_folders_and_unread_papers(tmp_path, args, message):
+    library = tmp_path / "papers"
+    literature, _ = recorded_literature()
+    _, model, _ = agent_with_library(tmp_path, library, [
+        *SEARCH_AND_READ, tool_turn("save_paper", args), text_turn("Done.")], literature)  # fmt: skip
+    assert message in said(model, 3) and library_pdfs(library) == []
+
+
+def test_a_failed_download_is_reported_and_nothing_is_kept(tmp_path):
     library = tmp_path / "papers"
     literature, _ = recorded_literature()  # no recorded PDF: the download fails with 404
-    result, model, _ = read_from_arxiv(tmp_path, library, FakeRunner(), literature)
-    told = model.calls[2][-1]["content"][0]["content"]
-    assert "# Source: https://arxiv.org/html/2007.05614" in told and "# Not kept in the local library:" in told
-    saved = json.loads((result.artifact_dir / "literature.json").read_text())
-    assert saved["kept_in_library"] == {} and "404" in saved["keep_errors"]["arxiv:2007.05614"]
-    assert not list(library.glob("*.pdf"))
+    _, model, _ = agent_with_library(tmp_path, library, [
+        *SEARCH_AND_READ, tool_turn("save_paper", {"paper": "arxiv:2007.05614"}), text_turn("Done.")], literature)  # fmt: skip
+    assert "could not download the PDF" in said(model, 3) and library_pdfs(library) == []
 
 
 def test_a_large_library_is_reported(tmp_path):

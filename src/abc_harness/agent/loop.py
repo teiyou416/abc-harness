@@ -32,7 +32,7 @@ from abc_harness.execution.limits import Budget, LimitReached
 from abc_harness.execution.runner import Runner, RunnerError
 from abc_harness.execution.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
 from abc_harness.literature.figures import media_type
-from abc_harness.literature.library import Library, Literature, read_index
+from abc_harness.literature.library import Library, Literature, library_pdfs, sync_index
 from abc_harness.literature.pdf import PARSER_IMAGE, PdfError
 from abc_harness.tools import HANDLERS, TOOLS, EndTask, ToolContext, ToolError, ToolOutput
 from abc_harness.tools.base import AskFn
@@ -307,10 +307,10 @@ LIBRARY_WARN_PAPERS = 100  # above this, the terminal suggests tidying the local
 
 def local_library_pdfs(library_dir: Path | None, supplied: Sequence[Path] = ()) -> list[Path]:
     """The PDFs under the local library directory, minus any also supplied with --paper."""
-    if library_dir is None or not library_dir.is_dir():
+    if library_dir is None:
         return []
     skip = {p.resolve() for p in supplied}
-    return sorted(p for p in library_dir.rglob("*") if p.suffix.lower() == ".pdf" and p.is_file() and p.resolve() not in skip)
+    return [p for p in library_pdfs(library_dir) if p.resolve() not in skip]
 
 
 def _shelve_papers(library: Library | None, pdfs: Sequence[Path], library_dir: Path | None, task: Task) -> str:
@@ -319,11 +319,10 @@ def _shelve_papers(library: Library | None, pdfs: Sequence[Path], library_dir: P
     lines = [(f"The researcher keeps these papers as PDFs in a local library ({library_dir}/). They are not parsed "
               "yet: open one with read_paper only if you need it (the first parse takes 1 to 6 minutes, outside "
               "the time limit). Before searching online, check this list; if a paper you need is here, read it "
-              "instead of searching for it. Once read, it can be cited like papers found by search_papers. Papers you "
-              "open from arXiv are added to this library for later tasks.")]  # fmt: skip
-    index = read_index(library_dir)
+              "instead of searching for it. Once read, it can be cited like papers found by search_papers.")]  # fmt: skip
+    index = {entry["path"]: entry for entry in sync_index(library_dir).values()}
     for path in pdfs:
-        relative = str(path.relative_to(library_dir))
+        relative = path.relative_to(library_dir).as_posix()
         label = f"{library_dir.name}/{relative}"
         paper = library.shelve(path, label, task.cached_pdf_output(path), index.get(relative))
         first = paper.abstract.split(". ")[0].strip()

@@ -77,7 +77,7 @@ A paper the researcher hands to a task as a PDF file. It is parsed before the ag
 _Avoid_: local paper, uploaded paper, attachment
 
 **Local library**:
-The researcher's folder of PDFs (`papers/` unless `--library` names another). The agent sees every PDF in it listed by file name, and the harness parses one only when the agent opens it. A library paper the agent opened can be cited like a supplied paper. The harness adds each arXiv paper the agent opens to the library, named by its title, and records its arXiv id in the library's `index.json`.
+The researcher's folder of PDFs (`papers/` unless `--library` names another). The agent sees every PDF in it listed by file name, and the harness parses one only when the agent opens it. A library paper the agent opened can be cited like a supplied paper. When the researcher asks, or a paper supports an approved plan, the agent can keep a paper it read in the library with `save_paper`, named by its title; the library's `index.json` records its arXiv id and DOI and prevents keeping it twice.
 _Avoid_: paper folder, thesis folder
 
 **PDF parser image**:

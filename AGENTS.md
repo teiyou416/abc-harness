@@ -12,7 +12,7 @@ caps it at 100 lines, so the detail lives in the files it points to.
 
 | Before you | Read |
 |---|---|
-| start any work | [docs/status.md](docs/status.md): what works, what is broken, what is next |
+| start any work | [docs/status.md](docs/status.md): what works, what is broken or not verified, what is next |
 | pick the next piece of work | [docs/development-plan.md](docs/development-plan.md): milestones in order |
 | decide whether a feature belongs in the MVP | [docs/project-spec.md](docs/project-spec.md): scope, limits, acceptance |
 | touch the loop, a tool, the approval gate, the runner or the limits | [docs/architecture.md](docs/architecture.md), then [conventions §2](docs/context/conventions.md#2-how-much-process-a-change-needs) |

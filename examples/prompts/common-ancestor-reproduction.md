@@ -1,7 +1,7 @@
 # Reproducing the Common Ancestor paper's stubborn-mining experiment
 
 Prompts for `abc-harness chat` that ask the agent to reproduce one experiment
-of the Common Ancestor paper (`thesis/common_anchestor.pdf`) and draw a figure
+of the Common Ancestor paper (`papers/common_anchestor.pdf`) and draw a figure
 to compare with it. The same prompts are given in Chinese, Japanese, and
 English; use any one. The agent answers in the language you write in.
 
@@ -34,7 +34,7 @@ new task of the same conversation.
 启动（带上论文；每个任务默认有 2 小时）：
 
 ```bash
-uv run abc-harness chat --paper thesis/common_anchestor.pdf
+uv run abc-harness chat --paper papers/common_anchestor.pdf
 ```
 
 第一条提示词：
@@ -68,7 +68,7 @@ uv run abc-harness chat --paper thesis/common_anchestor.pdf
 起動（論文を渡す。1 タスクの制限時間は既定で 2 時間）：
 
 ```bash
-uv run abc-harness chat --paper thesis/common_anchestor.pdf
+uv run abc-harness chat --paper papers/common_anchestor.pdf
 ```
 
 最初のプロンプト：
@@ -102,7 +102,7 @@ uv run abc-harness chat --paper thesis/common_anchestor.pdf
 Start (with the paper; each task has 2 hours by default):
 
 ```bash
-uv run abc-harness chat --paper thesis/common_anchestor.pdf
+uv run abc-harness chat --paper papers/common_anchestor.pdf
 ```
 
 First prompt:

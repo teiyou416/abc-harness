@@ -201,7 +201,7 @@ of the session (the parse cache makes this instant).
    A full text comes from arXiv's HTML or, when there is none, from the arXiv
    PDF parsed in the PDF parser image. PDFs the researcher supplies with
    `ask --paper` are parsed before step 2 and listed in the first message.
-   PDFs in the local library (`--library`, default `thesis/`) are listed
+   PDFs in the local library (`--library`, default `papers/`) are listed
    there unparsed, with the title from an earlier parse if the parse cache
    has one; `read_paper` parses one when the agent opens it.
 5. The model drafts a plan. The harness checks its citations, pins the execution image's ID into

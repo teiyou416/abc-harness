@@ -5,15 +5,17 @@ reproducible blockchain simulation. The researcher reviews an experiment plan
 and approves it. The harness then runs the simulator in a Docker container and
 writes a report linked to the raw output.
 
-The harness runs a hand-written SimBlock or BlockSim plan after approval,
-and an agent drafts plans from a research question (milestone M2).
+An agent drafts the plan from a research question, reads papers to justify
+it, and can change the simulator source within the files the plan permits; a
+hand-written plan runs too.
 [docs/status.md](docs/status.md) says what works today.
 
 ## Requirements
 
 - macOS on Apple silicon (other platforms are untested)
 - [uv](https://docs.astral.sh/uv/)
-- Docker Desktop or another Docker-compatible runtime, running
+- Docker Desktop or another Docker-compatible runtime, running, with enough
+  memory to parse a PDF beside a simulation run (see [Limits](docs/project-spec.md#limits))
 - Network access for the first `uv sync` and the image build
 
 ## Run the SimBlock example
@@ -33,8 +35,8 @@ uv run abc-harness run examples/simblock-baseline.toml
 - `abc-harness-sim:blocksim-603361d`: BlockSim at commit
   `603361dab49101cdd820dbfd86e19536d841cbae` with Python 3.11 and pandas 1.5.3.
 - `abc-harness-pdf:mineru-4.2.3`: the PDF parser, MinerU 4.2.3 with its CPU
-  models, used to read papers given as PDF. Parsing needs 6 GB of memory, so
-  give Docker Desktop at least 8 GB (12 GB to parse beside a simulation).
+  models, used to read papers given as PDF. Parsing needs more memory than a
+  simulation run; see the requirements above.
 - `abc-harness-plot:mpl-3.11.2`: matplotlib 3.11.2 and numpy 2.5.4, used to
   run the figure scripts the agent writes after an experiment.
 
@@ -63,6 +65,10 @@ The agent may ask clarification questions, then shows a plan and asks
 `Approve this plan? [approve/revise/reject]:`. Choose `revise` to send it
 back with a comment; every new version needs a fresh approval.
 
+Each task stops at its limits on active runtime and model calls; change them
+with `--time-limit-seconds` and `--llm-call-limit` (defaults in
+[Limits](docs/project-spec.md#limits)).
+
 While the task runs, the terminal shows each step as it happens: every model
 call with its time and tokens, the model's thinking (a summary the API
 returns), what it says, each tool it calls and a preview of the result, plan
@@ -70,12 +76,12 @@ decisions, and each simulation run with its metrics. `--quiet` turns this
 off; `trace.jsonl` and `history.md` keep the full text either way. At the
 end, `ask` and `run` print the agent's summary and the run statistics: active
 and waiting time, model calls and tokens, an estimated cost at list prices
-(`PRICES` in `src/abc_harness/agent/model.py`, from the official pricing page; not a bill), tool
+(`MODELS` in `src/abc_harness/agent/model.py`, from the official pricing page; not a bill), tool
 calls, and completed simulation runs. The experiment's results are in `report.md`.
 
 To have the agent read a paper you choose, pass the PDF; repeat `--paper` for
 several. The harness parses each one before the agent starts (1 to 6 minutes
-for a 20-page paper, not counted toward the 2-hour limit, and cached for
+for a 20-page paper, not counted toward the task's time limit, and cached for
 the next task), and the agent can cite them:
 
 ```bash
@@ -105,7 +111,7 @@ uv run abc-harness chat [--paper paper.pdf]
 
 Type a request and press Enter (Alt+Enter, or Esc then Enter, for a new
 line; the arrow keys recall earlier input). Each request runs as its own
-task, with its own directory, approval, report, and 2-hour limit, so a
+task, with its own directory, approval, report, and limits, so a
 follow-up such as "now with 1000 nodes" gets a new plan to approve. The agent
 remembers the earlier tasks of the conversation: the harness gives it each
 one's question, plan, results, figures, and final answer, and it can read
@@ -113,8 +119,7 @@ their files. Ctrl-C during a task stops that task and returns to the prompt;
 Ctrl-C or Ctrl-D at an empty prompt leaves. Commands: `/tasks` lists the
 conversation's tasks, `/paper <pdf>` adds a paper for every following task,
 `/model` shows the model and the available ones and `/model <name>` switches
-the following tasks to another (it must support adaptive thinking and the
-chosen `--effort`),
+the following tasks to another listed model,
 `/new` starts over, `/help`, and `/quit`. The conversation's log is
 `runs/sessions/<session_id>/session.jsonl`.
 
@@ -147,21 +152,23 @@ entry in `runs/<task_id>/results.json`. For a BlockSim run, leave out
 | `plans/` | every plan version proposed in the task |
 | `approvals.jsonl` | every decision, bound to a plan version |
 | `trace.jsonl` | every event, with active and waiting time and the stop reason |
-| `history.md` | (`ask` only) every message of every context window, with full tool results |
-| `figures/` | (`ask` only) each figure the agent drew: PNG, SVG, the script that drew it, its output, and `index.json` with the captions; the report shows them |
-| `literature.json`, `papers/` | (`ask` only) searches, found and supplied papers, full texts, PDFs and their parser output, viewed figures |
+| `history.md` | (agent tasks) every message of every context window, with full tool results |
+| `figures/` | (agent tasks) each figure the agent drew: PNG, SVG, the script that drew it, its output, and `index.json` with the captions; the report shows them |
+| `literature.json`, `papers/` | (agent tasks) searches, found and supplied papers, full texts, PDFs and their parser output, viewed figures |
 | `manifest.json` | simulator commit, image ID, command, limits, PDF parses, and task status |
 | `results.json`, `report.md` | per-run status and metrics, and the readable report |
 | `raw/<run_id>/` | the simulator's own output: `stdout.txt`, `blockList.txt`, `static.json` from SimBlock; `result.xlsx` and one CSV per sheet from BlockSim |
-| `changes/<run_id>.diff` | the parameter and seed edits applied to the simulator source |
-| `workspace/source/` | the unmodified simulator source copied from the image |
+| `changes/<run_id>.diff`, `changes/edits.diff` | the parameter and seed edits applied to each run's source, and the agent's permitted edits |
+| `validation.json` | the validation check's runs and verdict, for a plan with permitted edits |
+| `sandbox/` | every sandbox exec command and its output |
+| `workspace/` | `original/` (the simulator source copied from the image, never changed), `edited/` (the agent's copy), `scratch/` (its builds and tests), and `runs/` (each simulation run's source copy, removed after its output is saved) |
 
 ## Develop
 
 ```bash
 make check         # lint and offline tests; run before every commit
 make test-docker   # integration tests against the execution image
-make test-live     # one real Claude API call sequence; needs .env
+make test-live     # the real model APIs and literature services; needs .env
 ```
 
 | Read | For |

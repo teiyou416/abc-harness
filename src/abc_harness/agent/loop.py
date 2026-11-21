@@ -22,6 +22,7 @@ from abc_harness.agent.context import (
     cap_text,
     estimate_tokens,
     latest_tool_results,
+    limits_note,
     new_window_message,
     render_transcript,
     task_state,
@@ -70,7 +71,7 @@ class Agent:
         """Run the loop. `preface` is harness text added after the question, e.g. the papers the researcher supplied."""
         self.question = question
         system = system_prompt()
-        first = f"{question}\n\n{preface}" if preface else question
+        first = "\n\n".join(p for p in (question, preface, limits_note(self.task.budget)) if p)
         messages: list[dict[str, Any]] = [{"role": "user", "content": first}]
         self.history.start_window("The task starts.")
         self.history.user_text(first)

@@ -2,8 +2,8 @@
 
 This page describes the system as it is built today and which module holds
 each part. The diagram below is the current architecture; keep it true in the
-same commit as any change that makes it false. The original long-term sketch
-is kept under [Original design sketch](#original-design-sketch).
+same commit as any change that makes it false. The values of all limits are in
+[the project specification](project-spec.md#limits).
 
 ```mermaid
 flowchart TB
@@ -16,7 +16,7 @@ flowchart TB
     end
 
     subgraph LOOP["Agent: agent/"]
-        CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft limit 106,496 / hard limit 180,224"]
+        CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft and hard context limits"]
         LLM["Model client: agent/model.py<br/>only holder of the API keys<br/>Claude or DeepSeek"]
         TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_files, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan,<br/>make_figure"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
@@ -25,7 +25,7 @@ flowchart TB
     subgraph TASK["Task: execution/task.py"]
         PLAN["planning/plan.py<br/>validate, version = SHA-256"]
         APPROVAL["planning/approval.py<br/>decisions recorded by the harness"]
-        LIMITS["execution/limits.py<br/>2 h active time, 500 model calls"]
+        LIMITS["execution/limits.py<br/>active time and model-call limits"]
         EXEC["execute approved plan"]
     end
 
@@ -59,10 +59,11 @@ flowchart TB
     ENV -->|optional S2 key| LIB
     TOOLS -->|search_papers, read_paper, view_figure| LIB
     LIB <-->|HTTPS from the host| ACADEMIC(["OpenAlex, Semantic Scholar, arXiv"])
-    R -->|ask --paper PDF| LIB
+    R -->|--paper or /paper PDF| LIB
     LIB -->|parse a PDF, via the task| RUNNER
     LIB --> FILES
     LLM <-->|Messages API| CLAUDE(["Claude API"])
+    LLM <-->|Anthropic-compatible API| DEEPSEEK(["DeepSeek API"])
     R --> ASK --> LOOP
     R --> RUN --> PLAN
     TOOLS --> PLAN
@@ -76,8 +77,7 @@ flowchart TB
     LOOP -->|trace, history| FILES
 ```
 
-A module marked _planned_ names where code will go; replace the mark when the
-module lands. The [module map](#module-map) says what every file does. Each simulator adapter ships a capability card next to it,
+The [module map](#module-map) says what every file does. Each simulator adapter ships a capability card next to it,
 for example `simulators/simblock_card.md` and `simulators/blocksim_card.md`.
 The agent reads every card before choosing a simulator and cites entries of
 both in the plan's rationale.
@@ -107,9 +107,9 @@ checks that every module appears in this table.
 | Tools | `tools/search_papers.py` | Searches the first-round venues, or everything when broadened. |
 | Tools | `tools/read_paper.py` | Opens a paper's full text (arXiv HTML, or a PDF parsed by MinerU) in `papers/` and returns its source, outline, and figure and table list. |
 | Tools | `tools/view_figure.py` | Shows the model one figure (or, for a PDF, a table) as an image and records that it was viewed. |
-| Tools | `tools/read_file.py` | Reads lines of a file, or lists a folder, under `examples/`, `source/<simulator>/`, or the task's artifact directory, nothing else. |
+| Tools | `tools/read_file.py` | Reads lines of a file, or lists a folder, under the roots in `tools/paths.py`, nothing else. |
 | Tools | `tools/search_files.py` | Searches the same paths: matching lines as `path:line: text` for a regular expression, or file names for a glob. |
-| Tools | `tools/paths.py` | The three readable roots and the path check shared by `read_file` and `search_files`. |
+| Tools | `tools/paths.py` | The readable roots (`examples/`, `source/<simulator>/`, `task/`, and in a chat session `previous/<task_id>/`) and the path check shared by `read_file` and `search_files`. |
 | Tools | `tools/ask_researcher.py` | Asks the researcher a question; the wait is not active time. |
 | Tools | `tools/propose_plan.py` | Validates a plan and its citations, pins the image, and gets the researcher's decision. |
 | Tools | `tools/run_plan.py` | Runs an approved plan and summarises the results, including the validation check, for the model. |
@@ -123,7 +123,7 @@ checks that every module appears in this table.
 | Execution | `execution/workspace.py` | The original, edited, and scratch trees; which paths a write may touch; the diff of the edits. |
 | Execution | `execution/figures.py` | Runs one figure script in the plot image with the results read-only, checks its PNG, and keeps script, PNG, SVG, and log in `figures/` with `figures/index.json`. |
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
-| Execution | `execution/limits.py` | The 2-hour active time and 500-call limits; waiting for the researcher and PDF parsing do not count. |
+| Execution | `execution/limits.py` | The active-time and model-call limits; waiting for the researcher and PDF parsing do not count. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl`, passes each redacted event to an optional listener (the live terminal output), and summarises it. |
 | Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
 | Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |
@@ -167,7 +167,8 @@ name. The harness validates every
 proposed plan in code before the researcher sees it, records each decision
 itself, and refuses `run_plan` for any plan version without a recorded
 approval. A rejection ends the task without another model call. A plan's
-citations pass only if each paper came from `search_papers` in the same task,
+citations pass only if each paper came from `search_papers` in the same task
+or was supplied by the researcher,
 and its quote appears verbatim in the paper's abstract or saved full text or
 its figure reading names a figure the agent viewed, with an uncertainty.
 
@@ -216,31 +217,6 @@ of the session (the parse cache makes this instant).
    limit stops the task. The harness writes the report and manifest in every
    case.
 
-## Diagram boxes in the first release
-
-This table maps each box of the [original design sketch](#original-design-sketch)
-to what the first release builds.
-
-| Diagram element | First release | Module |
-|---|---|---|
-| Loop (LLM, tool calls, end-loop guardrails) | Yes. One loop; guardrails enforce the time, call, and context limits. | `agent/loop.py`, `agent/model.py`, `execution/limits.py` |
-| Tools: Files | Yes. Reads and searches examples, the simulator source, and the task; writes only the permitted files and `scratch/` after approval. | `tools/read_file.py`, `tools/search_files.py`, `tools/write_file.py`, `tools/edit_file.py` |
-| Tools: Execution (Bash) | Replaced by the runner and sandbox exec, both inside the execution image. No general shell on the host. | `execution/runner.py`, `tools/run_command.py` |
-| Tools: Web Retrieval | Yes, for academic literature only: search, arXiv full text, and PDFs parsed by MinerU. Sources are listed in the project specification. | `tools/search_papers.py`, `tools/read_paper.py`, `literature/` |
-| Tools: Human Interaction | Yes, for clarification and plan review. The harness, not the model, records approval. | `tools/ask_researcher.py`, `tools/propose_plan.py`, `planning/approval.py`, `interfaces/cli.py` (terminal prompts) |
-| Tools: Custom Tools | Later | |
-| Simulators: SimBlock, BlockSim | Yes. BlockSim runs its Bitcoin model only. | `simulators/simblock.py`, `simulators/blocksim.py` |
-| Simulators: Blockemulator | Later | |
-| Literature boxes | Partial. OpenAlex and Semantic Scholar replace DBLP (bot check) and Papers With Code (gone); arXiv serves full text; IEEE Xplore is optional and not built. | `literature/` |
-| System prompt, user prompt, working memory | Yes. The system prompt is `SOUL.md` followed by `rules.md`; the working memory is the current window. | `agent/prompts/`, `agent/loop.py`, `agent/secrets.py` (API keys from `.env`) |
-| SOUL.md, SKILL.md, History.md | SOUL.md and a per-task `history.md` are built; SKILL.md and memory across tasks are later. | `agent/prompts/SOUL.md`, `agent/context.py` |
-| Context summarization and token caps | Yes: soft limit 106,496 as in the diagram; output 65,536, hard limit 180,224, and summary call 32,768 instead of the diagram's 16,384, 131,072, and 8,192, because thinking counts toward each output cap (same input room). | `agent/context.py`, `agent/loop.py` |
-| Draft | Yes. The draft is the structured plan shown for review. | `planning/plan.py` |
-| LLM Ops: trace | Yes. One `trace.jsonl` per task and a CLI summary of calls, tokens, latency, and errors. | `execution/trace.py` |
-| LLM Ops: LLM-as-a-judge, Diagnose, Gate, Release | Later. Result verification is deterministic. | |
-
-All module paths are relative to `src/abc_harness/`.
-
 ## Context management
 
 The agent's input is the system prompt (`agent/prompts/SOUL.md`, then
@@ -250,20 +226,19 @@ applies them.
 
 - Before every model call the agent estimates the next input from the last
   reported input tokens, the reply, and the new tool results. Past the soft
-  limit (106,496 tokens) it compresses first. An input that would leave less
-  than one full reply (65,536 tokens, thinking included) inside the hard limit (180,224 tokens)
-  stops the task with reason `context`.
+  limit it compresses first. An input that would leave less than one full
+  reply (thinking included) inside the hard limit stops the task with reason
+  `context`.
 - Compression asks the model, with `agent/prompts/compact.md` and no tools, for a
-  summary of at most 1,500 words; the call's reply cap is 32,768 tokens
-  because its thinking counts too. The summary call counts toward the
-  500-call limit.
+  summary of bounded length; the call has its own reply cap because its
+  thinking counts too. The summary call counts toward the call limit.
 - The new window is one user message: the original question, a task-state
   block written from the harness's records (plan versions, decisions,
   clarification answers, run results), the summary, the latest tool results,
   and a pointer to `task/history.md`. Plan versions, decisions, and numbers
   never pass through the summary.
 - `history.md` receives every message of every window as it happens, with
-  full tool results. A tool result longer than 8,192 tokens is cut in the
+  full tool results. A tool result longer than its cap is cut in the
   window, and the cut notice points to its full text in `history.md`. The
   agent pages through files with `read_file` `offset` and `limit`.
 - Requests mark the system prompt as a cache breakpoint and enable automatic
@@ -314,8 +289,8 @@ applies them.
   `python:3.12-slim` with a pinned MinerU release and its CPU models (about
   0.8 GB) downloaded at build time; the whole image is about 3.2 GB. One
   container parses one PDF, with the PDF mounted read-only, an output
-  directory writable, no network, 6 CPUs and 6 GB of memory, and the task
-  label. It has a 15-minute timeout, and its time is recorded as
+  directory writable, no network, its own CPU and memory limits, and the
+  task label. It has its own timeout, and its time is recorded as
   `pdf_parse_seconds` instead of counting toward the task's limit. Its output
   is cached under `runs/.cache/pdf/<image id>/<PDF sha256>/` and copied into
   each task that needs it.
@@ -324,7 +299,7 @@ applies them.
   helper (`docker/plot/abcplot.py`: loads the results, applies the house
   style, saves SVG and PNG). One container runs one figure script, with
   `results.json`, `plan.json`, `validation.json`, and `raw/` read-only under
-  `/data`, only `/out` writable, no network, the simulation limits, the task
-  label, and a 120-second timeout.
+  `/data`, only `/out` writable, no network, the simulation container's CPU and memory
+  limits, the task label, and its own timeout.
 - Nothing is installed at runtime. A new dependency means a new image, which
   requires a new plan version and fresh approval.

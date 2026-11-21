@@ -31,7 +31,7 @@ A prebuilt Docker image, one per simulator, holding that simulator at a pinned c
 _Avoid_: container, environment
 
 **Runner**:
-The tool that executes the simulation runs of an approved plan.
+The harness component that starts every container: the simulation runs of an approved plan, sandbox exec commands, PDF parses, and figure scripts.
 _Avoid_: executor, launcher
 
 **Sandbox exec**:
@@ -89,7 +89,7 @@ The venues every literature search starts from: FC, AFT, and ICBC. A broadened s
 _Avoid_: configured sources, default venues
 
 **Citation**:
-An entry in a plan that ties one found paper to the parameter, assumption, or metric it supports. Every citation rests on either a quote or a figure reading.
+An entry in a plan that ties one found or supplied paper to the parameter, assumption, or metric it supports. Every citation rests on either a quote or a figure reading.
 _Avoid_: reference, source
 
 **Quote**:

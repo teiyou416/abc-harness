@@ -28,7 +28,7 @@ Paths are relative to the source root, as permitted edits name them. Read them w
 
 ## Cost
 
-- **BS-C1** One simulation run of one simulated day (`simTime` = 86400) with 3 miners, 600 s blocks, and Light transactions takes about 2 seconds. Run time grows with the number of blocks (simTime / Binterval), the number of miners, and the transaction rate. Keep a whole plan well inside the task's time limit (2 hours by default).
+- **BS-C1** One simulation run of one simulated day (`simTime` = 86400) with 3 miners, 600 s blocks, and Light transactions takes about 2 seconds. Run time grows with the number of blocks (simTime / Binterval), the number of miners, and the transaction rate. Keep a whole plan well inside the task's limits, stated in your first message.
 
 ## Metrics
 

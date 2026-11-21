@@ -25,11 +25,8 @@ caps it at 100 lines, so the detail lives in the files it points to.
 
 ## Definitions
 
-The terms used here (task, plan version, simulation run, task workspace,
-execution image, runner, sandbox exec, test double, permitted edit, validation
-check, edited source, citation, quote, figure reading, supplied paper,
-PDF parser image, machine-recognized text, result figure, plot image, chat
-session, custom metric) are defined in [docs/glossary.md](docs/glossary.md).
+Project terms are defined in [docs/glossary.md](docs/glossary.md). Use them
+as defined there, and add a term there before using a new one.
 
 ## Hard rules
 
@@ -46,10 +43,10 @@ session, custom metric) are defined in [docs/glossary.md](docs/glossary.md).
    change to the simulator, parameters, metrics, permitted edits, validation
    check, or execution image requires a new plan version and fresh approval.
 4. **Enforce limits in code.** Restrict writes to the task workspace and the
-   files the approved plan permits. Enforce two limits per task: 2 hours of
-   active runtime, excluding time spent waiting for the researcher or parsing
-   PDFs (the PDF parser has its own 15-minute timeout), and 500 LLM
-   calls. At either limit, stop active work, remove the task's containers, and
+   files the approved plan permits. Enforce two limits per task, with the
+   values in [Limits](docs/project-spec.md#limits): active runtime,
+   excluding time spent waiting for the researcher or parsing PDFs (the PDF
+   parser has its own timeout), and LLM calls. At either limit, stop active work, remove the task's containers, and
    preserve partial results.
 5. **Keep credentials private.** Every API key lives in `.env` (gitignored;
    `.env.example` lists the names). Pass each key only to the client that needs
@@ -77,7 +74,7 @@ fails on:
 |---|---|
 | a lint error in `src/` or `tests/` | `ruff check` |
 | a failing test that needs neither Docker nor an API key | `pytest` |
-| this file over 100 lines, a broken relative link, an unindexed doc, a gotcha without `Retire when:`, an import from a higher layer, a module missing from the module map | `tests/test_rulebook.py` |
+| this file over 100 lines, a broken relative link or heading anchor, an unindexed doc, a gotcha without `Retire when:`, an import from a higher layer, a module missing from the module map | `tests/test_rulebook.py` |
 
 Tests marked `docker` or `live` are skipped by `make check`. Run them with
 `make test-docker` and `make test-live` when a change touches the runner or the
@@ -86,5 +83,5 @@ model client.
 ## Commands
 
 `make check` (lint + offline tests) · `make test` · `make test-docker` · `make test-live` · `make lint` · `make fmt`
-`make image` (build both execution images) · `make example` / `make example-blocksim` (review and run an example plan)
+`make image` (build every image) · `make example` / `make example-blocksim` (review and run an example plan)
 `uv run abc-harness ask "<question>" [--paper paper.pdf]` (agent drafts a plan) · `uv run abc-harness chat` (conversation, one task per request) · `uv run abc-harness trace summary runs/<task_id>` · `uv run abc-harness export runs/<task_id>`

@@ -3,12 +3,15 @@
 Keys are read into a `Secrets` object and handed to the one client that needs
 each of them. They are never copied into `os.environ`, so no subprocess can
 inherit them, and `Secrets.redact` scrubs their values from anything the
-harness writes.
+harness writes. Only entries named like a credential are scrubbed: other
+`.env` lines are settings, and a value such as "deepseek" must not blank out
+model names.
 """
 
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 DEFAULT_ENV_FILE = Path(".env")
@@ -16,6 +19,8 @@ REDACTED = "[REDACTED]"
 # Values shorter than this are not treated as secrets when redacting, so a
 # placeholder such as "x" cannot blank out every "x" in a trace.
 MIN_SECRET_LENGTH = 8
+# Entry names treated as credentials, e.g. DEEPSEEK_API_KEY, GITHUB_TOKEN, DB_PASSWORD.
+SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH", re.IGNORECASE)
 
 
 class MissingSecret(KeyError):
@@ -66,8 +71,8 @@ class Secrets:
         return name in self._values
 
     def redact(self, text: str) -> str:
-        for value in self._values.values():
-            if len(value) >= MIN_SECRET_LENGTH:
+        for name, value in self._values.items():
+            if SECRET_NAME.search(name) and len(value) >= MIN_SECRET_LENGTH:
                 text = text.replace(value, REDACTED)
         return text
 

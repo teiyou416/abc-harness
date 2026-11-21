@@ -51,5 +51,11 @@ def run(ctx: ToolContext, args: dict[str, Any]) -> str:
               else "Figures (view one with view_figure; tables are text in the outline)")  # fmt: skip
     header = "\n".join(line for line in lines[:2] if line.startswith(("# Source:", "# Note:")))
     first = "\n".join(lines[:FIRST_LINES])
+    kept = ctx.library.kept.get(paper_id)
+    if kept:
+        header += (f"\n# Kept: the harness also saved this paper's PDF in the researcher's local library as "
+                   f"{ctx.library.library_dir.name if ctx.library.library_dir else 'papers'}/{kept}.")  # fmt: skip
+    elif paper_id in ctx.library.keep_errors:
+        header += f"\n# Not kept in the local library: {ctx.library.keep_errors[paper_id]}"
     return (f"[{paper.title}: saved to task/{rel}, {len(lines)} lines. Read sections with read_file.]\n"
             f"{header}\n\nOutline:\n{sections}\n\n{listed}:\n{figures}\n\nFirst {FIRST_LINES} lines:\n{first}")  # fmt: skip

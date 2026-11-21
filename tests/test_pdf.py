@@ -323,7 +323,7 @@ def test_an_opened_arxiv_paper_is_kept_in_the_library_and_read_from_arxiv_later(
     monkeypatch.setitem(RECORDED, "https://arxiv.org/pdf/2007.05614", "../pdf/handwritten.pdf")
     library, runner = tmp_path / "papers", FakeRunner()
     literature, fetcher = recorded_literature()
-    result, _, lines = read_from_arxiv(tmp_path, library, runner, literature)
+    result, first_model, lines = read_from_arxiv(tmp_path, library, runner, literature)
     assert result.status == "not_executed", result.stop_reason
     kept = library / f"{ARXIV_TITLE}.pdf"
     assert kept.read_bytes().startswith(b"%PDF")
@@ -332,6 +332,8 @@ def test_an_opened_arxiv_paper_is_kept_in_the_library_and_read_from_arxiv_later(
     assert f"✓ Saved to the local library: {kept.name}" in lines
     saved = json.loads((result.artifact_dir / "literature.json").read_text())
     assert saved["kept_in_library"] == {"arxiv:2007.05614": kept.name}
+    told = first_model.calls[2][-1]["content"][0]["content"]
+    assert f"# Kept: the harness also saved this paper's PDF in the researcher's local library as papers/{kept.name}." in told
 
     # The next task lists it with its title and arXiv id, reads it from arXiv's HTML, and does not keep it again.
     model = ScriptedModel([tool_turn("read_paper", {"paper": "local:efficient-mdp-analysis-for-selfish-minin"}),
@@ -351,7 +353,8 @@ def test_a_paper_that_cannot_be_kept_is_still_read(tmp_path):
     library = tmp_path / "papers"
     literature, _ = recorded_literature()  # no recorded PDF: the download fails with 404
     result, model, _ = read_from_arxiv(tmp_path, library, FakeRunner(), literature)
-    assert "# Source: https://arxiv.org/html/2007.05614" in model.calls[2][-1]["content"][0]["content"]
+    told = model.calls[2][-1]["content"][0]["content"]
+    assert "# Source: https://arxiv.org/html/2007.05614" in told and "# Not kept in the local library:" in told
     saved = json.loads((result.artifact_dir / "literature.json").read_text())
     assert saved["kept_in_library"] == {} and "404" in saved["keep_errors"]["arxiv:2007.05614"]
     assert not list(library.glob("*.pdf"))

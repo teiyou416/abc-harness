@@ -114,7 +114,7 @@ Append events to `trace.jsonl` as work happens, and show them in the terminal as
 | Supplied paper | Give the agent a paper as a PDF. Verify that the report cites it, that the citation is labelled as machine-recognized, and that a value from one of its tables is cited as a figure reading. |
 | Simulator selection | Verify that the agent explains its choice using the capabilities required by the experiment. If neither simulator fits, it identifies the missing capability. |
 | Plan approval | Approving a plan allows the corresponding run to start. Rejecting it starts no simulator container. Revising it requires approval of the new version. |
-| Permitted edits | Writing outside the permitted files is refused. Agent-written code that fails its validation check stops the task, and the report explains why. |
+| Permitted edits | A change to a simulator source file the approved plan does not permit, and any write outside the task workspace, is refused; builds and tests in `scratch/` are allowed. Agent-written code that fails its validation check stops the task, and the report explains why. |
 | Result verification | Match planned configurations and repetitions against completed runs. Recalculate a reported metric from raw output. A deliberately omitted run must appear as missing in the report. |
 | Controlled stopping | Exercise the time and call limits using smaller test budgets. Verify that the harness stops, removes active containers, and retains the trace and available results. |
 

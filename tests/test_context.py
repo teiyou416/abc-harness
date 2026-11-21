@@ -209,7 +209,6 @@ def test_terminal_reports_retries_and_exhausted_connection_is_a_failure(tmp_path
                             runs_root=tmp_path, on_event=Console(lines.append, color=False))
     assert result.status == "failed"
     assert len(timeouts) == 4
-    assert any("connect timeout up to 5s" in line for line in lines)
     for retry, delay in enumerate([0.5, 1.0, 2.0], start=1):
         assert any(f"Connection timed out. Retry {retry}/3 in {delay:.1f}s." in line for line in lines)
 

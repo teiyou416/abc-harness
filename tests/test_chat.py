@@ -179,8 +179,7 @@ def test_with_live_output_the_answer_is_printed_once(tmp_path):
 
     run_chat(lambda: ChatSession(tmp_path / "runs"), turn, Inputs("Which simulators?", "/quit"), out.append)
     assert [line.strip() for line in out].count("BlockSim and SimBlock.") == 1
-    assert "Using describe_simulator" in out
-    assert all("Checking." not in line for line in out)
+    assert all("Checking." not in line for line in out)  # text before a tool call stays in the trace
 
 
 def test_model_command_shows_and_switches_the_model_for_following_tasks(tmp_path):

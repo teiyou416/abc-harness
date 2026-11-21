@@ -27,7 +27,8 @@ history.
   with `/tasks`, `/paper`, `/model`, and `/new`. [M5.1]
 - Six models: four Claude models and two DeepSeek models; `deepseek-flash`
   is the default. [M5.1]
-- The terminal shows one line per action and ends with run statistics, including
+- The terminal shows a status line for the current action, milestones and
+  errors above it, and ends with run statistics, including
   an estimated cost. [M5.1]
 - Per-task limits on active runtime and model calls, changed with
   `--time-limit-seconds` and `--llm-call-limit`

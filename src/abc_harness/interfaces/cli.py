@@ -161,6 +161,13 @@ def _chat(
                 for name, spec in MODELS.items()]  # fmt: skip
 
     def turn(session: ChatSession, text: str) -> Any:
+        try:
+            return _turn(session, text)
+        finally:
+            if console:
+                console.idle()  # a stopped task must not leave the status line over the prompt
+
+    def _turn(session: ChatSession, text: str) -> Any:
         return session.run_turn(
             text, current["model"], runner,
             lambda question: prompt_answer(question, read=read),

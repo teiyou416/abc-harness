@@ -3,7 +3,7 @@
 **What is true right now.** Rewrite this file whole when it changes; never
 append to it. Git already records the history.
 
-**Last updated:** 2026-11-19
+**Last updated:** 2026-11-20
 
 ## What works
 

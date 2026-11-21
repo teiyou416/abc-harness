@@ -64,6 +64,7 @@ class ChatSession:
         redact: Callable[[str], str] | None = None,
         on_event: Callable[[dict[str, Any]], None] | None = None,
         on_start: Callable[[Path], None] | None = None,
+        library_dir: Path | None = None,
     ) -> Turn:
         """Run one request as a new task. A KeyboardInterrupt is recorded as an interrupted turn and re-raised."""
         started: list[Path] = []
@@ -78,7 +79,7 @@ class ChatSession:
                 question, model, runner, ask, review, runs_root=self.runs_root, budget=budget(), redact=redact,
                 literature=literature, on_start=start, papers=self.papers, on_event=on_event,
                 preface=self.preface(), previous_tasks={t.task_id: t.artifact_dir for t in self.turns},
-                session_id=self.session_id,
+                session_id=self.session_id, library_dir=library_dir,
             )  # fmt: skip
             turn = Turn(question, result.task_id, result.artifact_dir, result.status, result.stop_reason, result.summary,
                         model.name)  # fmt: skip

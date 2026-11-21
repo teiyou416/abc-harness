@@ -94,6 +94,9 @@ class Library:
         self.figures: dict[str, list[Figure]] = {}  # paper id -> figures listed in its full text
         self.viewed: dict[str, dict[str, list[str]]] = {}  # paper id -> figure label -> saved image paths
         self.sources: dict[str, dict[str, Any]] = {}  # paper id -> where its full text came from and how
+        # Local-library papers not parsed until first read: paper id -> the PDF, and how the agent saw it.
+        self.shelf: dict[str, Path] = {}
+        self.shelf_labels: dict[str, str] = {}
 
     @classmethod
     def load(cls, artifact_dir: Path) -> Library:
@@ -149,7 +152,12 @@ class Library:
         Raises FetchError or PdfError.
         """
         rel = self.full_texts.get(paper_id)
-        if rel is None:
+        if rel is None and paper_id in self.shelf:
+            if self.convert is None:
+                raise PdfError("this task has no PDF parser")
+            label = self.shelf_labels[paper_id]
+            rel = self._parse_local(paper_id, self.shelf[paper_id], f"PDF from the researcher's local library ({label})")
+        elif rel is None:
             assert self.literature is not None
             paper = self.papers[paper_id]
             assert paper.arxiv_id
@@ -177,23 +185,53 @@ class Library:
         """Add a PDF the researcher supplied: copy it into the task, parse it, and make it citable. Raises PdfError."""
         if self.convert is None:
             raise PdfError("this task has no PDF parser")
+        paper = self._register_local(path, path.name, "")
+        self._parse_local(paper.id, path, f"PDF supplied by the researcher ({path.name})")
+        return self.papers[paper.id]
+
+    def shelve(self, path: Path, label: str, cached_output: Path | None = None) -> Paper:
+        """List a PDF from the researcher's local library without parsing it; `read` parses it on first use.
+
+        `label` is how the agent sees the file (e.g. thesis/Some Title.pdf). With `cached_output`, an earlier
+        parse of the same bytes, the entry shows the paper's own title and first abstract sentence.
+        """
+        title, abstract = path.stem, ""
+        if cached_output is not None:
+            try:
+                data = json.loads((cached_output / pdf.OUTPUT_FILE).read_text(encoding="utf-8"))
+                parsed = pdf.parse_structured(data, "")
+                title, abstract = parsed.title or title, parsed.abstract
+            except (OSError, ValueError, AttributeError, TypeError):
+                pass  # the file name still identifies it
+        paper = self._register_local(path, title, abstract)
+        self.shelf[paper.id] = path
+        self.shelf_labels[paper.id] = label
+        self.save()
+        return paper
+
+    def _register_local(self, path: Path, title: str, abstract: str) -> Paper:
         name = slug(path.stem)[:40] or "paper"
         paper_id, n = f"local:{name}", 1
         while paper_id in self.papers:
             n += 1
             paper_id = f"local:{name}-{n}"
         stem = paper_id.replace(":", "-")
+        paper = Paper(id=paper_id, title=title, year=None, venue="", authors=[], abstract=abstract,
+                      url=f"{PAPERS_DIR}/{stem}.pdf", source="local")  # fmt: skip
+        self.papers[paper_id] = paper
+        return paper
+
+    def _parse_local(self, paper_id: str, path: Path, origin: str) -> str:
+        stem = paper_id.replace(":", "-")
         pdf_rel = f"{PAPERS_DIR}/{stem}.pdf"
         (self.artifact_dir / PAPERS_DIR).mkdir(exist_ok=True)
         (self.artifact_dir / pdf_rel).write_bytes(path.read_bytes())
         parsed, source = self._parse_pdf(pdf_rel, stem)
         source = {**source, "file": path.name}
-        paper = Paper(id=paper_id, title=parsed.title or path.name, year=None, venue="", authors=[],
-                      abstract=parsed.abstract, url=pdf_rel, source="local")  # fmt: skip
-        self.papers[paper_id] = paper
-        header = _pdf_header(f"PDF supplied by the researcher ({path.name})", source)
-        self._save_text(paper_id, stem, header, parsed.lines, parsed.figures, source)
-        return paper
+        paper = self.papers[paper_id]
+        paper.title = parsed.title or paper.title
+        paper.abstract = parsed.abstract or paper.abstract
+        return self._save_text(paper_id, stem, _pdf_header(origin, source), parsed.lines, parsed.figures, source)
 
     def _parse_pdf(self, pdf_rel: str, stem: str) -> tuple[pdf.ParsedPdf, dict[str, Any]]:
         assert self.convert is not None
@@ -312,6 +350,7 @@ class Library:
             "figures": {k: [f.as_dict() for f in v] for k, v in self.figures.items()},
             "viewed": self.viewed,
             "sources": self.sources,
+            "local_library": self.shelf_labels,
         }
         (self.artifact_dir / LITERATURE_FILE).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
                                                       encoding="utf-8")  # fmt: skip

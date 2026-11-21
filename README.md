@@ -88,6 +88,11 @@ the next task), and the agent can cite them:
 uv run abc-harness ask "Reproduce Figure 2 of this paper." --paper ~/papers/selfish-mining.pdf
 ```
 
+Papers you keep for reference go in `thesis/` (another folder with
+`--library DIR`), named by their titles. The agent sees the list, checks it
+before searching online, and parses only the papers it opens; a parsed paper's
+own title appears in the list from then on.
+
 ### Models
 
 `--model` (and `/model` in chat) takes one of: `deepseek-flash` (default),

@@ -43,6 +43,9 @@ TOOL_IMAGES = {
     PLOT: (Path(__file__).resolve().parents[3] / "docker" / "plot", PLOT_IMAGE),
 }
 
+DEFAULT_LIBRARY_DIR = Path("thesis")  # the researcher's local papers, read on demand
+
+
 def prompt_decision(
     plan: Plan, read: Read | None = None, write: Write = print, allow_revise: bool = False
 ) -> tuple[str, str]:
@@ -114,6 +117,8 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--env-file", type=Path, default=DEFAULT_ENV_FILE, help="file holding API keys")
         p.add_argument("--paper", type=Path, action="append", default=[], metavar="PDF",
                        help="a paper the agent should read, as a PDF file; repeat for several")  # fmt: skip
+        p.add_argument("--library", type=Path, default=DEFAULT_LIBRARY_DIR, metavar="DIR",
+                       help="local PDFs the agent may open when needed, parsed on first read (default: thesis)")  # fmt: skip
         task_options(p)
 
     ask = sub.add_parser("ask", help="describe an experiment; the agent drafts a plan for your approval")
@@ -161,7 +166,7 @@ def _chat(
             lambda question: prompt_answer(question, read=read),
             lambda plan: prompt_decision(plan, read=read, allow_revise=True),
             budget=lambda: Budget(time_limit_seconds=args.time_limit_seconds, llm_call_limit=args.llm_call_limit),
-            literature=literature, redact=redact, on_event=console, on_start=_announce,
+            literature=literature, redact=redact, on_event=console, on_start=_announce, library_dir=args.library,
         )  # fmt: skip
 
     print(f"ABC Harness chat with {model.name}.")
@@ -251,6 +256,7 @@ def main(argv: list[str] | None = None) -> int:
             literature=literature,
             on_start=_announce,
             papers=args.paper,
+            library_dir=args.library,
             on_event=None if args.quiet else Console(),
         )
         summary = (result.artifact_dir / "report.md").read_text(encoding="utf-8")

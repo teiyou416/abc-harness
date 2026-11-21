@@ -226,12 +226,14 @@ def run_agent_task(
     preface: str = "",
     previous_tasks: dict[str, Path] | None = None,
     session_id: str | None = None,
+    library_dir: Path | None = None,
 ) -> TaskResult:
     """Run one agent task.
 
     `papers` are PDFs the researcher supplied; they are parsed before the first model call. In a chat session,
     `preface` is the harness's account of the earlier tasks, added to the first message, and `previous_tasks`
-    are their artifact directories, which the agent may read.
+    are their artifact directories, which the agent may read. PDFs under `library_dir`, the researcher's local
+    library, are listed for the agent and parsed only when it reads one.
     """
     previous_tasks = previous_tasks or {}
     limits = limits or ContextLimits()
@@ -239,7 +241,7 @@ def run_agent_task(
                 prompts=prompt_hashes(), context_limits=limits.__dict__,
                 literature_services=literature.services if literature else [],
                 supplied_papers=[p.name for p in papers], session_id=session_id,
-                previous_tasks=list(previous_tasks))  # fmt: skip
+                previous_tasks=list(previous_tasks), local_library=str(library_dir) if library_dir else None)  # fmt: skip
     if on_start:
         on_start(task.artifact_dir)
     agent = Agent(task, model, ask, review, limits)
@@ -250,11 +252,13 @@ def run_agent_task(
         convert = task.convert_pdf
     except RunnerError:
         convert = None  # without the parser image, PDFs cannot be read; arXiv HTML still can
-    if literature is not None or papers:
+    shelf = local_library_pdfs(library_dir, papers)
+    if literature is not None or papers or shelf:
         agent.tools.library = Library(task.artifact_dir, literature, convert)
     status, stop_reason = FAILED, "unknown"
     try:
-        parts = [_supply_papers(agent.tools.library, papers) if papers else "", preface]
+        parts = [_supply_papers(agent.tools.library, papers) if papers else "",
+                 _shelve_papers(agent.tools.library, shelf, library_dir, task) if shelf else "", preface]
         status, stop_reason = agent.run(question, "\n\n".join(p for p in parts if p))
     except EndTask as e:
         status, stop_reason = e.status, e.reason
@@ -292,6 +296,30 @@ def _supply_papers(library: Library | None, papers: Sequence[Path]) -> str:
     lines = [("The researcher supplied these papers as PDFs. The harness has parsed them; open one with read_paper. "
              "They can be cited like papers found by search_papers.")]  # fmt: skip
     lines += [f"- `{p.id}`: {p.title}" for p in added]
+    return "\n".join(lines)
+
+
+def local_library_pdfs(library_dir: Path | None, supplied: Sequence[Path] = ()) -> list[Path]:
+    """The PDFs under the local library directory, minus any also supplied with --paper."""
+    if library_dir is None or not library_dir.is_dir():
+        return []
+    skip = {p.resolve() for p in supplied}
+    return sorted(p for p in library_dir.rglob("*") if p.suffix.lower() == ".pdf" and p.is_file() and p.resolve() not in skip)
+
+
+def _shelve_papers(library: Library | None, pdfs: Sequence[Path], library_dir: Path | None, task: Task) -> str:
+    """List the local library for the agent; nothing is parsed until it reads a paper."""
+    assert library is not None and library_dir is not None
+    lines = [(f"The researcher keeps these papers as PDFs in a local library ({library_dir}/). They are not parsed "
+              "yet: open one with read_paper only if you need it (the first parse takes 1 to 6 minutes, outside "
+              "the time limit). Before searching online, check this list; if a paper you need is here, read it "
+              "instead of searching for it. Once read, it can be cited like papers found by search_papers.")]  # fmt: skip
+    for path in pdfs:
+        label = f"{library_dir.name}/{path.relative_to(library_dir)}"
+        paper = library.shelve(path, label, task.cached_pdf_output(path))
+        first = paper.abstract.split(". ")[0].strip()
+        title = f" ({paper.title})" if paper.title != path.stem else ""
+        lines.append(f"- `{paper.id}`: {label}{title}" + (f". {first[:200]}" if first else ""))
     return "\n".join(lines)
 
 

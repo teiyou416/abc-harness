@@ -250,6 +250,9 @@ def task_summary(task_dir: Path) -> list[str]:
     return lines
 
 
+CURRENCY_SIGNS = {"USD": "$", "CNY": "¥"}
+
+
 def judgment_lines(record: dict[str, Any]) -> list[str]:
     """A judgment for the terminal, always labelled as model-assessed."""
     who = f"{record['judge_model']}, model-assessed" + (", the task's own model" if record.get("same_model_as_task")
@@ -279,13 +282,15 @@ def _evidence_lines(task_dir: Path, shown: int = 5) -> list[str]:
     return lines
 
 
-def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[float, set[str], set[str]]:
-    """(USD, models priced, models without a known price) over every model call, summary calls included.
+def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[dict[str, float], set[str], set[str]]:
+    """(total per currency, models priced, models without a known price) over every model call, summary calls
+    included. Currencies stay apart: a conversation may mix USD-priced and CNY-priced models.
 
     Each call is priced by the model that answered it (a server-side fallback may answer with another model),
     from its own usage: uncached input, output (thinking included), cache reads, and cache writes.
     """
-    total, priced, unknown = 0.0, set(), set()
+    totals: dict[str, float] = {}
+    priced, unknown = set(), set()
     for e in read_trace(trace_file):
         if e["event"] not in ("model_call", "compaction"):
             continue
@@ -296,21 +301,26 @@ def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[float, se
             continue
         priced.add(model)
         when = datetime.fromisoformat(e["ts"]) if e.get("ts") else None  # DeepSeek prices by time of day
-        total += price.cost(e.get("usage") or {}, when)
-    return total, priced, unknown
+        totals[price.currency] = totals.get(price.currency, 0.0) + price.cost(e.get("usage") or {}, when)
+    return totals, priced, unknown
 
 
 def estimated_cost_line(trace_file: Path, default_model: str = "") -> str:
     return cost_line(*estimated_cost(trace_file, default_model))
 
 
-def cost_line(total: float, priced: set[str], unknown: set[str]) -> str:
+def cost_line(totals: dict[str, float], priced: set[str], unknown: set[str]) -> str:
     if not priced:
         return f"Estimated cost: unknown (no list price for {', '.join(sorted(unknown))})"
-    line = f"Estimated cost: ${total:.2f} at list prices for {', '.join(sorted(priced))} (an estimate, not a bill)"
+    amount = " + ".join(f"{CURRENCY_SIGNS.get(c, c + ' ')}{v:.2f}" for c, v in sorted(totals.items(), key=_usd_first))
+    line = f"Estimated cost: {amount} at list prices for {', '.join(sorted(priced))} (an estimate, not a bill)"
     if unknown:
         line += f"; calls to {', '.join(sorted(unknown))} are not included"
     return line
+
+
+def _usd_first(item: tuple[str, float]) -> tuple[bool, str]:
+    return item[0] != "USD", item[0]
 
 
 def _read_json(path: Path) -> Any:

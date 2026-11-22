@@ -1,7 +1,7 @@
 """The model client: the only code that receives a model API key (AGENTS.md hard rule 5).
 
-Two providers serve the same Messages API: Anthropic, and DeepSeek through its
-Anthropic-compatible endpoint. `MODELS` is the whole list of models the
+Three providers serve the same Messages API: Anthropic, and DeepSeek and
+Moonshot (Kimi) through their Anthropic-compatible endpoints. `MODELS` is the whole list of models the
 harness may use, with each one's provider, list price, and whether it can see
 images; `make_model` builds the client for one of them with that provider's key.
 """
@@ -32,7 +32,7 @@ RetryNotice = Callable[[str, int, float], None]
 
 @dataclass(frozen=True)
 class Price:
-    """List prices in USD per million tokens. `cache_write` is the 5-minute TTL, the one the client uses.
+    """List prices per million tokens, in `currency`. `cache_write` is the 5-minute TTL, the one the client uses.
 
     A model priced by prompt length (Claude Haiku 5.5) has `above`: a request whose prompt (input, cache reads,
     and cache writes together) exceeds `above_tokens` pays those prices for all of its tokens. A model priced by
@@ -46,6 +46,7 @@ class Price:
     above: Price | None = None
     above_tokens: int = 0
     off_peak: Price | None = None
+    currency: str = "USD"
 
     def cost(self, usage: dict[str, int], when: datetime | None = None) -> float:
         price = self.off_peak if self.off_peak and when is not None and not deepseek_peak(when) else self
@@ -69,11 +70,15 @@ class Provider:
     key_name: str  # the .env entry holding its API key
     base_url: str | None
     anthropic_extras: bool  # the beta endpoint with server-side fallback and summarized thinking
+    efforts: tuple[str, ...] = EFFORTS  # the output_config.effort values it accepts
 
 
 ANTHROPIC = Provider("Anthropic", "ANTHROPIC_API_KEY", None, True)
 DEEPSEEK = Provider("DeepSeek", "DEEPSEEK_API_KEY", "https://api.deepseek.com/anthropic", False)
-API_KEY_NAMES = (ANTHROPIC.key_name, DEEPSEEK.key_name)
+# The China platform (platform.moonshot.cn); its keys do not work on the international one (api.moonshot.ai).
+KIMI = Provider("Moonshot", "MOONSHOT_API_KEY", "https://api.moonshot.cn/anthropic", False,
+                efforts=("low", "high", "max"))
+API_KEY_NAMES = (ANTHROPIC.key_name, DEEPSEEK.key_name, KIMI.key_name)
 
 
 @dataclass(frozen=True)
@@ -89,9 +94,15 @@ def _deepseek(hit: float, miss: float, output: float) -> Price:
     return Price(miss, output, hit, miss, off_peak=off)
 
 
+def _kimi(miss: float, hit: float, write_5m: float, output: float) -> Price:
+    """China-platform prices in CNY."""
+    return Price(miss, output, hit, write_5m, currency="CNY")
+
+
 # The models the harness may use. Claude prices from https://platform.claude.com/docs/en/about-claude/pricing and
-# DeepSeek prices from https://api-docs.deepseek.com/quick_start/pricing, both read 2026-11-19. Update them when
-# the published prices change; they feed only the cost estimate in the run statistics.
+# DeepSeek prices from https://api-docs.deepseek.com/quick_start/pricing, both read 2026-11-19; Kimi prices from
+# the China price table at https://platform.kimi.com/docs/pricing/chat, as the maintainer read it on 2026-11-22.
+# Update them when the published prices change; they feed only the cost estimate in the run statistics.
 MODELS: dict[str, ModelSpec] = {
     "claude-opus-5-5": ModelSpec(ANTHROPIC, Price(4.0, 20.0, 0.20, 5.0)),
     "claude-sonnet-5-5": ModelSpec(ANTHROPIC, Price(2.0, 10.0, 0.10, 2.50)),
@@ -101,6 +112,9 @@ MODELS: dict[str, ModelSpec] = {
     # deepseek-v4-pro replaces images with "[Unsupported Image]", so it cannot read figures.
     "deepseek-v4-pro": ModelSpec(DEEPSEEK, _deepseek(0.044, 1.32, 3.96), sees_images=False),
     "deepseek-flash": ModelSpec(DEEPSEEK, _deepseek(0.006, 0.30, 1.20)),
+    "kimi-k3.1-pro": ModelSpec(KIMI, _kimi(13.0, 1.30, 13.0, 68.0)),
+    "kimi-k3.1-pro-highspeed": ModelSpec(KIMI, _kimi(26.0, 1.30, 26.0, 136.0)),
+    "kimi-k3": ModelSpec(KIMI, _kimi(20.0, 2.0, 20.0, 100.0)),
 }
 
 
@@ -165,6 +179,8 @@ def make_model(name: str, effort: str, key: Callable[[str], str | None]) -> Anth
     api_key = key(spec.provider.key_name)
     if not api_key:
         raise ModelUnavailable(f"{name} needs {spec.provider.key_name} in .env")
+    if effort not in spec.provider.efforts:
+        raise ModelUnavailable(f"{name} accepts effort {', '.join(spec.provider.efforts)}, not {effort}")
     return AnthropicModel(api_key, model=name, effort=effort, provider=spec.provider)
 
 

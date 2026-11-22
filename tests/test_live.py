@@ -203,22 +203,34 @@ def test_real_model_reads_a_value_off_a_figure(tmp_path):
     assert value - uncertainty <= 0.954 <= value + uncertainty
 
 
-@pytest.mark.parametrize("name", ["deepseek-flash", "deepseek-v4-pro"])
-def test_deepseek_answers_a_tool_call_and_reports_usage(name):
-    from abc_harness.agent.model import make_model
+@pytest.mark.parametrize("name", ["deepseek-flash", "deepseek-v4-pro", "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed",
+                                  "kimi-k3"])
+def test_compatible_provider_answers_a_tool_call_and_reports_usage(name):
+    """A non-Anthropic provider takes the harness's request as sent (thinking, effort, cache_control), calls a
+    tool, and continues after the tool result with its own thinking blocks passed back unchanged."""
+    from abc_harness.agent.model import MODELS, make_model
     from abc_harness.tools import TOOLS
 
-    secrets = Secrets.load(ROOT / ".env", names=("DEEPSEEK_API_KEY",))
-    if not secrets.has("DEEPSEEK_API_KEY"):
-        pytest.skip("DEEPSEEK_API_KEY is not set in .env")
+    key_name = MODELS[name].provider.key_name
+    secrets = Secrets.load(ROOT / ".env", names=(key_name,))
+    if not secrets.has(key_name):
+        pytest.skip(f"{key_name} is not set in .env")
     model = make_model(name, "high", lambda key: secrets.get(key) if secrets.has(key) else None)
-    turn = model.create("You plan blockchain simulations. Use the tools.",
-                        [{"role": "user", "content": "Read the SimBlock capability card."}], TOOLS,
-                        max_tokens=4000, timeout_seconds=120)  # fmt: skip
+    system = "You plan blockchain simulations. Use the tools."
+    messages = [{"role": "user", "content": "Read the SimBlock capability card, then say in one sentence what "
+                                            "SimBlock simulates."}]  # fmt: skip
+    turn = model.create(system, messages, TOOLS, max_tokens=4000, timeout_seconds=120)
     assert turn.stop_reason == "tool_use", (turn.stop_reason, turn.text())
-    assert turn.tool_uses()[0]["name"] == "describe_simulator"
+    use = turn.tool_uses()[0]
+    assert use["name"] == "describe_simulator"
     assert turn.usage.get("input_tokens", 0) + turn.usage.get("cache_read_input_tokens", 0) > 0
     assert turn.usage.get("output_tokens", 0) > 0
+    messages += [{"role": "assistant", "content": turn.content},
+                 {"role": "user", "content": [{"type": "tool_result", "tool_use_id": use["id"],
+                                               "content": "SimBlock simulates block propagation in a Bitcoin-like "
+                                                          "peer-to-peer network."}]}]  # fmt: skip
+    after = model.create(system, messages, TOOLS, max_tokens=4000, timeout_seconds=120)
+    assert after.stop_reason == "end_turn" and "propagation" in after.text().lower(), (after.stop_reason, after.text())
 
 
 JUDGE_BAD = ("The 60 s delay clearly produces more stale blocks: the stale rate rose from 0.200 to 0.210, so a "

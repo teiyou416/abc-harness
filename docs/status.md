@@ -27,7 +27,8 @@ history.
   searches the source and task files; `chat` keeps a conversation of tasks
   with `/tasks`, `/model`, `/effort`, `/status`, `/clean`, and `/new`;
   `abc-harness clean` frees disk space without touching evidence. [M5.1]
-- Six models: four Claude models and two DeepSeek models; `deepseek-flash`
+- Nine models: four Claude models, two DeepSeek models, and three Kimi models
+  (China platform; not yet verified against the live API); `deepseek-flash`
   is the default. [M5.1]
 - The terminal shows a status line for the current action, each tool call,
   milestones, and errors above it, and ends with run statistics, including
@@ -46,8 +47,8 @@ history.
   maintainer confirmed. 2026-11-23: claude-sonnet-5-5 agreed on 23 of 24
   scored cases ($0.24), deepseek-v4-pro on 23 of 24 ($0.13), though
   deepseek-v4-pro put four bad cases at exactly the boundary score 5. [M5.2]
-- `make check` runs ruff and 267 offline tests; `make test-docker` runs 11
-  Docker tests and `make test-live` runs 10 tests against the model APIs and
+- `make check` runs ruff and 269 offline tests; `make test-docker` runs 11
+  Docker tests and `make test-live` runs 13 tests against the model APIs and
   literature services.
 
 ## Broken or not verified

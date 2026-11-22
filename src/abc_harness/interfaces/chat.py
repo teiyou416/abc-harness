@@ -19,6 +19,7 @@ from abc_harness.agent.model import EFFORTS, MODELS
 from abc_harness.agent.session import ChatSession, Turn
 from abc_harness.execution.cleanup import LARGE_RUNS_BYTES, apply_cleanup, describe, dir_size, human_size, plan_cleanup
 from abc_harness.interfaces.console import (
+    CURRENCY_SIGNS,
     Write,
     cost_line,
     estimated_cost,
@@ -143,19 +144,22 @@ def _status(
         lines.append("Tasks: none yet")
         return "\n".join(lines)
     counts: dict[str, int] = {}
-    total, priced, unknown = 0.0, set[str](), set[str]()
+    totals: dict[str, float] = {}
+    priced, unknown = set[str](), set[str]()
     for t in session.turns:
         if not t.is_reply:
             counts[t.status] = counts.get(t.status, 0) + 1
         trace = t.artifact_dir / "trace.jsonl"
         if trace.exists():
-            cost, p, u = estimated_cost(trace, t.model)
-            total, priced, unknown = total + cost, priced | p, unknown | u
+            costs, p, u = estimated_cost(trace, t.model)
+            for currency, amount in costs.items():
+                totals[currency] = totals.get(currency, 0.0) + amount
+            priced, unknown = priced | p, unknown | u
     tasks = sum(counts.values())
     by_status = f" ({', '.join(f'{n} {s}' for s, n in counts.items())})" if tasks else ""
     lines.append(f"Tasks with a plan: {tasks}{by_status}; replies without a plan: {len(session.turns) - tasks}; "
                  "/tasks lists both")  # fmt: skip
-    lines.append(cost_line(total, priced, unknown) if priced or unknown else "Estimated cost: no model call yet")
+    lines.append(cost_line(totals, priced, unknown) if priced or unknown else "Estimated cost: no model call yet")
     return "\n".join(lines)
 
 
@@ -209,7 +213,7 @@ def judge_task(
     estimate = prepared.estimate(name)
     if estimate:
         typical, most, currency = estimate
-        sign = {"USD": "$", "CNY": "¥"}.get(currency, currency + " ")
+        sign = CURRENCY_SIGNS.get(currency, currency + " ")
         cost = f"about {sign}{typical:.3f}, at most {sign}{most:.3f} at list prices"
     else:
         cost = "cost unknown (no list price)"

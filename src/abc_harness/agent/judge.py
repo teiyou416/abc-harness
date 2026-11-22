@@ -59,7 +59,7 @@ class JudgeInput:
         tokens_in = (len(rubric()) + len(self.message.encode("utf-8"))) / 4
         typical = price.cost({"input_tokens": int(tokens_in), "output_tokens": TYPICAL_OUTPUT_TOKENS})
         most = price.cost({"input_tokens": int(tokens_in), "output_tokens": JUDGE_MAX_TOKENS}) * JUDGE_CALLS
-        return typical, most, getattr(price, "currency", "USD")
+        return typical, most, price.currency
 
 
 def rubric() -> str:
@@ -137,8 +137,7 @@ def judge(prepared: JudgeInput, model: ModelClient, now: Callable[[], datetime] 
             usage[k] = usage.get(k, 0) + v
         price = price_for(answered_by)
         if price is not None:
-            currency = getattr(price, "currency", "USD")
-            cost[currency] = cost.get(currency, 0.0) + price.cost(turn.usage, now())
+            cost[price.currency] = cost.get(price.currency, 0.0) + price.cost(turn.usage, now())
         verdict = parse_verdict(turn.text())
         if verdict is not None:
             break

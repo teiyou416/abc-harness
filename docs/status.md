@@ -27,7 +27,8 @@ history.
   searches the source and task files; `chat` keeps a conversation of tasks
   with `/tasks`, `/model`, `/effort`, `/status`, `/clean`, and `/new`;
   `abc-harness clean` frees disk space without touching evidence. [M5.1]
-- Six models: four Claude models and two DeepSeek models; `deepseek-flash`
+- Nine models: four Claude models, two DeepSeek models, and three Kimi models
+  (China platform; not yet verified against the live API); `deepseek-flash`
   is the default. [M5.1]
 - The terminal shows a status line for the current action, each tool call,
   milestones, and errors above it, and ends with run statistics, including

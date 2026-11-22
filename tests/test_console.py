@@ -116,10 +116,24 @@ def test_estimated_cost_prices_each_call_from_its_usage(tmp_path):
     trace.event("compaction", usage={"input_tokens": 10_000, "output_tokens": 1_000})  # priced as the task's model
     trace.close()
     # 0.05*4 + 0.03*20 + 0.5*0.20 + 0.02*5 = 1.00; the summary call: 0.01*4 + 0.001*20 = 0.06
-    total, priced, unknown = console.estimated_cost(tmp_path / "trace.jsonl", "claude-opus-5-5")
-    assert round(total, 6) == 1.06 and priced == {"claude-opus-5-5"} and unknown == set()
+    totals, priced, unknown = console.estimated_cost(tmp_path / "trace.jsonl", "claude-opus-5-5")
+    assert round(totals["USD"], 6) == 1.06 and priced == {"claude-opus-5-5"} and unknown == set()
     line = console.estimated_cost_line(tmp_path / "trace.jsonl", "claude-opus-5-5")
     assert line == "Estimated cost: $1.06 at list prices for claude-opus-5-5 (an estimate, not a bill)"
+
+
+def test_cny_and_usd_prices_are_summed_apart(tmp_path):
+    from abc_harness.execution.trace import Trace
+
+    trace = Trace(tmp_path / "trace.jsonl")
+    trace.event("model_call", model="claude-opus-5-5", usage={"input_tokens": 1_000_000})
+    # kimi-k3.1-pro, CNY: 0.1M uncached input * 13 + 1M cache reads * 1.30 + 0.1M output * 68 = 1.3 + 1.3 + 6.8
+    trace.event("model_call", model="kimi-k3.1-pro",
+                usage={"input_tokens": 100_000, "cache_read_input_tokens": 1_000_000, "output_tokens": 100_000})
+    trace.close()
+    totals, _, _ = console.estimated_cost(tmp_path / "trace.jsonl")
+    assert round(totals["USD"], 6) == 4.0 and round(totals["CNY"], 6) == 9.4
+    assert console.estimated_cost_line(tmp_path / "trace.jsonl").startswith("Estimated cost: $4.00 + ¥9.40 at")
 
 
 def test_unknown_models_are_named_not_guessed(tmp_path):

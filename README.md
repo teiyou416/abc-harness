@@ -138,6 +138,7 @@ conversation's tasks,
 `/model` shows the model and the available ones and `/model <name>` switches
 the following tasks to another listed model,
 `/effort` shows the effort and `/effort <level>` sets it for the following tasks,
+`/status` shows the model, effort, limits, task count, and estimated cost of the conversation,
 `/new` starts over, `/help`, and `/quit`. The conversation's log is
 `runs/sessions/<session_id>/session.jsonl`.
 

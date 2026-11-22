@@ -267,7 +267,10 @@ def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[float, se
 
 
 def estimated_cost_line(trace_file: Path, default_model: str = "") -> str:
-    total, priced, unknown = estimated_cost(trace_file, default_model)
+    return cost_line(*estimated_cost(trace_file, default_model))
+
+
+def cost_line(total: float, priced: set[str], unknown: set[str]) -> str:
     if not priced:
         return f"Estimated cost: unknown (no list price for {', '.join(sorted(unknown))})"
     line = f"Estimated cost: ${total:.2f} at list prices for {', '.join(sorted(priced))} (an estimate, not a bill)"

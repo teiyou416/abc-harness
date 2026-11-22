@@ -142,6 +142,7 @@ conversation's tasks,
 the following tasks to another listed model,
 `/effort` shows the effort and `/effort <level>` sets it for the following tasks,
 `/status` shows the model, effort, limits, task count, estimated cost, and disk use,
+`/judge [n]` asks a model to judge a task's answer (see [Ask a model to judge the answer](#ask-a-model-to-judge-the-answer)),
 `/clean [days]` frees disk space (see [Free disk space](#free-disk-space)),
 `/new` starts over, `/help`, and `/quit`. The conversation's log is
 `runs/sessions/<session_id>/session.jsonl`.
@@ -162,6 +163,22 @@ as a ratio, or one it got wrong, so check it. Warnings do not change the exit co
 The harness runs this check by itself when a task that executed a plan ends:
 the run statistics show its verdict (with the problems found, if any), and
 `trace_check.json` in the task directory keeps the full result.
+
+## Ask a model to judge the answer
+
+`uv run abc-harness judge runs/<task_id>` (or `/judge` in chat, `/judge 2`
+for task 2 of `/tasks`) asks a model whether the agent's final answer follows
+from the task's results: does it call a difference within the spread "clear",
+or generalise past the tested parameters? It shows the judge model and an
+estimated cost first; Enter judges. The default judge is another model than
+the task's own, since a model favours its own answers; `--model` picks one.
+
+It only judges a task that executed a plan and whose evidence check found no
+contradiction, and it sees only saved artifacts: your question, the plan, the
+harness's tables, the validation check, the evidence check, and the answer.
+The score (0 to 10), the reason, and the sentences it faults go to
+`judge.jsonl` and the run statistics, labelled as model-assessed. It is
+advice: it never changes the task, its report, or its status.
 
 ## Free disk space
 
@@ -214,6 +231,7 @@ entry in `runs/<task_id>/results.json`. For a BlockSim run, leave out
 | `raw/<run_id>/` | the simulator's own output: `stdout.txt`, `blockList.txt`, `static.json` from SimBlock; `result.xlsx` and one CSV per sheet from BlockSim |
 | `changes/<run_id>.diff`, `changes/edits.diff` | the parameter and seed edits applied to each run's source, and the agent's permitted edits |
 | `validation.json` | the validation check's runs and verdict, for a plan with permitted edits |
+| `judge.jsonl` | every judgment you asked for: score, reason, faulted sentences, judge model, prompt hash, tokens, and estimated cost |
 | `trace_check.json` | the verdict and findings of the `trace check` the harness ran when the task ended (only for a task that executed a plan) |
 | `sandbox/` | every sandbox exec command and its output |
 | `workspace/` | `original/` (the simulator source copied from the image, never changed), `edited/` (the agent's copy), `scratch/` (its builds and tests), and `runs/` (each simulation run's source copy, removed after its output is saved) |

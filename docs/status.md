@@ -38,8 +38,11 @@ history.
 - `trace check` audits saved approval, validation order, and reported metrics offline,
   and runs by itself when a task that executed a plan ends (`trace_check.json`). It also
   warns about each number in the agent's final answer that no source supports.
-- `make check` runs ruff and 253 offline tests; `make test-docker` runs 11
-  Docker tests and `make test-live` runs 9 tests against the model APIs and
+- `abc-harness judge` and `/judge` ask another model whether a finished task's
+  answer follows from its results, on request, and keep the judgment in
+  `judge.jsonl` as model-assessed advice. [M5.2]
+- `make check` runs ruff and 265 offline tests; `make test-docker` runs 11
+  Docker tests and `make test-live` runs 10 tests against the model APIs and
   literature services.
 
 ## Broken or not verified

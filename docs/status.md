@@ -41,7 +41,12 @@ history.
 - `abc-harness judge` and `/judge` ask another model whether a finished task's
   answer follows from its results, on request, and keep the judgment in
   `judge.jsonl` as model-assessed advice. [M5.2]
-- `make check` runs ruff and 265 offline tests; `make test-docker` runs 11
+- `make eval-judge` scores 26 gold cases (7 real tasks, 6 edited answers, 13
+  constructed) and compares with labels a second agent reviewed and the
+  maintainer confirmed. 2026-11-23: claude-sonnet-5-5 agreed on 23 of 24
+  scored cases ($0.24), deepseek-v4-pro on 23 of 24 ($0.13), though
+  deepseek-v4-pro put four bad cases at exactly the boundary score 5. [M5.2]
+- `make check` runs ruff and 267 offline tests; `make test-docker` runs 11
   Docker tests and `make test-live` runs 10 tests against the model APIs and
   literature services.
 

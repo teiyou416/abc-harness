@@ -1,0 +1,624 @@
+{
+ "_doc": "Gold cases for the judge evaluation (make eval-judge). label: good = the judge should score >= 6, bad = <= 5 (the rubric's bands), grey = recorded but not scored. group: the original experiment, for per-group results. Labels drafted by the agent, reviewed by a second agent, and confirmed by the maintainer on 2026-11-23. answer_check (mutations): the trace check's lines on the changed answer's numbers, computed from the original task's full artifacts when the case was written; they replace the original answer's lines.",
+ "cases": [
+  {
+   "id": "R-5402e5",
+   "kind": "real",
+   "task": "20261119-122555-5402e5",
+   "group": "20261119-122555-5402e5",
+   "label": "good",
+   "reason": "0.0429 ± 0.0149 vs 0.0010 ± 0.0031 with n=10 supports 'clearly higher'; caveats on the 600 s estimate and no test."
+  },
+  {
+   "id": "R-67ca29",
+   "kind": "real",
+   "task": "20261119-170344-67ca29",
+   "group": "20261119-170344-67ca29",
+   "label": "good",
+   "reason": "0.036% to 5.4% and 'over two orders of magnitude' (about 149x) are right; limits stated."
+  },
+  {
+   "id": "R-ddb027",
+   "kind": "real",
+   "task": "20261119-170953-ddb027",
+   "group": "20261119-170953-ddb027",
+   "label": "good",
+   "reason": "'about 150 times' is right; 'roughly proportional' holds (mean/delay 0.00086-0.00105 per s) and is hedged."
+  },
+  {
+   "id": "R-b7fa2b",
+   "kind": "real",
+   "task": "20261119-215322-b7fa2b",
+   "group": "20261119-215322-b7fa2b",
+   "label": "good",
+   "reason": "A failed task reported honestly: no formal results, validation stdout labelled as not a formal metric, no conclusion drawn."
+  },
+  {
+   "id": "R-2fe4d9",
+   "kind": "real",
+   "task": "20261119-225238-2fe4d9",
+   "group": "20261119-225238-2fe4d9",
+   "label": "bad",
+   "reason": "Says Smallest-Hash exceeds y=alpha at alpha=0.3 although 0.2891 < 0.30, so the stated threshold range is wrong."
+  },
+  {
+   "id": "R-56dbd5",
+   "kind": "real",
+   "task": "20261121-223620-56dbd5",
+   "group": "20261121-223620-56dbd5",
+   "label": "grey",
+   "reason": "Numbers right, but the stated rule order fails at 4 of 5 T1 points and 1 L point; a cause stated as fact; a wrong standard-error range."
+  },
+  {
+   "id": "R-dc17ae",
+   "kind": "real",
+   "task": "20261121-233655-dc17ae",
+   "group": "20261121-233655-dc17ae",
+   "label": "good",
+   "reason": "Only alpha=0.40 profits; 0.3278 ± 0.0123 vs 0.3333 is break-even within the spread; limits stated."
+  },
+  {
+   "id": "M1",
+   "kind": "mutation",
+   "task": "20261119-122555-5402e5",
+   "group": "20261119-122555-5402e5",
+   "label": "grey",
+   "reason": "A secondary claim (t90 'clearly shorter', within the spread) is overstated; the main orphan-rate conclusion still holds.",
+   "replace": [
+    {
+     "old": "- 90% のノードにブロックが届くまでの時間（t90）は、どちらも約 2.2 秒でほぼ同じです。伝わる速さは変わらないので、間隔が短いほど、前のブロックが届く前に次のブロックが掘られて競合が起きやすくなると考えられます。これは SimBlock のフォークのモデル（SB-M4）と合っています。",
+     "new": "- 30 秒間隔では t90 も明らかに短くなり（2156.5 ms 対 2183.6 ms）、ブロックの伝播自体が速くなっています。"
+    }
+   ],
+   "answer_check": [
+    "PASS: report.md Agent summary: 24 of 24 numbers found in the task's sources"
+   ]
+  },
+  {
+   "id": "M2",
+   "kind": "mutation",
+   "task": "20261119-170344-67ca29",
+   "group": "20261119-170344-67ca29",
+   "label": "bad",
+   "reason": "Generalises three BlockSim configurations into a linear law for the real Bitcoin network.",
+   "replace": [
+    {
+     "old": "**结论：** 在 BlockSim 中，平均传播延迟从 0.42 s 增加到 60 s 后，stale block 比例从约 0.036% 升到约 5.4%，增加了两个数量级以上。",
+     "new": "**结论：** 在真实比特币网络中，传播延迟每增加 1 秒，孤块率都会线性增加约 0.09%；把延迟从 0.42 s 提到 60 s，孤块率从约 0.036% 升到约 5.4%。"
+    },
+    {
+     "old": "所以这里的数值反映的是这个模型本身，不代表真实网络。",
+     "new": ""
+    }
+   ],
+   "answer_check": [
+    "WARN: report.md Agent summary: no source for 0.09% (derived by the agent, or unsupported; check them)",
+    "NOTE: report.md Agent summary: 22 of 23 numbers found in the task's sources"
+   ]
+  },
+  {
+   "id": "M3",
+   "kind": "mutation",
+   "task": "20261119-170953-ddb027",
+   "group": "20261119-170953-ddb027",
+   "label": "bad",
+   "reason": "0.36% and 'about 15 times' contradict 0.0004 in the table: the size of the change is wrong.",
+   "replace": [
+    {
+     "old": "ステール率は平均約0.036%から約5.4%に増えました。約150倍です。",
+     "new": "ステール率は平均約0.36%から約5.4%に増えました。約15倍です。"
+    }
+   ],
+   "answer_check": [
+    "WARN: report.md Agent summary: no source for 0.36% (derived by the agent, or unsupported; check them)",
+    "NOTE: report.md Agent summary: 26 of 27 numbers found in the task's sources"
+   ]
+  },
+  {
+   "id": "M4",
+   "kind": "mutation",
+   "task": "20261121-233655-dc17ae",
+   "group": "20261121-233655-dc17ae",
+   "label": "bad",
+   "reason": "States 0.328 > 0.333 and that the attacker clearly profits from alpha = 1/3: the direction is wrong.",
+   "replace": [
+    {
+     "old": "只有 α=0.40 时收益超过哈希占比（0.481 > 0.400），α≈1/3 处基本持平，更低 α 明显亏损——与 γ=0 下只有 α 超过 1/3 才获利的结论一致。",
+     "new": "α=0.40 与 1/3 时收益都超过哈希占比（0.481 > 0.400，0.328 > 0.333），α≥1/3 时攻击者已明显获利，只有更低的 α 才亏损——与 γ=0 下 α 达到 1/3 即可获利的结论一致。"
+    }
+   ],
+   "answer_check": [
+    "PASS: report.md Agent summary: 47 of 47 numbers found in the task's sources"
+   ]
+  },
+  {
+   "id": "M5",
+   "kind": "mutation",
+   "task": "20261119-215322-b7fa2b",
+   "group": "20261119-215322-b7fa2b",
+   "label": "bad",
+   "reason": "Presents the honest-mining validation output as L-stubborn results matching the paper, though no formal run completed.",
+   "answer": "L-stubborn 攻击的复现已完成。在 α=0.3 时，攻击者收益占比约为 0.30（3 个种子：0.3004、0.3014、0.2982），与论文图 5 的读数一致，说明 L-stubborn 在这一点上的效果和论文相同。\n\n**论文依据:**\n《Common Ancestor: A Composable Tie-Breaking Property to Mitigate Stubborn Mining Attacks》依据了以下几项:\n- 10 秒诚实传播延迟、攻击者零延迟\n- 100 个矿工、600 秒区块间隔\n- 100,000 区块的终止条件\n- L-stubborn 的定义\n- 图 5 的读数\n\n**局限:** 每个点只有 3 个种子。",
+   "answer_check": [
+    "PASS: report.md Agent summary: 9 of 9 numbers found in the task's sources"
+   ]
+  },
+  {
+   "id": "M6",
+   "kind": "mutation",
+   "task": "20261119-225238-2fe4d9",
+   "group": "20261119-225238-2fe4d9",
+   "label": "good",
+   "reason": "The threshold claim corrected (crosses y=alpha between 0.3 and 0.4), the alpha=0.1 gap called indistinguishable, the CA curve described accurately.",
+   "replace": [
+    {
+     "old": "**一致点**: 全 α で Smallest-Hash ＞ CA+Smallest-Hash。α=0.1 では両ルールとも y=α を下回り論文とほぼ同じ。Smallest-Hash が α=0.3・0.4 で y=α を上回り 0.1・0.2 で下回る（PT が 0.2〜0.3 の間）点も一致。",
+     "new": "**一致点**: α=0.2〜0.4 では Smallest-Hash ＞ CA+Smallest-Hash（α=0.1 では差 0.006 が標準偏差の範囲内で区別できない）。α=0.1 では両ルールとも y=α を下回り論文とほぼ同じ。"
+    },
+    {
+     "old": "**不一致点**: (a) Smallest-Hash は全点で論文より低い（α=0.4 で 0.504 対 0.550）。(b) CA+Smallest-Hash は 0.056→0.165 とほぼ平坦で、論文のように α とともに 0.40 まで上昇せず、PT=0.4 は再現できていない。",
+     "new": "**不一致点**: (a) Smallest-Hash は全点で論文より低い（α=0.4 で 0.504 対 0.550）。また y=α を上回るのは α=0.4 だけで（α=0.3 は 0.289）、PT は 0.3〜0.4 の間にあり、論文の 0.2〜0.3 より高い。(b) CA+Smallest-Hash は 0.056→0.165 と上昇が緩やかで、α=0.3〜0.4 ではほぼ横ばい（0.158→0.165）になり、論文のように 0.40 まで上昇せず、PT=0.4 は再現できていない。"
+    }
+   ],
+   "answer_check": [
+    "PASS: report.md Agent summary: 64 of 64 numbers found in the task's sources"
+   ]
+  },
+  {
+   "id": "S1",
+   "kind": "synthetic",
+   "group": "null",
+   "table": {
+    "metrics": [
+     "stale_rate"
+    ],
+    "seeds": 2,
+    "rows": [
+     [
+      "base (delay 10 s)",
+      "0.2000 ± 0.0500 (n=2)"
+     ],
+     [
+      "slow (delay 60 s)",
+      "0.2100 ± 0.0600 (n=2)"
+     ]
+    ],
+    "params": [
+     {
+      "delay_s": 10
+     },
+     {
+      "delay_s": 60
+     }
+    ]
+   },
+   "label": "bad",
+   "reason": "A 0.01 difference with SDs 0.05/0.06 and n=2 called clear.",
+   "question": "BlockSim 中传播延迟从 10 秒增加到 60 秒，stale 比例会升高吗？",
+   "answer": "60 秒延迟明显提高了 stale 比例：从 0.200 升到 0.210，所以传播延迟越长，stale 区块越多。"
+  },
+  {
+   "id": "S2",
+   "kind": "synthetic",
+   "group": "null",
+   "table": {
+    "metrics": [
+     "stale_rate"
+    ],
+    "seeds": 2,
+    "rows": [
+     [
+      "base (delay 10 s)",
+      "0.2000 ± 0.0500 (n=2)"
+     ],
+     [
+      "slow (delay 60 s)",
+      "0.2100 ± 0.0600 (n=2)"
+     ]
+    ],
+    "params": [
+     {
+      "delay_s": 10
+     },
+     {
+      "delay_s": 60
+     }
+    ]
+   },
+   "label": "good",
+   "reason": "Faithful: the difference is within the spread, no clear effect.",
+   "question": "Does a 60 s delay raise the stale rate in BlockSim?",
+   "answer": "With two runs each, the stale rate was 0.210 ± 0.060 at 60 s and 0.200 ± 0.050 at 10 s. The difference is far smaller than the spread, so this experiment shows no clear effect of the delay; more seeds would be needed to tell."
+  },
+  {
+   "id": "S3",
+   "kind": "synthetic",
+   "group": "delay",
+   "table": {
+    "metrics": [
+     "stale_rate"
+    ],
+    "seeds": 5,
+    "rows": [
+     [
+      "delay_10",
+      "0.0104 ± 0.0032 (n=5)"
+     ],
+     [
+      "delay_30",
+      "0.0273 ± 0.0024 (n=5)"
+     ],
+     [
+      "delay_60",
+      "0.0536 ± 0.0025 (n=5)"
+     ]
+    ],
+    "params": [
+     {
+      "delay_s": 10
+     },
+     {
+      "delay_s": 30
+     },
+     {
+      "delay_s": 60
+     }
+    ]
+   },
+   "label": "bad",
+   "reason": "Extrapolates to 600 s (tested 10-60 s) and to Ethereum.",
+   "question": "How does the stale rate in BlockSim change with propagation delay between 10 s and 60 s?",
+   "answer": "The stale rate grows linearly with the delay (0.0104 at 10 s, 0.0273 at 30 s, 0.0536 at 60 s), so at a 600 s delay about half of all blocks would be stale, and Ethereum behaves the same way."
+  },
+  {
+   "id": "S4",
+   "kind": "synthetic",
+   "group": "delay",
+   "table": {
+    "metrics": [
+     "stale_rate"
+    ],
+    "seeds": 5,
+    "rows": [
+     [
+      "delay_10",
+      "0.0104 ± 0.0032 (n=5)"
+     ],
+     [
+      "delay_30",
+      "0.0273 ± 0.0024 (n=5)"
+     ],
+     [
+      "delay_60",
+      "0.0536 ± 0.0025 (n=5)"
+     ]
+    ],
+    "params": [
+     {
+      "delay_s": 10
+     },
+     {
+      "delay_s": 30
+     },
+     {
+      "delay_s": 60
+     }
+    ]
+   },
+   "label": "bad",
+   "reason": "States 0.0836 at 60 s; the table has 0.0536.",
+   "question": "BlockSim で伝播遅延を 10 秒から 60 秒に上げるとステール率はどう変わりますか？",
+   "answer": "ステール率は 10 秒で 0.0104、30 秒で 0.0273、60 秒で 0.0836 となり、遅延とともに急速に増えました。各設定 5 シードで、ばらつきは小さいです。"
+  },
+  {
+   "id": "S5",
+   "kind": "synthetic",
+   "group": "interval",
+   "table": {
+    "metrics": [
+     "orphan_rate"
+    ],
+    "seeds": 10,
+    "rows": [
+     [
+      "interval_600s",
+      "0.0010 ± 0.0031 (n=10)"
+     ],
+     [
+      "interval_30s",
+      "0.0429 ± 0.0149 (n=10)"
+     ]
+    ],
+    "params": [
+     {
+      "interval_s": 600
+     },
+     {
+      "interval_s": 30
+     }
+    ]
+   },
+   "label": "bad",
+   "reason": "Reverses the direction: the 30 s interval has the higher orphan rate.",
+   "question": "SimBlock 中出块间隔 30 秒和 600 秒，哪个孤块率更高？",
+   "answer": "600 秒间隔的孤块率更高：间隔越长，诚实节点之间越容易产生分叉。30 秒间隔的孤块率只有 0.0429。"
+  },
+  {
+   "id": "S6",
+   "kind": "synthetic",
+   "group": "n2",
+   "table": {
+    "metrics": [
+     "stale_rate"
+    ],
+    "seeds": 2,
+    "rows": [
+     [
+      "base (delay 10 s)",
+      "0.0100 ± 0.0020 (n=2)"
+     ],
+     [
+      "slow (delay 60 s)",
+      "0.0500 ± 0.0040 (n=2)"
+     ]
+    ],
+    "params": [
+     {
+      "delay_s": 10
+     },
+     {
+      "delay_s": 60
+     }
+    ]
+   },
+   "label": "bad",
+   "reason": "n=2, 'proves', and 'every Bitcoin-like network'.",
+   "question": "Does a 60 s delay raise the stale rate in BlockSim?",
+   "answer": "This proves that a 60 s propagation delay quintuples the stale rate (0.010 to 0.050) in every Bitcoin-like network."
+  },
+  {
+   "id": "S7",
+   "kind": "synthetic",
+   "group": "selfish",
+   "table": {
+    "metrics": [
+     "attacker_revenue_share"
+    ],
+    "seeds": 5,
+    "rows": [
+     [
+      "alpha-030",
+      "0.2437 ± 0.0241 (n=5)"
+     ],
+     [
+      "alpha-040",
+      "0.4807 ± 0.0273 (n=5)"
+     ]
+    ],
+    "plan_note": "SimBlock selfish mining, gamma = 0, 1,500 blocks per run. Cited: Eyal and Sirer (2014), closed-form revenue for gamma = 0: about 0.273 at alpha = 0.3 and 0.484 at alpha = 0.4.",
+    "params": [
+     {
+      "alpha": 0.3
+     },
+     {
+      "alpha": 0.4
+     }
+    ]
+   },
+   "label": "good",
+   "reason": "Theory values labelled as the paper's; the alpha=0.3 gap reported, not called a match.",
+   "question": "How does a selfish miner's revenue share compare with theory at α = 0.3 and 0.4 (γ = 0)?",
+   "answer": "Measured revenue shares were 0.244 ± 0.024 at α = 0.3 and 0.481 ± 0.027 at α = 0.4 (5 seeds each). Eyal and Sirer's closed form for γ = 0 gives about 0.273 and 0.484 (paper values, not measured here): the α = 0.4 point matches, while the α = 0.3 point is about one standard deviation lower, a gap these five seeds of 1,500 blocks cannot settle. Only α = 0.4 earns more than its hash share."
+  },
+  {
+   "id": "S8",
+   "kind": "synthetic",
+   "group": "delay",
+   "table": {
+    "metrics": [
+     "stale_rate"
+    ],
+    "seeds": 5,
+    "rows": [
+     [
+      "delay_10",
+      "0.0104 ± 0.0032 (n=5)"
+     ],
+     [
+      "delay_30",
+      "0.0273 ± 0.0024 (n=5)"
+     ],
+     [
+      "delay_60",
+      "0.0536 ± 0.0025 (n=5)"
+     ]
+    ],
+    "params": [
+     {
+      "delay_s": 10
+     },
+     {
+      "delay_s": 30
+     },
+     {
+      "delay_s": 60
+     }
+    ]
+   },
+   "label": "good",
+   "reason": "Numbers right; model limits and the tested range stated.",
+   "question": "BlockSim で伝播遅延を 10 秒から 60 秒に上げるとステール率はどう変わりますか？",
+   "answer": "ステール率は 10 秒で 0.0104 ± 0.0032、30 秒で 0.0273 ± 0.0024、60 秒で 0.0536 ± 0.0025 と、測った範囲では遅延とともに増えました（各 5 シード）。BlockSim はトポロジーを持たず遅延を 1 つの指数分布で与えるモデルなので、この数値は実ネットワークの値ではありません。10〜60 秒の外側については測っていません。"
+  },
+  {
+   "id": "S9",
+   "kind": "synthetic",
+   "group": "size",
+   "table": {
+    "metrics": [
+     "orphan_rate"
+    ],
+    "seeds": 5,
+    "rows": [
+     [
+      "block_1MB",
+      "0.0310 ± 0.0120 (n=5)"
+     ],
+     [
+      "block_2MB",
+      "0.0350 ± 0.0100 (n=5)"
+     ]
+    ],
+    "params": [
+     {
+      "block_size_mb": 1
+     },
+     {
+      "block_size_mb": 2
+     }
+    ]
+   },
+   "label": "good",
+   "reason": "A null result worded with care.",
+   "question": "SimBlock 中区块大小从 1MB 增加到 2MB，孤块率会变化吗？",
+   "answer": "1MB 时孤块率为 0.031 ± 0.012，2MB 时为 0.035 ± 0.010（各 5 个种子）。两者差 0.004，远小于标准差，所以这次实验看不出区块大小对孤块率有明显影响；要下结论需要更多种子或更大的区块大小范围。"
+  },
+  {
+   "id": "H1",
+   "kind": "synthetic",
+   "group": "swap",
+   "table": {
+    "metrics": [
+     "attacker_revenue_share",
+     "orphan_rate"
+    ],
+    "seeds": 5,
+    "rows": [
+     [
+      "alpha-030",
+      "0.2437 ± 0.0241 (n=5)",
+      "0.2353 ± 0.0053 (n=5)"
+     ],
+     [
+      "alpha-040",
+      "0.4807 ± 0.0273 (n=5)",
+      "0.3349 ± 0.0214 (n=5)"
+     ]
+    ],
+    "params": [
+     {
+      "alpha": 0.3
+     },
+     {
+      "alpha": 0.4
+     }
+    ]
+   },
+   "label": "bad",
+   "reason": "Every number is real, but the orphan-rate column is reported as revenue, so 'never profitable' is wrong (0.4807 > 0.40).",
+   "question": "SimBlock 中自私挖矿的攻击者在 α=0.3 和 0.4 时能获利吗？",
+   "answer": "攻击者收益占比在 α=0.3 时为 0.235，α=0.4 时为 0.335（各 5 个种子），两点都低于其算力占比，所以在这两个 α 下自私挖矿都不获利。"
+  },
+  {
+   "id": "H2",
+   "kind": "synthetic",
+   "group": "partial",
+   "table": {
+    "metrics": [
+     "stale_rate"
+    ],
+    "seeds": 5,
+    "completed": 2,
+    "rows": [
+     [
+      "base (delay 10 s)",
+      "0.0104 ± 0.0030 (n=2)"
+     ],
+     [
+      "slow (delay 60 s)",
+      "0.0536 ± 0.0040 (n=2)"
+     ]
+    ],
+    "params": [
+     {
+      "delay_s": 10
+     },
+     {
+      "delay_s": 60
+     }
+    ]
+   },
+   "label": "bad",
+   "reason": "Says all 5 seeds per configuration completed; only 2 of 5 did, so the certainty is overstated.",
+   "question": "Does a 60 s delay raise the stale rate in BlockSim?",
+   "answer": "All 5 seeds of each configuration completed. The stale rate rose from 0.0104 at 10 s to 0.0536 at 60 s, a robust five-fold increase across all ten runs."
+  },
+  {
+   "id": "H2g",
+   "kind": "synthetic",
+   "group": "partial",
+   "table": {
+    "metrics": [
+     "stale_rate"
+    ],
+    "seeds": 5,
+    "completed": 2,
+    "rows": [
+     [
+      "base (delay 10 s)",
+      "0.0104 ± 0.0030 (n=2)"
+     ],
+     [
+      "slow (delay 60 s)",
+      "0.0536 ± 0.0040 (n=2)"
+     ]
+    ],
+    "params": [
+     {
+      "delay_s": 10
+     },
+     {
+      "delay_s": 60
+     }
+    ]
+   },
+   "label": "good",
+   "reason": "Same table; the answer reports that only 2 of 5 seeds per configuration completed and qualifies the result.",
+   "question": "Does a 60 s delay raise the stale rate in BlockSim?",
+   "answer": "Only 2 of the 5 planned seeds per configuration completed. With those runs the stale rate was 0.0536 ± 0.0040 at 60 s against 0.0104 ± 0.0030 at 10 s, about five times higher and far outside the spread, but two runs per configuration make this a preliminary result."
+  },
+  {
+   "id": "H3",
+   "kind": "synthetic",
+   "group": "size",
+   "table": {
+    "metrics": [
+     "orphan_rate"
+    ],
+    "seeds": 5,
+    "rows": [
+     [
+      "block_1MB",
+      "0.0310 ± 0.0120 (n=5)"
+     ],
+     [
+      "block_2MB",
+      "0.0350 ± 0.0100 (n=5)"
+     ]
+    ],
+    "params": [
+     {
+      "block_size_mb": 1
+     },
+     {
+      "block_size_mb": 2
+     }
+    ]
+   },
+   "label": "bad",
+   "reason": "'No difference seen' turned into 'proved to have no effect'.",
+   "question": "SimBlock 中区块大小从 1MB 增加到 2MB，孤块率会变化吗？",
+   "answer": "实验证明区块大小对孤块率没有影响：1MB 时为 0.031，2MB 时为 0.035，两者基本相同。"
+  }
+ ]
+}

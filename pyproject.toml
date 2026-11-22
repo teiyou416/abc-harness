@@ -25,6 +25,7 @@ pythonpath = ["tests"]
 markers = [
     "docker: needs a Docker daemon",
     "live: calls a real model or external API",
+    "judge_eval: runs the judge over the gold cases in tests/fixtures/judge (about $0.2 a run)",
 ]
 
 [tool.ruff]

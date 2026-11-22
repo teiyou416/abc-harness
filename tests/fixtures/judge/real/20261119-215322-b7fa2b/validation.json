@@ -1,0 +1,89 @@
+{
+  "passed": false,
+  "metric": "orphan_rate",
+  "mean": null,
+  "n": 0,
+  "planned": 3,
+  "expected": 0.3,
+  "tolerance": 0.005,
+  "runs": [
+    {
+      "run_id": "validation__seed-1",
+      "configuration": "validation",
+      "seed": 1,
+      "params": {
+        "AVERAGE_MINING_POWER": 400000,
+        "BLOCK_SIZE": 1,
+        "CHURN_NODE_RATE": 0.3,
+        "END_BLOCK_HEIGHT": 100000,
+        "INTERVAL": 600000,
+        "NUM_OF_NODES": 100,
+        "STDEV_OF_MINING_POWER": 0
+      },
+      "status": "failed",
+      "exit_code": 0,
+      "duration_seconds": 0.612,
+      "metrics": {},
+      "raw_files": [
+        "raw/validation__seed-1/stdout.txt",
+        "raw/validation__seed-1/stderr.txt",
+        "raw/validation__seed-1/blockList.txt",
+        "raw/validation__seed-1/static.json"
+      ],
+      "diff_file": "changes/validation__seed-1.diff",
+      "error": "output did not parse: no block reached 90% of nodes; t90_ms is undefined"
+    },
+    {
+      "run_id": "validation__seed-2",
+      "configuration": "validation",
+      "seed": 2,
+      "params": {
+        "AVERAGE_MINING_POWER": 400000,
+        "BLOCK_SIZE": 1,
+        "CHURN_NODE_RATE": 0.3,
+        "END_BLOCK_HEIGHT": 100000,
+        "INTERVAL": 600000,
+        "NUM_OF_NODES": 100,
+        "STDEV_OF_MINING_POWER": 0
+      },
+      "status": "failed",
+      "exit_code": 0,
+      "duration_seconds": 0.616,
+      "metrics": {},
+      "raw_files": [
+        "raw/validation__seed-2/stdout.txt",
+        "raw/validation__seed-2/stderr.txt",
+        "raw/validation__seed-2/blockList.txt",
+        "raw/validation__seed-2/static.json"
+      ],
+      "diff_file": "changes/validation__seed-2.diff",
+      "error": "output did not parse: no block reached 90% of nodes; t90_ms is undefined"
+    },
+    {
+      "run_id": "validation__seed-3",
+      "configuration": "validation",
+      "seed": 3,
+      "params": {
+        "AVERAGE_MINING_POWER": 400000,
+        "BLOCK_SIZE": 1,
+        "CHURN_NODE_RATE": 0.3,
+        "END_BLOCK_HEIGHT": 100000,
+        "INTERVAL": 600000,
+        "NUM_OF_NODES": 100,
+        "STDEV_OF_MINING_POWER": 0
+      },
+      "status": "failed",
+      "exit_code": 0,
+      "duration_seconds": 0.595,
+      "metrics": {},
+      "raw_files": [
+        "raw/validation__seed-3/stdout.txt",
+        "raw/validation__seed-3/stderr.txt",
+        "raw/validation__seed-3/blockList.txt",
+        "raw/validation__seed-3/static.json"
+      ],
+      "diff_file": "changes/validation__seed-3.diff",
+      "error": "output did not parse: no block reached 90% of nodes; t90_ms is undefined"
+    }
+  ]
+}

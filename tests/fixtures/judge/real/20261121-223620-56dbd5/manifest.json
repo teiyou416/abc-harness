@@ -1,0 +1,6 @@
+{
+ "task_id": "20261121-223620-56dbd5",
+ "question": "我想再现这篇论文的实验，请使用simblock模拟器。我想再现论文的figure 4,5,6,请你实现在simblock里论文的核心内容和算法，然后按照论文相似的参数运行实验，并生成实验结果的图片并且保存在本地。你修改的simblock的代码也请一并保存下来。",
+ "model": "deepseek-flash",
+ "status": "completed"
+}

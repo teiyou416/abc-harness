@@ -1,0 +1,6 @@
+{
+ "task_id": "20261119-170344-67ca29",
+ "question": "在 BlockSim 中，区块传播延迟从 0.42 秒增加到 60 秒，stale block 比例会怎么变化？",
+ "model": "claude-opus-5-5",
+ "status": "completed"
+}

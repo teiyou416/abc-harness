@@ -1,0 +1,8 @@
+{
+ "lines": [
+  "INSUFFICIENT: trace.jsonl: 45 run start(s) without a plan version, or no plan.json",
+  "PASS: raw/, results.json and report.md: 120 measurements checked (custom values checked against stdout only)",
+  "PASS: report.md Agent summary: 55 of 55 numbers found in the task's sources"
+ ],
+ "note": "the trace check of the original task, run on its full artifacts"
+}

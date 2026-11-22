@@ -25,7 +25,7 @@ history.
   configuration runs; `abc-harness export` packages the edited source. [M5]
 - `make_figure` draws result figures in the plot image; `search_files`
   searches the source and task files; `chat` keeps a conversation of tasks
-  with `/tasks`, `/model`, and `/new`. [M5.1]
+  with `/tasks`, `/model`, `/effort`, and `/new`. [M5.1]
 - Six models: four Claude models and two DeepSeek models; `deepseek-flash`
   is the default. [M5.1]
 - The terminal shows a status line for the current action, each tool call,

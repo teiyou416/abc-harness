@@ -13,6 +13,7 @@ from abc_harness.agent.model import (
     API_KEY_NAMES,
     DEFAULT_EFFORT,
     DEFAULT_MODEL,
+    EFFORTS,
     MODELS,
     ModelUnavailable,
     make_model,
@@ -113,7 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def agent_options(p: argparse.ArgumentParser) -> None:
         p.add_argument("--model", default=DEFAULT_MODEL)
-        p.add_argument("--effort", default=DEFAULT_EFFORT, choices=["low", "medium", "high", "xhigh", "max"])
+        p.add_argument("--effort", default=DEFAULT_EFFORT, choices=EFFORTS)
         p.add_argument("--llm-call-limit", type=int, default=DEFAULT_LLM_CALL_LIMIT, help="per task")
         p.add_argument("--env-file", type=Path, default=DEFAULT_ENV_FILE, help="file holding API keys")
         p.add_argument("--library", type=Path, default=DEFAULT_LIBRARY_DIR, metavar="DIR",
@@ -148,9 +149,9 @@ def _chat(
     console = None if args.quiet else Console()
     current = {"model": model}
 
-    def switch(name: str) -> str | None:
+    def switch(name: str, effort: str | None = None) -> str | None:
         try:
-            current["model"] = make_model(name, args.effort, key)
+            current["model"] = make_model(name, effort or current["model"].effort, key)
         except ModelUnavailable as e:
             return str(e)
         return None
@@ -176,7 +177,9 @@ def _chat(
         )  # fmt: skip
 
     print(f"ABC Harness chat with {model.name}.")
-    models = ModelControl(lambda: current["model"].name, switch, available)
+    models = ModelControl(lambda: current["model"].name, switch, available,
+                          effort=lambda: current["model"].effort,
+                          set_effort=lambda level: switch(current["model"].name, level))
     return run_chat(lambda: ChatSession(args.runs_dir), turn, read, show_answers=args.quiet,
                     models=models)  # fmt: skip
 

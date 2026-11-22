@@ -41,6 +41,7 @@ class Turn:
     stop_reason: str
     summary: str | None
     model: str = ""
+    effort: str | None = None
 
 
 class ChatSession:
@@ -67,6 +68,7 @@ class ChatSession:
     ) -> Turn:
         """Run one request as a new task. A KeyboardInterrupt is recorded as an interrupted turn and re-raised."""
         started: list[Path] = []
+        effort = getattr(model, "effort", None)
 
         def start(artifact_dir: Path) -> None:
             started.append(artifact_dir)
@@ -81,12 +83,12 @@ class ChatSession:
                 session_id=self.session_id, library_dir=library_dir,
             )  # fmt: skip
             turn = Turn(question, result.task_id, result.artifact_dir, result.status, result.stop_reason, result.summary,
-                        model.name)  # fmt: skip
+                        model.name, effort)  # fmt: skip
         except KeyboardInterrupt:
             if started:
                 manifest = _read_json(started[0] / "manifest.json") or {}
                 self._record(Turn(question, started[0].name, started[0], manifest.get("status", "failed"),
-                                  manifest.get("stop_reason", "interrupted by researcher"), None, model.name))  # fmt: skip
+                                  manifest.get("stop_reason", "interrupted by researcher"), None, model.name, effort))  # fmt: skip
             raise
         self._record(turn)
         return turn
@@ -95,7 +97,7 @@ class ChatSession:
         self.turns.append(turn)
         line = {"ts": datetime.now().astimezone().isoformat(timespec="seconds"), "turn": len(self.turns),
                 "question": turn.question, "task_id": turn.task_id, "task_dir": str(turn.artifact_dir),
-                "status": turn.status, "stop_reason": turn.stop_reason, "model": turn.model}  # fmt: skip
+                "status": turn.status, "stop_reason": turn.stop_reason, "model": turn.model, "effort": turn.effort}  # fmt: skip
         with (self.dir / "session.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
 

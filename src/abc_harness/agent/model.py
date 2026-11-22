@@ -16,6 +16,7 @@ from typing import Any, Protocol
 
 DEFAULT_MODEL = "deepseek-flash"  # what --model chooses when not given
 DEFAULT_EFFORT = "high"
+EFFORTS = ("low", "medium", "high", "xhigh", "max")  # the values output_config.effort accepts
 # Thinking counts toward this cap, so it leaves room for long reasoning plus a large tool input such as a plan.
 MAX_OUTPUT_TOKENS = 65_536
 # On a safety decline the Anthropic API reruns the request on a fallback model chosen

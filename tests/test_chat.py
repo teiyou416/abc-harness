@@ -202,3 +202,31 @@ def test_model_command_shows_and_switches_the_model_for_following_tasks(tmp_path
     assert "! deepseek-flash needs DEEPSEEK_API_KEY in .env" in joined
     assert "The following tasks use deepseek-v4-pro. It cannot see images" in joined
     assert used == ["deepseek-v4-pro"] and "not_executed  deepseek-v4-pro  hello" in joined
+
+
+def test_effort_command_sets_the_effort_for_following_tasks_and_records_it(tmp_path):
+    current = {"name": "claude-opus-5-5", "effort": "high"}
+
+    def set_effort(level):
+        current["effort"] = level
+
+    models = ModelControl(lambda: current["name"], lambda _n: None, lambda: [current["name"]],
+                          effort=lambda: current["effort"], set_effort=set_effort)  # fmt: skip
+    model = ScriptedModel([text_turn("Hi.")])
+
+    def turn(session, text):
+        model.effort = current["effort"]
+        return session.run_turn(text, model, FakeRunner(), lambda q: "", lambda p: ("approve", ""))
+
+    out = []
+    inputs = Inputs("/effort", "/effort extreme", "/effort LOW", "hello", "/tasks", "/quit")
+    run_chat(lambda: ChatSession(tmp_path / "runs"), turn, inputs, out.append, models=models)
+    joined = "\n".join(out)
+    assert "Effort: high\nLevels: low, medium, high, xhigh, max" in joined
+    assert "! unknown effort 'extreme'" in joined
+    assert "The following tasks use effort low." in joined
+    assert f"{model.name} (low)  hello" in joined
+    task_dir = next(p for p in (tmp_path / "runs").iterdir() if (p / "manifest.json").exists())
+    assert json.loads((task_dir / "manifest.json").read_text())["effort"] == "low"
+    session_log = next((tmp_path / "runs" / "sessions").glob("*/session.jsonl")).read_text()
+    assert json.loads(session_log.splitlines()[-1])["effort"] == "low"

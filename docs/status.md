@@ -36,9 +36,19 @@ history.
 - Per-task limits on active runtime and model calls, changed with
   `--time-limit-seconds` and `--llm-call-limit`
   ([values](project-spec.md#limits)).
-- `trace check` audits saved approval, validation order, and reported metrics offline.
-- `make check` runs ruff and 228 offline tests; `make test-docker` runs 11
-  Docker tests and `make test-live` runs 9 tests against the model APIs and
+- `trace check` audits saved approval, validation order, and reported metrics offline,
+  and runs by itself when a task that executed a plan ends (`trace_check.json`). It also
+  warns about each number in the agent's final answer that no source supports.
+- `abc-harness judge` and `/judge` ask another model whether a finished task's
+  answer follows from its results, on request, and keep the judgment in
+  `judge.jsonl` as model-assessed advice. [M5.2]
+- `make eval-judge` scores 26 gold cases (7 real tasks, 6 edited answers, 13
+  constructed) and compares with labels a second agent reviewed and the
+  maintainer confirmed. 2026-11-23: claude-sonnet-5-5 agreed on 23 of 24
+  scored cases ($0.24), deepseek-v4-pro on 23 of 24 ($0.13), though
+  deepseek-v4-pro put four bad cases at exactly the boundary score 5. [M5.2]
+- `make check` runs ruff and 269 offline tests; `make test-docker` runs 11
+  Docker tests and `make test-live` runs 13 tests against the model APIs and
   literature services.
 
 ## Broken or not verified

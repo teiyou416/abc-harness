@@ -13,11 +13,19 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from abc_harness.agent.model import EFFORTS, MODELS
 from abc_harness.agent.session import ChatSession, Turn
 from abc_harness.execution.cleanup import LARGE_RUNS_BYTES, apply_cleanup, describe, dir_size, human_size, plan_cleanup
-from abc_harness.interfaces.console import Write, cost_line, estimated_cost, task_summary
+from abc_harness.interfaces.console import (
+    CURRENCY_SIGNS,
+    Write,
+    cost_line,
+    estimated_cost,
+    judgment_lines,
+    task_summary,
+)
 
 Read = Callable[[str], str]
 PROMPT = "› "
@@ -26,6 +34,7 @@ HELP = """Type a research request and press Enter (Alt+Enter for a new line). Ea
   /model [name]   show the model, or switch the following tasks to another one
   /effort [level] show the effort, or set it for the following tasks
   /status         show the model, effort, limits, tasks, estimated cost, and disk use
+  /judge [n]      ask a model whether task n's answer (default: the latest with a plan) follows from its results
   /clean [days]   free disk space: list sandbox files (and with days, unrun tasks older than that), then ask
   /new            start a new conversation; the agent forgets the earlier tasks
   /help           show this help
@@ -53,6 +62,7 @@ def run_chat(
     show_answers: bool = False,
     models: ModelControl | None = None,
     limits: Callable[[], tuple[float, int]] | None = None,
+    judge: Callable[[Path], None] | None = None,
 ) -> int:
     """Run the conversation until the researcher leaves. Returns the exit status.
 
@@ -83,6 +93,8 @@ def run_chat(
                 write(_task_list(session))
             elif command == "/status":
                 write(_status(session, models, limits))
+            elif command == "/judge":
+                _judge_command(session, argument.strip(), judge, write)
             elif command == "/clean":
                 _clean_command(session.runs_root, argument.strip(), read, write)
             elif command == "/new":
@@ -149,6 +161,70 @@ def _status(
                  "/tasks lists both")  # fmt: skip
     lines.append(cost_line(totals, priced, unknown) if priced or unknown else "Estimated cost: no model call yet")
     return "\n".join(lines)
+
+
+def _judge_command(
+    session: ChatSession, argument: str, judge: Callable[[Path], None] | None, write: Write
+) -> None:
+    if judge is None:
+        write("! this chat cannot judge tasks")
+        return
+    if argument:
+        if not argument.isdigit() or not 1 <= int(argument) <= len(session.turns):
+            write(f"! /judge takes a task number from /tasks (1 to {len(session.turns)}), not {argument!r}")
+            return
+        turn = session.turns[int(argument) - 1]
+    else:
+        planned = [t for t in session.turns if not t.is_reply]
+        if not planned:
+            write("! no task in this conversation has a plan to judge")
+            return
+        turn = planned[-1]
+    judge(turn.artifact_dir)
+
+
+def judge_task(
+    task_dir: Path, model_name: str | None, make: Callable[[str], Any], has_key: Callable[[str], bool],
+    confirm: Callable[[], bool], redact: Callable[[str], str], write: Write = print,
+) -> int:
+    """Check the task can be judged, show the judge and its estimated cost, and judge it if `confirm()` says yes.
+
+    `make(name)` builds the judge's model client. Returns the exit status: 0 judged or declined, 1 the judge
+    gave no verdict, 2 the task cannot be judged or no judge model is available.
+    """
+    from abc_harness.agent.judge import JUDGE_EFFORT, JudgeRefused, default_model, judge, prepare
+    from abc_harness.agent.model import ModelUnavailable
+
+    try:
+        prepared = prepare(task_dir, redact)
+    except JudgeRefused as e:
+        write(f"! cannot judge {task_dir.name}: {e}")
+        return 2
+    name = model_name or default_model(prepared.task_model, has_key)
+    if name is None:
+        write("! no judge model: add a key for a model other than the task's own to .env, or pass --model")
+        return 2
+    try:
+        model = make(name)
+    except ModelUnavailable as e:
+        write(f"! {e}")
+        return 2
+    same = " (the task's own model, which tends to favour its own answers)" if name == prepared.task_model else ""
+    estimate = prepared.estimate(name)
+    if estimate:
+        typical, most, currency = estimate
+        sign = CURRENCY_SIGNS.get(currency, currency + " ")
+        cost = f"about {sign}{typical:.3f}, at most {sign}{most:.3f} at list prices"
+    else:
+        cost = "cost unknown (no list price)"
+    write(f"Judge {task_dir.name} with {name}{same}, effort {JUDGE_EFFORT}: {cost}.")
+    if not confirm():
+        write("Not judged.")
+        return 0
+    record = judge(prepared, model)
+    for line in judgment_lines(record):
+        write(line)
+    return 0 if record["status"] == "scored" else 1
 
 
 def _clean_command(runs_root: Path, argument: str, read: Read, write: Write) -> None:

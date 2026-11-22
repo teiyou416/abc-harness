@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
 
+from abc_harness.agent.judge import latest as latest_judgment
 from abc_harness.agent.model import price_for
 from abc_harness.execution.trace import read_trace, summarize_trace
 
@@ -241,11 +242,44 @@ def task_summary(task_dir: Path) -> list[str]:
     if records:
         done = sum(r.get("status") == "completed" for r in records)
         lines.append(f"Simulation runs: {done} of {len(records)} completed")
+    lines += _evidence_lines(task_dir)
+    record = latest_judgment(task_dir)
+    if record:
+        lines += judgment_lines(record)
     lines.append(f"Report: {task_dir / 'report.md'}")
     return lines
 
 
 CURRENCY_SIGNS = {"USD": "$", "CNY": "¥"}
+
+
+def judgment_lines(record: dict[str, Any]) -> list[str]:
+    """A judgment for the terminal, always labelled as model-assessed."""
+    who = f"{record['judge_model']}, model-assessed" + (", the task's own model" if record.get("same_model_as_task")
+                                                         else "")  # fmt: skip
+    if record["status"] != "scored":
+        return [f"Judge ({who}): no verdict: {record['reason']}"]
+    lines = [f"Judge ({who}): {record['dimension']} {record['score']}/10. {record['reason']}"]
+    lines += [f"  faulted: \"{s}\"" for s in record.get("faulted") or []]
+    return lines
+
+
+def _evidence_lines(task_dir: Path, shown: int = 5) -> list[str]:
+    """The verdict of the automatic `trace check`, with its problems when it did not pass."""
+    check = _read_json(task_dir / "trace_check.json")
+    if not check:
+        return []
+    passes = [line.removeprefix("PASS: ") for line in check["lines"] if line.startswith("PASS: ")]
+    warnings = [line for line in check["lines"] if line.startswith("WARN: ")]
+    if check["verdict"] == "PASS" and not warnings:
+        return [f"Evidence check: PASS ({'; '.join(passes)})"]
+    problems = [line for line in check["lines"] if not line.startswith(("PASS: ", "NOTE: "))]
+    verdict = check["verdict"] + (f" with {len(warnings)} warning(s)" if warnings else "")
+    lines = [f"Evidence check: {verdict}; details in trace_check.json"]
+    lines += [f"  {p}" for p in problems[:shown]]
+    if len(problems) > shown:
+        lines.append(f"  … and {len(problems) - shown} more")
+    return lines
 
 
 def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[dict[str, float], set[str], set[str]]:

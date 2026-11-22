@@ -46,7 +46,7 @@ flowchart TB
     end
 
     subgraph ART["runs/task_id/"]
-        FILES["approvals.jsonl, plans/, plan.json<br/>raw/, changes/, results.json<br/>report.md, manifest.json<br/>trace.jsonl, history.md"]
+        FILES["approvals.jsonl, plans/, plan.json<br/>raw/, changes/, results.json<br/>report.md, manifest.json<br/>trace.jsonl, history.md<br/>trace_check.json"]
     end
 
     subgraph LIT["Literature: literature/"]
@@ -98,9 +98,10 @@ checks that every module appears in this table.
 | Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
 | Agent | `agent/session.py` | A chat session: runs each request as a new task, writes the earlier tasks into the next task's first message from their records, logs the session in `runs/sessions/<id>/session.jsonl`, and moves each chat reply (a task that proposed no plan) to `runs/sessions/<id>/replies/` when it ends. |
 | Agent | `agent/model.py` | The model client for Anthropic's Messages API and the Anthropic-compatible ones of DeepSeek and Moonshot (Kimi); the list of supported models with their provider, list price, and whether they see images; the only code that receives a model API key. Caps connection attempts at 5 seconds and retries transient failures up to three times within the remaining task time. The terminal shows each retry and its delay. |
+| Agent | `agent/judge.py` | The on-demand judge: builds its input from a finished task's artifacts, calls one model, parses the verdict, and appends it to `judge.jsonl`. |
 | Agent | `agent/context.py` | Token estimates, `history.md`, and the message that starts a new window. |
 | Agent | `agent/secrets.py` | Reads API keys from `.env` and redacts them from traces. |
-| Agent | `agent/prompts/` | `SOUL.md` (identity), `rules.md` (workflow), `compact.md` (summary instructions). |
+| Agent | `agent/prompts/` | `SOUL.md` (identity), `rules.md` (workflow), `compact.md` (summary instructions), `judge.md` (the judge's rubric). |
 | Tools | `tools/__init__.py` | The explicit list of tools the agent can call. |
 | Tools | `tools/base.py` | `ToolContext` (shared task state), `ToolOutput` (a result with images), `ToolError` (refusal), `EndTask` (ends the task). |
 | Tools | `tools/describe_simulator.py` | Returns a simulator's capability card. |
@@ -127,7 +128,8 @@ checks that every module appears in this table.
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
 | Execution | `execution/limits.py` | The active-time and model-call limits; waiting for the researcher and PDF parsing do not count. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl`, passes each redacted event to an optional listener (the live terminal output), and summarises it. |
-| Execution | `execution/trace_check.py` | Audits approval and validation order and checks saved result tables offline. |
+| Execution | `execution/grounding.py` | Grounded numbers: finds each number of the agent's final answer in what the task saw or produced (tool results, the researcher's messages, plan, results, report tables), never in the agent's own words; `trace check` reports one without a source as a warning. |
+| Execution | `execution/trace_check.py` | Audits approval and validation order and checks saved result tables offline; `execution/task.py` also runs it when a task that executed a plan ends and keeps the verdict in `trace_check.json`. |
 | Execution | `execution/recompute.py` | Independent standard-library metric calculations, also available as the standalone recomputation script. |
 | Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
 | Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |
@@ -187,6 +189,18 @@ final answer; the latest five in full), added to the new task's first
 message; the earlier artifact directories are readable at
 `previous/<task_id>/`. Papers must be found or opened again in each task
 before they are cited; the parse cache makes reopening a library PDF instant.
+
+## Judge
+
+`abc-harness judge` and `/judge` call `agent/judge.py`, which builds the
+judge's input from the task's saved artifacts, calls one model through
+`agent/model.py` (so the key, retries, and pricing are the same as for the
+agent), parses its JSON verdict, and appends it to `judge.jsonl`. It runs
+only after the task ended and only when `trace_check.json` has no `FAIL`; it
+reads artifacts and writes nothing else. The rubric is
+`agent/prompts/judge.md`, and its SHA-256 goes into each record, so a score
+can be traced to the exact prompt. Limits are in
+[project-spec.md](project-spec.md#limits).
 
 ## Data flow
 

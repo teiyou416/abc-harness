@@ -1,0 +1,6 @@
+{
+ "task_id": "20261121-233655-dc17ae",
+ "question": "我想模拟self-mining这个攻击，使用simblock进行模拟，你完成的代码和模拟的结果，还有基于模拟结果生成的图片都保存下来。",
+ "model": "deepseek-flash",
+ "status": "completed"
+}

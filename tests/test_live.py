@@ -231,3 +231,47 @@ def test_compatible_provider_answers_a_tool_call_and_reports_usage(name):
                                                           "peer-to-peer network."}]}]  # fmt: skip
     after = model.create(system, messages, TOOLS, max_tokens=4000, timeout_seconds=120)
     assert after.stop_reason == "end_turn" and "propagation" in after.text().lower(), (after.stop_reason, after.text())
+
+
+JUDGE_BAD = ("The 60 s delay clearly produces more stale blocks: the stale rate rose from 0.200 to 0.210, so a "
+             "longer propagation delay raises the stale rate.")
+JUDGE_FAITHFUL = ("With two runs each, the stale rate was 0.210 ± 0.060 at 60 s and 0.200 ± 0.050 at 10 s. The "
+                  "difference is far smaller than the spread, so this experiment shows no clear effect of the delay; "
+                  "more seeds would be needed to tell.")
+
+
+def _judge_fixture(root, answer):
+    """A finished task whose two configurations differ by much less than their standard deviations."""
+    import json
+
+    root.mkdir()
+    (root / "manifest.json").write_text(json.dumps({"question": "Does a 60 s delay raise the stale rate?",
+                                                    "model": "deepseek-flash", "status": "completed"}))
+    (root / "plan.json").write_text(json.dumps({"title": "Delay and stale rate", "simulator": "blocksim",
+                                                "configurations": [{"name": "base", "delay_s": 10},
+                                                                   {"name": "slow", "delay_s": 60}],
+                                                "seeds": [1, 2], "metrics": ["stale_rate"]}))
+    (root / "trace_check.json").write_text(json.dumps({"verdict": "PASS", "lines": [
+        "PASS: raw/, results.json and report.md: 4 measurements checked"]}))
+    (root / "report.md").write_text(
+        "# Report\n\n## Planned versus completed runs\n\n| Configuration | Planned | Completed |\n|---|---|---|\n"
+        "| base | 2 | 2 |\n| slow | 2 | 2 |\n\n## Results\n\nMean ± sample standard deviation over completed runs.\n\n"
+        "| Configuration | stale_rate |\n|---|---|\n| base | 0.2000 ± 0.0500 (n=2) |\n| slow | 0.2100 ± 0.0600 (n=2) |\n"
+        f"\n## Agent summary\n\n{answer}\n")
+    return root
+
+
+def test_real_judge_tells_an_overstated_answer_from_a_faithful_one(tmp_path):
+    from abc_harness.agent.judge import JUDGE_EFFORT, default_model, judge, prepare
+    from abc_harness.agent.model import API_KEY_NAMES, make_model
+
+    secrets = Secrets.load(ROOT / ".env", names=API_KEY_NAMES)
+    name = default_model("deepseek-flash", secrets.has)
+    if name is None:
+        pytest.skip("no judge model key in .env")
+    model = make_model(name, JUDGE_EFFORT, lambda key: secrets.get(key) if secrets.has(key) else None)
+    bad = judge(prepare(_judge_fixture(tmp_path / "bad", JUDGE_BAD)), model)
+    good = judge(prepare(_judge_fixture(tmp_path / "good", JUDGE_FAITHFUL)), model)
+    assert bad["status"] == good["status"] == "scored", (bad, good)
+    assert bad["score"] < 5, bad
+    assert good["score"] >= 7, good

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from abc_harness.execution import recompute
+from abc_harness.execution.grounding import check_answer
 from abc_harness.execution.report import format_value
 from abc_harness.execution.trace import read_trace
 from abc_harness.planning.approval import read_decisions
@@ -16,6 +17,8 @@ from abc_harness.planning.plan import Plan, SimulationRunSpec, load_plan
 
 
 class Findings:
+    """PASS, FAIL, and INSUFFICIENT set the exit code; WARN (an answer number without a source) does not."""
+
     def __init__(self) -> None:
         self.lines: list[str] = []
         self.status: set[str] = set()
@@ -168,6 +171,25 @@ def _metrics(root: Path, plan: Plan, records: list[dict[str, Any]], starts: set[
                      + (" (custom values checked against stdout only)" if plan.custom_metrics else ""))
 
 
+def answer_number_lines(root: Path) -> list[str]:
+    """The trace-check lines about the final answer's numbers: a WARN for those without a source, and a count."""
+    try:
+        result = check_answer(root)
+    except (OSError, ValueError) as exc:
+        return [f"WARN: report.md Agent summary: numbers not checked: {exc}"]
+    if result is None or not result.checked:
+        return []
+    found = len(result.checked) - len(result.ungrounded)
+    lines = []
+    if result.ungrounded:
+        missing = ", ".join(dict.fromkeys(c.text for c in result.ungrounded))
+        lines.append(f"WARN: report.md Agent summary: no source for {missing} "
+                     "(derived by the agent, or unsupported; check them)")  # fmt: skip
+    lines.append(f"{'PASS' if not result.ungrounded else 'NOTE'}: report.md Agent summary: "
+                 f"{found} of {len(result.checked)} numbers found in the task's sources")  # fmt: skip
+    return lines
+
+
 def check_task(root: Path) -> tuple[int, list[str]]:
     findings = Findings()
     try:
@@ -195,5 +217,6 @@ def check_task(root: Path) -> tuple[int, list[str]]:
             findings.add("PASS", "results.json: no simulation measurements to verify")
     except (OSError, ValueError, KeyError, TypeError, AttributeError, IndexError) as exc:
         findings.add("INSUFFICIENT", f"missing or unreadable task evidence: {exc}")
+    findings.lines += answer_number_lines(root)
     code = 1 if "FAIL" in findings.status else 2 if "INSUFFICIENT" in findings.status else 0
     return code, findings.lines

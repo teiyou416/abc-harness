@@ -1,7 +1,7 @@
 # One target per command in AGENTS.md. Each target is the command you would
 # otherwise type.
 
-.PHONY: check lint fmt test test-docker test-live image example example-blocksim
+.PHONY: check lint fmt test test-docker test-live eval-judge image example example-blocksim
 
 check: lint test          ## run before every commit
 
@@ -13,13 +13,16 @@ fmt:                      ## format and auto-fix
 	uv run ruff check --fix src tests
 
 test:                     ## offline tests: no Docker, no API key
-	uv run pytest -m "not docker and not live"
+	uv run pytest -m "not docker and not live and not judge_eval"
 
 test-docker:              ## tests that need a Docker daemon
 	uv run pytest -m docker
 
 test-live:                ## tests that call a real model or API
 	uv run pytest -m live
+
+eval-judge:               ## judge the gold cases and compare with their labels; MODEL=<name> picks the judge
+	JUDGE_EVAL_MODEL=$(MODEL) uv run pytest -m judge_eval -s
 
 image:                    ## build every image: simulators, PDF parser, plot
 	uv run abc-harness image build

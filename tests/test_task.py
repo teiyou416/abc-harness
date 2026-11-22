@@ -144,6 +144,11 @@ def test_end_of_input_counts_as_rejection(write_plan):
     assert decision == "reject"
 
 
+def test_empty_answer_approves(write_plan):
+    decision, _ = cli.prompt_decision(load_plan(write_plan()), read=lambda _p: "  ", write=lambda _s: None)
+    assert decision == "approve"
+
+
 def test_cli_rejection_starts_no_container(write_plan, tmp_path, monkeypatch, capsys):
     # Before approval the harness may only read the image ID it pins into the plan.
     def inspect_only(cmd, **kwargs):

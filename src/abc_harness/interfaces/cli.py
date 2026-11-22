@@ -51,19 +51,20 @@ def prompt_decision(
 ) -> tuple[str, str]:
     """Show the plan and ask the researcher to decide.
 
-    End of input or an unreadable terminal counts as a rejection, so a closed
-    terminal never starts a run.
+    An empty answer (Enter) approves. End of input or an unreadable terminal
+    counts as a rejection, so a closed terminal never starts a run.
     """
     read = read or input
     choices = "approve/revise/reject" if allow_revise else "approve/reject"
+    shown = choices.replace("approve", "approve(default)", 1)
     write(plan.render())
     write("")
     while True:
         try:
-            answer = read(f"Approve this plan? [{choices}]: ").strip().lower()
+            answer = read(f"Approve this plan? [{shown}]: ").strip().lower()
         except (EOFError, OSError):
             return "reject", "no answer (input closed)"
-        if answer in ("approve", "a", "yes", "y"):
+        if answer in ("", "approve", "a", "yes", "y"):
             return "approve", ""
         if answer in ("reject", "no", "n") or (answer == "r" and not allow_revise):
             return "reject", _read_optional(read, "Reason (optional): ")

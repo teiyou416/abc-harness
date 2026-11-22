@@ -127,6 +127,7 @@ checks that every module appears in this table.
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
 | Execution | `execution/limits.py` | The active-time and model-call limits; waiting for the researcher and PDF parsing do not count. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl`, passes each redacted event to an optional listener (the live terminal output), and summarises it. |
+| Execution | `execution/grounding.py` | Grounded numbers: finds each number of the agent's final answer in what the task saw or produced (tool results, the researcher's messages, plan, results, report tables), never in the agent's own words; `trace check` reports one without a source as a warning. |
 | Execution | `execution/trace_check.py` | Audits approval and validation order and checks saved result tables offline; `execution/task.py` also runs it when a task that executed a plan ends and keeps the verdict in `trace_check.json`. |
 | Execution | `execution/recompute.py` | Independent standard-library metric calculations, also available as the standalone recomputation script. |
 | Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |

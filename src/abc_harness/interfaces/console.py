@@ -252,10 +252,12 @@ def _evidence_lines(task_dir: Path, shown: int = 5) -> list[str]:
     if not check:
         return []
     passes = [line.removeprefix("PASS: ") for line in check["lines"] if line.startswith("PASS: ")]
-    if check["verdict"] == "PASS":
+    warnings = [line for line in check["lines"] if line.startswith("WARN: ")]
+    if check["verdict"] == "PASS" and not warnings:
         return [f"Evidence check: PASS ({'; '.join(passes)})"]
     problems = [line for line in check["lines"] if not line.startswith(("PASS: ", "NOTE: "))]
-    lines = [f"Evidence check: {check['verdict']}; details in trace_check.json"]
+    verdict = check["verdict"] + (f" with {len(warnings)} warning(s)" if warnings else "")
+    lines = [f"Evidence check: {verdict}; details in trace_check.json"]
     lines += [f"  {p}" for p in problems[:shown]]
     if len(problems) > shown:
         lines.append(f"  … and {len(problems) - shown} more")

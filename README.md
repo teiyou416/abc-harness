@@ -154,7 +154,11 @@ It compares run starts with the plan version and approval records, checks that e
 validation before formal runs, and checks completed runs against raw output, results.json, and the two
 metric tables in report.md. Custom metrics are checked against printed values only.
 Exit codes: 0 for consistent evidence, 1 for a contradiction, 2 for insufficient evidence
-(including older run starts without a plan version). It does not grade the agent's prose.
+(including older run starts without a plan version). It does not grade the agent's prose,
+but it does look for every number of the agent's final answer in what the task saw or produced
+(tool results, your messages, the plan, results, and report tables, never the agent's own words).
+A number without a source is a `WARN` line, not a failure: it may be one the agent derived, such
+as a ratio, or one it got wrong, so check it. Warnings do not change the exit code.
 The harness runs this check by itself when a task that executed a plan ends:
 the run statistics show its verdict (with the problems found, if any), and
 `trace_check.json` in the task directory keeps the full result.

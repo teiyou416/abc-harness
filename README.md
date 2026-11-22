@@ -110,6 +110,10 @@ and send your question, papers, and results to DeepSeek's servers.
 `deepseek-v4-pro` cannot see images, so it cannot read figures in papers or
 check the figures it draws.
 
+`--effort` (and `/effort` in chat) sets how hard the model thinks: `low`,
+`medium`, `high` (default), `xhigh`, or `max`. Each task records its model and
+effort in `manifest.json`.
+
 ### Chat
 
 Ready-made prompts, in Chinese, Japanese, and English, are in `examples/prompts/`;
@@ -133,6 +137,7 @@ Ctrl-C or Ctrl-D at an empty prompt leaves. Commands: `/tasks` lists the
 conversation's tasks,
 `/model` shows the model and the available ones and `/model <name>` switches
 the following tasks to another listed model,
+`/effort` shows the effort and `/effort <level>` sets it for the following tasks,
 `/new` starts over, `/help`, and `/quit`. The conversation's log is
 `runs/sessions/<session_id>/session.jsonl`.
 

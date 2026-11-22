@@ -236,6 +236,7 @@ def run_agent_task(
     previous_tasks = previous_tasks or {}
     limits = limits or ContextLimits()
     task = Task(runner, runs_root, budget, redact=redact, on_event=on_event, mode="agent", question=question, model=model.name,
+                effort=getattr(model, "effort", None),
                 prompts=prompt_hashes(), context_limits=limits.__dict__,
                 literature_services=literature.services if literature else [],
                 session_id=session_id,

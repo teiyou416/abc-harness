@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from abc_harness.agent.model import MODELS
+from abc_harness.agent.model import EFFORTS, MODELS
 from abc_harness.agent.session import ChatSession, Turn
 from abc_harness.interfaces.console import Write, task_summary
 
@@ -23,6 +23,7 @@ PROMPT = "› "
 HELP = """Type a research request and press Enter (Alt+Enter for a new line). Each request runs as its own task.
   /tasks          list this conversation's tasks
   /model [name]   show the model, or switch the following tasks to another one
+  /effort [level] show the effort, or set it for the following tasks
   /new            start a new conversation; the agent forgets the earlier tasks
   /help           show this help
   /quit           leave (or Ctrl-D)
@@ -31,11 +32,14 @@ Ctrl-C while a task runs stops that task and returns here."""
 
 @dataclass
 class ModelControl:
-    """How the chat shows and switches the model. `switch` returns why it refused, or None."""
+    """How the chat shows and switches the model and its effort. `switch` and `set_effort` return why they
+    refused, or None."""
 
     current: Callable[[], str]
     switch: Callable[[str], str | None]
     available: Callable[[], list[str]]
+    effort: Callable[[], str] | None = None
+    set_effort: Callable[[str], str | None] | None = None
 
 
 def run_chat(
@@ -74,6 +78,8 @@ def run_chat(
                 write(f"New conversation {session.session_id}; earlier tasks are forgotten.")
             elif command == "/model":
                 write(_model_command(models, argument.strip()))
+            elif command == "/effort":
+                write(_effort_command(models, argument.strip().lower()))
             else:
                 write(f"! unknown command {command}; /help lists the commands")
             continue
@@ -93,7 +99,8 @@ def run_chat(
 def _task_list(session: ChatSession) -> str:
     if not session.turns:
         return "No task yet in this conversation."
-    rows = [f"{i}. {t.task_id}  {t.status}  {t.model}  {' '.join(t.question.split())[:60]}"
+    rows = [f"{i}. {t.task_id}  {t.status}  {t.model}{f' ({t.effort})' if t.effort else ''}  "
+            f"{' '.join(t.question.split())[:60]}"
             for i, t in enumerate(session.turns, 1)]  # fmt: skip
     return "\n".join(rows)
 
@@ -110,6 +117,20 @@ def _model_command(models: ModelControl | None, name: str) -> str:
     spec = MODELS.get(name)
     note = " It cannot see images: figures in papers and its own figures are not shown to it." if spec and not spec.sees_images else ""
     return f"The following tasks use {name}.{note} Earlier tasks keep the model they ran with."
+
+
+def _effort_command(models: ModelControl | None, level: str) -> str:
+    if models is None or models.effort is None or models.set_effort is None:
+        return "! this chat cannot change the effort"
+    if not level:
+        return (f"Effort: {models.effort()}\nLevels: {', '.join(EFFORTS)}\n"
+                "Set it with /effort <level>; it applies to the following tasks.")  # fmt: skip
+    if level not in EFFORTS:
+        return f"! unknown effort {level!r}; choose one of: {', '.join(EFFORTS)}"
+    problem = models.set_effort(level)
+    if problem:
+        return f"! {problem}"
+    return f"The following tasks use effort {level}. Earlier tasks keep the effort they ran with."
 
 
 def terminal_reader(history_file: Path) -> Read:

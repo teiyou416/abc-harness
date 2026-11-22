@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
 
+from abc_harness.agent.judge import latest as latest_judgment
 from abc_harness.agent.model import price_for
 from abc_harness.execution.trace import read_trace, summarize_trace
 
@@ -242,7 +243,21 @@ def task_summary(task_dir: Path) -> list[str]:
         done = sum(r.get("status") == "completed" for r in records)
         lines.append(f"Simulation runs: {done} of {len(records)} completed")
     lines += _evidence_lines(task_dir)
+    record = latest_judgment(task_dir)
+    if record:
+        lines += judgment_lines(record)
     lines.append(f"Report: {task_dir / 'report.md'}")
+    return lines
+
+
+def judgment_lines(record: dict[str, Any]) -> list[str]:
+    """A judgment for the terminal, always labelled as model-assessed."""
+    who = f"{record['judge_model']}, model-assessed" + (", the task's own model" if record.get("same_model_as_task")
+                                                         else "")  # fmt: skip
+    if record["status"] != "scored":
+        return [f"Judge ({who}): no verdict: {record['reason']}"]
+    lines = [f"Judge ({who}): {record['dimension']} {record['score']}/10. {record['reason']}"]
+    lines += [f"  faulted: \"{s}\"" for s in record.get("faulted") or []]
     return lines
 
 

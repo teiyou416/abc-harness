@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from abc_harness.agent.judge import JUDGE_EFFORT
 from abc_harness.agent.model import (
     API_KEY_NAMES,
     DEFAULT_EFFORT,
@@ -25,7 +26,7 @@ from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LI
 from abc_harness.execution.runner import DockerRunner, build_image
 from abc_harness.execution.task import TaskResult, run_task
 from abc_harness.execution.trace import summarize_trace
-from abc_harness.interfaces.chat import ModelControl, clean_runs, run_chat, terminal_reader
+from abc_harness.interfaces.chat import ModelControl, clean_runs, judge_task, run_chat, terminal_reader
 from abc_harness.interfaces.console import Console, task_summary
 from abc_harness.literature.pdf import PARSER_IMAGE
 from abc_harness.planning.plan import Plan, PlanError, load_plan
@@ -129,6 +130,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     trace = sub.add_parser("trace", help="inspect task traces")
     trace_sub = trace.add_subparsers(dest="trace_command", required=True)
+    judge = sub.add_parser("judge", help="ask a model whether a finished task's answer follows from its results")
+    judge.add_argument("task", help="runs/<task_id>, or a task ID under --runs-dir")
+    judge.add_argument("--runs-dir", type=Path, default=Path("runs"))
+    judge.add_argument("--model", help="the judge model (default: the first one with a key that is not the task's own)")
+    judge.add_argument("--env-file", type=Path, default=DEFAULT_ENV_FILE, help="file holding API keys")
+    judge.add_argument("--yes", action="store_true", help="judge without asking after the cost estimate")
     clean = sub.add_parser("clean", help="free disk space in runs/: sandbox files, and optionally old unrun tasks")
     clean.add_argument("--runs-dir", type=Path, default=Path("runs"))
     clean.add_argument("--older-than", type=float, metavar="DAYS",
@@ -183,11 +190,28 @@ def _chat(
         )  # fmt: skip
 
     print(f"ABC Harness chat with {model.name}.")
+    def judge(task_dir: Path) -> None:
+        judge_task(task_dir, None, lambda name: make_model(name, JUDGE_EFFORT, key),
+                   lambda name: key(name) is not None, lambda: _confirm_yes(read), redact)  # fmt: skip
+
     models = ModelControl(lambda: current["model"].name, switch, available,
                           effort=lambda: current["model"].effort,
                           set_effort=lambda level: switch(current["model"].name, level))
     return run_chat(lambda: ChatSession(args.runs_dir), turn, read, show_answers=args.quiet,
-                    models=models, limits=lambda: (args.time_limit_seconds, args.llm_call_limit))  # fmt: skip
+                    models=models, limits=lambda: (args.time_limit_seconds, args.llm_call_limit),
+                    judge=judge)  # fmt: skip
+
+
+def _key_lookup(secrets: Secrets) -> Callable[[str], str | None]:
+    return lambda name: secrets.get(name) if secrets.has(name) else None
+
+
+def _confirm_yes(read: Read) -> bool:
+    """Enter means yes: the researcher asked for the judgment already."""
+    try:
+        return read("Judge it? [Y/n]: ").strip().lower() in ("", "y", "yes")
+    except (EOFError, KeyboardInterrupt, OSError):
+        return False
 
 
 def _announce(artifact_dir: Path) -> None:
@@ -215,6 +239,14 @@ def main(argv: list[str] | None = None) -> int:
                 context, tag = get_simulator(name).docker_context, get_simulator(name).image_tag
             print(f"Built {tag} ({build_image(context, tag)})")
         return 0
+
+    if args.command == "judge":
+        task_dir = Path(args.task) if Path(args.task).is_dir() else args.runs_dir / args.task
+        secrets = Secrets.load(args.env_file, names=API_KEY_NAMES)
+        key = _key_lookup(secrets)
+        return judge_task(task_dir, args.model, lambda name: make_model(name, JUDGE_EFFORT, key),
+                          lambda name: key(name) is not None, lambda: args.yes or _confirm_yes(input),
+                          secrets.redact)  # fmt: skip
 
     if args.command == "clean":
         return clean_runs(args.runs_dir, args.older_than, confirm=lambda: args.yes,
@@ -248,9 +280,7 @@ def main(argv: list[str] | None = None) -> int:
 
         secrets = Secrets.load(args.env_file, names=(*API_KEY_NAMES, S2_KEY))
 
-        def key(name: str) -> str | None:
-            return secrets.get(name) if secrets.has(name) else None
-
+        key = _key_lookup(secrets)
         try:
             model = make_model(args.model, args.effort, key)
         except ModelUnavailable as e:

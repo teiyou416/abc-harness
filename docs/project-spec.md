@@ -20,7 +20,7 @@ Terms such as task, plan version, simulation run, and citation are defined in th
 - Apply two hard limits to each task, **active runtime** and **LLM calls**, with the values in [Limits](#limits). Active runtime excludes time spent waiting for the researcher and time spent parsing PDFs; the trace records both separately. The limit exists to stop a model that spins; a PDF parse is not model work, so it has its own timeout per PDF instead. Every model call counts toward the call limit, including calls made for summarization or by any future sub-agent. Each model call, with its retries, may use only the task's remaining active time, and a response that arrives after the limit, even a final answer, leaves the task `stopped_by_limit`. Stop when either limit is reached and preserve partial results.
 - Use the Human Interaction tool for clarification and plan approval. Bind approval to the displayed plan version.
 - Limit writes to the task workspace and the files explicitly permitted in the approved plan.
-- Keep the first release focused on literature-assisted experiment planning and execution. Full paper reproduction, additional simulators (such as BlockEmulator), custom tools, a web interface, sub-agents, and LLM Ops beyond the trace and run statistics (an LLM judge, diagnosis of failed tasks, and release gates) are future work.
+- Keep the first release focused on literature-assisted experiment planning and execution. Full paper reproduction, additional simulators (such as BlockEmulator), custom tools, a web interface, sub-agents, and LLM Ops beyond the trace, the run statistics, `trace check`, and the on-demand [judge](#judge) (diagnosis of failed tasks, release gates, and judged offline evaluation suites) are future work.
 - Deliberately not built: DBLP and IEEE Xplore search, BlockSim's Ethereum model, automatic retry of a failed simulation run (the report shows it as failed), and memory across conversations (a `MEMORY.md` or `USER.md`) or `SKILL.md` files.
 
 ## Limits
@@ -40,6 +40,9 @@ Every number that bounds a task lives in this table; other documents name the li
 | Simulation run and sandbox exec container | 2 CPUs, 4 GB of memory; each run's timeout is set by its plan | `execution/runner.py` |
 | PDF parse container | 6 CPUs, 6 GB of memory, 15-minute timeout | `execution/runner.py`, `literature/pdf.py` |
 | Figure script container | the simulation container's CPU and memory, 120-second timeout | `execution/figures.py` |
+| Model calls per judgment (one retry for an unreadable verdict) | 2 | `agent/judge.py` |
+| Output per judge reply, thinking included | 4,096 tokens | `agent/judge.py` |
+| Time per judge call, retries included | 120 seconds | `agent/judge.py` |
 | Docker Desktop memory | 12 GB, to parse a PDF beside a simulation run | the researcher's Docker settings |
 
 ## Simulator selection
@@ -104,6 +107,17 @@ A chat session (`abc-harness chat`) is a conversation of several tasks: each res
 After a plan runs, the agent may draw static figures of the task's results. It writes a matplotlib script, which the harness runs in the plot image with the results read-only and no network. The script, PNG, and SVG are kept together, and the report shows each figure with its caption and a link to its script, so every plotted value can be traced to the results. Include enough information to rerun the experiment.
 
 Append events to `trace.jsonl` as work happens. Show brief progress, retries, and errors in the terminal. Record model calls with the model's summarized thinking, tool calls, active and waiting time, errors, and the final stop reason. At the end, print the run statistics: time, model calls and tokens, tool calls, and completed simulation runs. Record token usage when the provider supplies it and label cost estimates as estimates.
+
+## Judge
+
+After a task that executed a plan, the researcher may ask a model to judge whether the agent's final answer is supported by the task's results: `abc-harness judge runs/<task_id>`, or `/judge` in chat. The judgment is advice for the researcher, labelled as model-assessed, and never changes the task's status, report, or evidence.
+
+- **When.** Only on request, only for a task that executed a plan, and only when the automatic `trace check` found no `FAIL`: judging reasoning built on contradicted numbers is meaningless. The harness shows the judge model and an estimated cost first and asks before calling it.
+- **What the judge sees.** Only saved artifacts: the researcher's question, the executed plan, the harness-computed Results table, the validation verdict, the `trace check` findings (including numbers without a source), and the agent's final answer. Each part has a length cap; nothing is sent to the judge that the task did not already send to a model, and keys are redacted.
+- **What it scores.** One dimension in the first version, `conclusion_supported` from 0 to 10: does every claim of the final answer follow from the results, without overstating a difference within the spread or generalising past the tested parameters? The judge must check each number before scoring, and quote the sentences it faults.
+- **Which model.** `--model` chooses it; by default the first listed model with a key in `.env` that is not the task's own model, because a model favours its own answers. A judgment by the task's own model is allowed but recorded as such.
+- **Limits.** A judgment runs after the task ended, so it does not use the task's limits; it has its own (see [Limits](#limits)).
+- **Record.** Each judgment appends one line to `judge.jsonl` in the task directory: the score, the reason and quoted sentences, the judge model and effort, the prompt's hash, token usage, estimated cost, and the time. An unreadable verdict is recorded as `no_verdict`, never guessed. The run statistics show the latest judgment.
 
 ## Acceptance criteria
 

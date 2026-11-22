@@ -212,6 +212,20 @@ Tools and controls added while preparing M6, after real tasks showed they were n
 - DeepSeek with real chat tasks (2026-11-19): 88 `deepseek-flash` calls and 61 `deepseek-v4-pro` calls returned thinking, tool calls, and the cache usage fields the cost estimate reads; `deepseek-v4-pro` averaged about 29 s per call.
 - The 30-minute limit stopped two paper reproductions (tasks `20261119-231750-318e68` and `20261120-102217-6a74bc`); the second had completed 132 of 216 runs.
 
+## M5.2: Judge (added and done 2026-11-22)
+
+**What the researcher can do.** Ask a model whether a finished task's final answer is supported by its results, and see the score, the reason, and the sentences it faults, labelled as model-assessed.
+
+**Scope:** `agent/judge.py`, `agent/prompts/judge.md`, `abc-harness judge`, `/judge` in chat, `judge.jsonl`, and the latest judgment in the run statistics, as specified in [Judge](project-spec.md#judge). One dimension, `conclusion_supported`. Judged offline evaluation suites (DeepEval) come later.
+
+**Test doubles:** a scripted judge model returns fixed verdicts, unreadable JSON, and errors.
+
+**Acceptance (passed)**
+
+- Offline tests (`tests/test_judge.py`) cover input building, the `trace check` precondition, refusal of an unexecuted task, parsing, one retry then `no_verdict`, a timeout recorded as an error, the record, the summary line, the cost prompt, and `/judge` in chat.
+- Live (`test_real_judge_tells_an_overstated_answer_from_a_faithful_one`, 2026-11-22): `claude-sonnet-5-5` scored the overstated answer 2 and the faithful one 9, for about $0.007.
+- A real task (`20261121-233655-dc17ae`, judged on a copy): 6/10, faulting a comparison with a paper value the judge cannot see and a break-even claim made with five seeds, for about $0.018. The reason came back in English for a Chinese answer, against the rubric; not fixed yet.
+
 ## M6: MVP demonstration
 
 **What the researcher can do.** Compare honest mining and selfish mining across mining-power shares and inspect the measured reward share.

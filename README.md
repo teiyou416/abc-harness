@@ -43,9 +43,9 @@ uv run abc-harness run examples/simblock-baseline.toml
 `uv run abc-harness run examples/blocksim-baseline.toml` runs the BlockSim
 example the same way.
 
-`run` prints the plan and asks `Approve this plan? [approve/reject]:`.
+`run` prints the plan and asks `Approve this plan? [approve(default)/reject]:`.
 
-- Answer `approve` to run the 10 simulation runs (about 30 seconds). The
+- Answer `approve`, or press Enter, to run the 10 simulation runs (about 30 seconds). The
   command prints `Artifacts: runs/<task_id>`.
 - Answer `reject` to stop. The command prints `No simulator was started.` and
   still writes the decision, the trace and a report.
@@ -63,7 +63,7 @@ uv run abc-harness ask "With 300 nodes, does a 30 s block interval produce more 
 ```
 
 The agent may ask clarification questions, then shows a plan and asks
-`Approve this plan? [approve/revise/reject]:`. Choose `revise` to send it
+`Approve this plan? [approve(default)/revise/reject]:`. Choose `revise` to send it
 back with a comment; every new version needs a fresh approval.
 
 Each task stops at its limits on active runtime and model calls; change them

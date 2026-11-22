@@ -24,7 +24,9 @@ from abc_harness.execution.grounding import split_summary
 from abc_harness.execution.trace_check import check_task
 
 JUDGE_CALLS = 2
-JUDGE_MAX_TOKENS = 4096
+# Thinking counts toward it; 4,096 let deepseek-v4-pro think past its verdict on a 45-configuration task. Billing
+# follows what is used, so a high cap costs nothing when the judge needs little.
+JUDGE_MAX_TOKENS = 16384
 JUDGE_TIMEOUT_SECONDS = 120.0
 JUDGE_EFFORT = "low"
 DIMENSION = "conclusion_supported"
@@ -118,7 +120,7 @@ def judge(prepared: JudgeInput, model: ModelClient, now: Callable[[], datetime] 
     messages: list[dict[str, Any]] = [{"role": "user", "content": prepared.message}]
     usage: dict[str, int] = {}
     cost: dict[str, float] = {}
-    verdict, error, calls, answered_by = None, None, 0, model.name
+    verdict, error, calls, answered_by, cut = None, None, 0, model.name, False
     for _ in range(JUDGE_CALLS):
         calls += 1
         try:
@@ -140,12 +142,13 @@ def judge(prepared: JudgeInput, model: ModelClient, now: Callable[[], datetime] 
         verdict = parse_verdict(turn.text())
         if verdict is not None:
             break
+        cut = turn.stop_reason == "max_tokens"
         messages += [{"role": "assistant", "content": turn.content}, {"role": "user", "content": RETRY_NOTE}]
     record = {
         "ts": now().astimezone().isoformat(timespec="seconds"),
         "status": "scored" if verdict else ("error" if error else "no_verdict"),
         "dimension": DIMENSION,
-        **(verdict or {"score": None, "reason": error or "the judge's reply held no readable verdict", "faulted": []}),
+        **(verdict or {"score": None, "reason": error or _no_verdict_reason(cut), "faulted": []}),
         "judge_model": answered_by,
         "effort": getattr(model, "effort", None),
         "task_model": prepared.task_model,
@@ -159,6 +162,12 @@ def judge(prepared: JudgeInput, model: ModelClient, now: Callable[[], datetime] 
     with (prepared.task_dir / RECORD_FILE).open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
     return record
+
+
+def _no_verdict_reason(cut: bool) -> str:
+    if cut:
+        return f"the judge's reply was cut at the {JUDGE_MAX_TOKENS:,}-token output limit before its verdict"
+    return "the judge's reply held no readable verdict"
 
 
 def parse_verdict(text: str) -> dict[str, Any] | None:

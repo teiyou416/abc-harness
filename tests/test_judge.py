@@ -81,6 +81,13 @@ def test_an_unreadable_verdict_is_retried_once_then_recorded_as_no_verdict(tmp_p
     assert "no verdict" in "\n".join(task_summary(task_dir))
 
 
+def test_a_reply_cut_at_the_output_limit_says_so(tmp_path):
+    _, task_dir = finished_task(tmp_path)
+    cut = text_turn("Let me check each number first...", stop_reason="max_tokens")
+    record = judge(prepare(task_dir), judge_model(cut, cut))
+    assert record["status"] == "no_verdict" and "cut at the 16,384-token output limit" in record["reason"]
+
+
 def test_a_judge_that_times_out_is_recorded_as_an_error(tmp_path):
     _, task_dir = finished_task(tmp_path)
 

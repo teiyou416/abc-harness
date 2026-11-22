@@ -132,7 +132,10 @@ task, with its own directory, approval, report, and limits, so a
 follow-up such as "now with 1000 nodes" gets a new plan to approve. The agent
 remembers the earlier tasks of the conversation: the harness gives it each
 one's question, plan, results, figures, and final answer, and it can read
-their files. Ctrl-C during a task stops that task and returns to the prompt;
+their files. A request the agent answers without proposing a plan is a chat
+reply: it is still recorded, but under
+`runs/sessions/<session_id>/replies/<task_id>/`, so `runs/` lists only tasks
+with a plan. Ctrl-C during a task stops that task and returns to the prompt;
 Ctrl-C or Ctrl-D at an empty prompt leaves. Commands: `/tasks` lists the
 conversation's tasks,
 `/model` shows the model and the available ones and `/model <name>` switches

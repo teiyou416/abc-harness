@@ -96,7 +96,7 @@ checks that every module appears in this table.
 | Entry | `interfaces/console.py` | Shows a status line redrawn in place for the current action, with each tool call, milestones, errors, and the final answer above it (`Console`) and the run statistics at the end of a task (`task_summary`). |
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
 | Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
-| Agent | `agent/session.py` | A chat session: runs each request as a new task, writes the earlier tasks into the next task's first message from their records, and logs the session in `runs/sessions/<id>/session.jsonl`. |
+| Agent | `agent/session.py` | A chat session: runs each request as a new task, writes the earlier tasks into the next task's first message from their records, logs the session in `runs/sessions/<id>/session.jsonl`, and moves each chat reply (a task that proposed no plan) to `runs/sessions/<id>/replies/` when it ends. |
 | Agent | `agent/model.py` | The model client for Anthropic's Messages API and DeepSeek's Anthropic-compatible one; the list of supported models with their provider, list price, and whether they see images; the only code that receives a model API key. Caps connection attempts at 5 seconds and retries transient failures up to three times within the remaining task time. The terminal shows each retry and its delay. |
 | Agent | `agent/context.py` | Token estimates, `history.md`, and the message that starts a new window. |
 | Agent | `agent/secrets.py` | Reads API keys from `.env` and redacts them from traces. |

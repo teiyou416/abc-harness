@@ -7,7 +7,7 @@ listed under each.
 ## Tasks and experiments
 
 **Task**:
-One research request, with one task ID, one artifact directory `runs/<task_id>/`, one trace, and one set of limits.
+One research request, with one task ID, one artifact directory `runs/<task_id>/`, one trace, and one set of limits. A chat reply's artifact directory moves into its chat session's directory when it ends.
 _Avoid_: job, session, run (a run is a simulation run)
 
 **Plan version**:
@@ -21,6 +21,10 @@ _Avoid_: experiment, trial, job
 **Chat session**:
 A conversation started with `abc-harness chat`. Each request in it runs as its own task; the next task learns about the earlier ones from a block the harness writes from their records.
 _Avoid_: thread, conversation task
+
+**Chat reply**:
+A task in a chat session that ended without proposing a plan. When it ends, the harness moves its artifact directory to `runs/sessions/<session_id>/replies/<task_id>/`, so `runs/` itself holds only tasks with a plan.
+_Avoid_: chat task, small talk
 
 **Task workspace**:
 `runs/<task_id>/workspace/`, the task's copy of the simulator source, where every file change for the task happens.

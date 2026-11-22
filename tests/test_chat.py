@@ -68,6 +68,10 @@ def test_each_request_is_a_task_and_the_next_one_remembers_it(tmp_path):
     assert [t.status for t in session.turns] == ["completed", "not_executed"]
     first, second = session.turns
     assert first.artifact_dir != second.artifact_dir and (second.artifact_dir / "report.md").exists()
+    # A task with a plan stays in runs/; a chat reply moves under its session, with all its files.
+    assert first.artifact_dir == tmp_path / "runs" / first.task_id and not first.is_reply
+    assert second.artifact_dir == session.dir / "replies" / second.task_id and second.is_reply
+    assert not (tmp_path / "runs" / second.task_id).exists() and (second.artifact_dir / "trace.jsonl").exists()
 
     memory = first_message(model, 3)
     assert memory.startswith("Which configuration was lower?")
@@ -82,6 +86,7 @@ def test_each_request_is_a_task_and_the_next_one_remembers_it(tmp_path):
     assert manifest["session_id"] == session.session_id and manifest["previous_tasks"] == [first.task_id]
     log = [json.loads(line) for line in (session.dir / "session.jsonl").read_text().splitlines()]
     assert [(e["turn"], e["task_id"]) for e in log] == [(1, first.task_id), (2, second.task_id)]
+    assert [e["reply"] for e in log] == [False, True] and log[1]["task_dir"] == str(second.artifact_dir)
     assert "The 60 s delay raised the stale rate." in [line.strip() for line in out]
     assert any("── Run statistics" in line for line in out)
 
@@ -121,7 +126,7 @@ def test_slash_commands(tmp_path):
     joined = "\n".join(out)
     assert HELP in out and "No task yet in this conversation." in out and "/paper" not in HELP
     assert "unknown command /paper" in joined and "unknown command /bogus" in joined  # papers come from the library
-    assert "1. " in joined and "not_executed  scripted-model  hello" in joined
+    assert "1. " in joined and "reply (no plan)  scripted-model  hello" in joined
     assert sessions[1].turns == []
 
 
@@ -201,7 +206,7 @@ def test_model_command_shows_and_switches_the_model_for_following_tasks(tmp_path
     assert "Model: claude-opus-5-5\nModels:\n  claude-opus-5-5\n  deepseek-v4-pro\n  deepseek-flash (needs" in joined
     assert "! deepseek-flash needs DEEPSEEK_API_KEY in .env" in joined
     assert "The following tasks use deepseek-v4-pro. It cannot see images" in joined
-    assert used == ["deepseek-v4-pro"] and "not_executed  deepseek-v4-pro  hello" in joined
+    assert used == ["deepseek-v4-pro"] and "reply (no plan)  deepseek-v4-pro  hello" in joined
 
 
 def test_effort_command_sets_the_effort_for_following_tasks_and_records_it(tmp_path):
@@ -226,7 +231,7 @@ def test_effort_command_sets_the_effort_for_following_tasks_and_records_it(tmp_p
     assert "! unknown effort 'extreme'" in joined
     assert "The following tasks use effort low." in joined
     assert f"{model.name} (low)  hello" in joined
-    task_dir = next(p for p in (tmp_path / "runs").iterdir() if (p / "manifest.json").exists())
+    task_dir = next((tmp_path / "runs" / "sessions").glob("*/replies/*"))
     assert json.loads((task_dir / "manifest.json").read_text())["effort"] == "low"
     session_log = next((tmp_path / "runs" / "sessions").glob("*/session.jsonl")).read_text()
     assert json.loads(session_log.splitlines()[-1])["effort"] == "low"
@@ -248,5 +253,5 @@ def test_status_command_shows_settings_tasks_and_cost(tmp_path):
     assert "Model: claude-opus-5-5, effort medium (for the following tasks)" in before
     assert "Limits per task: 7200 s of active runtime, 500 LLM calls" in before
     assert "Tasks: none yet" in before
-    assert "Tasks: 1 (1 not_executed); /tasks lists them" in after
+    assert "Tasks with a plan: 0; replies without a plan: 1; /tasks lists both" in after
     assert "Estimated cost:" in after

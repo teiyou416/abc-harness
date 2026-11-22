@@ -72,6 +72,10 @@ _Avoid_: plotting container, matplotlib sandbox
 
 ## Evidence
 
+**Grounded number**:
+A number in the agent's final answer that some number the task saw or produced rounds to: a tool result, the researcher's message, the plan, `results.json`, or a report table, never the agent's own words. `trace check` warns about each number that is not grounded; such a number is not a failure, since the agent may have derived it.
+_Avoid_: verified number, cited number
+
 **Found paper**:
 A paper that a literature search returned during the task. Found papers and library papers the agent opened are the only ones that can be cited.
 _Avoid_: source, reference

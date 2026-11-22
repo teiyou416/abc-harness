@@ -104,7 +104,7 @@ def run_chat(
 def _task_list(session: ChatSession) -> str:
     if not session.turns:
         return "No task yet in this conversation."
-    rows = [f"{i}. {t.task_id}  {t.status}  {t.model}{f' ({t.effort})' if t.effort else ''}  "
+    rows = [f"{i}. {t.task_id}  {'reply (no plan)' if t.is_reply else t.status}  {t.model}{f' ({t.effort})' if t.effort else ''}  "
             f"{' '.join(t.question.split())[:60]}"
             for i, t in enumerate(session.turns, 1)]  # fmt: skip
     return "\n".join(rows)
@@ -126,12 +126,16 @@ def _status(
     counts: dict[str, int] = {}
     total, priced, unknown = 0.0, set[str](), set[str]()
     for t in session.turns:
-        counts[t.status] = counts.get(t.status, 0) + 1
+        if not t.is_reply:
+            counts[t.status] = counts.get(t.status, 0) + 1
         trace = t.artifact_dir / "trace.jsonl"
         if trace.exists():
             cost, p, u = estimated_cost(trace, t.model)
             total, priced, unknown = total + cost, priced | p, unknown | u
-    lines.append(f"Tasks: {len(session.turns)} ({', '.join(f'{n} {s}' for s, n in counts.items())}); /tasks lists them")
+    tasks = sum(counts.values())
+    by_status = f" ({', '.join(f'{n} {s}' for s, n in counts.items())})" if tasks else ""
+    lines.append(f"Tasks with a plan: {tasks}{by_status}; replies without a plan: {len(session.turns) - tasks}; "
+                 "/tasks lists both")  # fmt: skip
     lines.append(cost_line(total, priced, unknown) if priced or unknown else "Estimated cost: no model call yet")
     return "\n".join(lines)
 

@@ -46,7 +46,7 @@ flowchart TB
     end
 
     subgraph ART["runs/task_id/"]
-        FILES["approvals.jsonl, plans/, plan.json<br/>raw/, changes/, results.json<br/>report.md, manifest.json<br/>trace.jsonl, history.md"]
+        FILES["approvals.jsonl, plans/, plan.json<br/>raw/, changes/, results.json<br/>report.md, manifest.json<br/>trace.jsonl, history.md<br/>trace_check.json"]
     end
 
     subgraph LIT["Literature: literature/"]
@@ -127,7 +127,7 @@ checks that every module appears in this table.
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
 | Execution | `execution/limits.py` | The active-time and model-call limits; waiting for the researcher and PDF parsing do not count. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl`, passes each redacted event to an optional listener (the live terminal output), and summarises it. |
-| Execution | `execution/trace_check.py` | Audits approval and validation order and checks saved result tables offline. |
+| Execution | `execution/trace_check.py` | Audits approval and validation order and checks saved result tables offline; `execution/task.py` also runs it when a task that executed a plan ends and keeps the verdict in `trace_check.json`. |
 | Execution | `execution/recompute.py` | Independent standard-library metric calculations, also available as the standalone recomputation script. |
 | Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
 | Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |

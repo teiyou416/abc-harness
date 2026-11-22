@@ -155,6 +155,9 @@ validation before formal runs, and checks completed runs against raw output, res
 metric tables in report.md. Custom metrics are checked against printed values only.
 Exit codes: 0 for consistent evidence, 1 for a contradiction, 2 for insufficient evidence
 (including older run starts without a plan version). It does not grade the agent's prose.
+The harness runs this check by itself when a task that executed a plan ends:
+the run statistics show its verdict (with the problems found, if any), and
+`trace_check.json` in the task directory keeps the full result.
 
 ## Free disk space
 
@@ -207,6 +210,7 @@ entry in `runs/<task_id>/results.json`. For a BlockSim run, leave out
 | `raw/<run_id>/` | the simulator's own output: `stdout.txt`, `blockList.txt`, `static.json` from SimBlock; `result.xlsx` and one CSV per sheet from BlockSim |
 | `changes/<run_id>.diff`, `changes/edits.diff` | the parameter and seed edits applied to each run's source, and the agent's permitted edits |
 | `validation.json` | the validation check's runs and verdict, for a plan with permitted edits |
+| `trace_check.json` | the verdict and findings of the `trace check` the harness ran when the task ended (only for a task that executed a plan) |
 | `sandbox/` | every sandbox exec command and its output |
 | `workspace/` | `original/` (the simulator source copied from the image, never changed), `edited/` (the agent's copy), `scratch/` (its builds and tests), and `runs/` (each simulation run's source copy, removed after its output is saved) |
 

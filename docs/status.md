@@ -35,8 +35,9 @@ history.
 - Per-task limits on active runtime and model calls, changed with
   `--time-limit-seconds` and `--llm-call-limit`
   ([values](project-spec.md#limits)).
-- `trace check` audits saved approval, validation order, and reported metrics offline.
-- `make check` runs ruff and 228 offline tests; `make test-docker` runs 11
+- `trace check` audits saved approval, validation order, and reported metrics offline,
+  and runs by itself when a task that executed a plan ends (`trace_check.json`).
+- `make check` runs ruff and 248 offline tests; `make test-docker` runs 11
   Docker tests and `make test-live` runs 9 tests against the model APIs and
   literature services.
 

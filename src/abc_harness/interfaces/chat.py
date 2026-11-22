@@ -16,6 +16,7 @@ from pathlib import Path
 
 from abc_harness.agent.model import EFFORTS, MODELS
 from abc_harness.agent.session import ChatSession, Turn
+from abc_harness.execution.cleanup import LARGE_RUNS_BYTES, apply_cleanup, describe, dir_size, human_size, plan_cleanup
 from abc_harness.interfaces.console import Write, cost_line, estimated_cost, task_summary
 
 Read = Callable[[str], str]
@@ -24,7 +25,8 @@ HELP = """Type a research request and press Enter (Alt+Enter for a new line). Ea
   /tasks          list this conversation's tasks
   /model [name]   show the model, or switch the following tasks to another one
   /effort [level] show the effort, or set it for the following tasks
-  /status         show the model, effort, limits, tasks, and estimated cost of this conversation
+  /status         show the model, effort, limits, tasks, estimated cost, and disk use
+  /clean [days]   free disk space: list sandbox files (and with days, unrun tasks older than that), then ask
   /new            start a new conversation; the agent forgets the earlier tasks
   /help           show this help
   /quit           leave (or Ctrl-D)
@@ -59,6 +61,9 @@ def run_chat(
     """
     session = new_session()
     write(f"Conversation {session.session_id} (log: {session.dir / 'session.jsonl'}). /help lists the commands.")
+    size = dir_size(session.runs_root)
+    if size > LARGE_RUNS_BYTES:
+        write(f"{session.runs_root} uses {human_size(size)}; /clean lists what can be removed.")
     while True:
         try:
             line = read(PROMPT).strip()
@@ -78,6 +83,8 @@ def run_chat(
                 write(_task_list(session))
             elif command == "/status":
                 write(_status(session, models, limits))
+            elif command == "/clean":
+                _clean_command(session.runs_root, argument.strip(), read, write)
             elif command == "/new":
                 session = new_session()
                 write(f"New conversation {session.session_id}; earlier tasks are forgotten.")
@@ -120,6 +127,7 @@ def _status(
     if limits is not None:
         seconds, calls = limits()
         lines.append(f"Limits per task: {seconds:g} s of active runtime, {calls} LLM calls")
+    lines.append(f"Disk: {session.runs_root} uses {human_size(dir_size(session.runs_root))}; /clean frees space")
     if not session.turns:
         lines.append("Tasks: none yet")
         return "\n".join(lines)
@@ -138,6 +146,42 @@ def _status(
                  "/tasks lists both")  # fmt: skip
     lines.append(cost_line(total, priced, unknown) if priced or unknown else "Estimated cost: no model call yet")
     return "\n".join(lines)
+
+
+def _clean_command(runs_root: Path, argument: str, read: Read, write: Write) -> None:
+    try:
+        days = float(argument) if argument else None
+    except ValueError:
+        write(f"! /clean takes a number of days, not {argument!r}")
+        return
+
+    def confirm() -> bool:
+        try:
+            return read("Remove these? [y/N]: ").strip().lower() in ("y", "yes")
+        except (EOFError, KeyboardInterrupt):
+            return False
+
+    clean_runs(runs_root, days, confirm, write)
+
+
+def clean_runs(
+    runs_root: Path, older_than_days: float | None, confirm: Callable[[], bool], write: Write = print,
+    dry_run_hint: str = "Nothing was removed.",
+) -> int:
+    """List what a cleanup would remove, and remove it only if `confirm()` says yes. Returns the exit status."""
+    removals = plan_cleanup(runs_root, older_than_days)
+    if not removals:
+        write(f"Nothing to remove in {runs_root}.")
+        return 0
+    write(f"These can be removed from {runs_root} (raw output, plans, approvals, traces, and reports of other "
+          "tasks are kept):")  # fmt: skip
+    for line in describe(removals, runs_root):
+        write(line)
+    if not confirm():
+        write(dry_run_hint)
+        return 0
+    write(f"Removed {human_size(apply_cleanup(removals))}.")
+    return 0
 
 
 def _model_command(models: ModelControl | None, name: str) -> str:

@@ -230,3 +230,23 @@ def test_effort_command_sets_the_effort_for_following_tasks_and_records_it(tmp_p
     assert json.loads((task_dir / "manifest.json").read_text())["effort"] == "low"
     session_log = next((tmp_path / "runs" / "sessions").glob("*/session.jsonl")).read_text()
     assert json.loads(session_log.splitlines()[-1])["effort"] == "low"
+
+
+def test_status_command_shows_settings_tasks_and_cost(tmp_path):
+    models = ModelControl(lambda: "claude-opus-5-5", lambda _n: None, lambda: ["claude-opus-5-5"],
+                          effort=lambda: "medium", set_effort=lambda _l: None)  # fmt: skip
+    model = ScriptedModel([text_turn("Hi.")])
+
+    def turn(session, text):
+        return session.run_turn(text, model, FakeRunner(), lambda q: "", lambda p: ("approve", ""))
+
+    out = []
+    inputs = Inputs("/status", "hello", "/status", "/quit")
+    run_chat(lambda: ChatSession(tmp_path / "runs"), turn, inputs, out.append, models=models,
+             limits=lambda: (7200.0, 500))  # fmt: skip
+    before, after = [line for line in out if line.startswith("Conversation ") and "\n" in line]
+    assert "Model: claude-opus-5-5, effort medium (for the following tasks)" in before
+    assert "Limits per task: 7200 s of active runtime, 500 LLM calls" in before
+    assert "Tasks: none yet" in before
+    assert "Tasks: 1 (1 not_executed); /tasks lists them" in after
+    assert "Estimated cost:" in after

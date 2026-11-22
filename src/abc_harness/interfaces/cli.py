@@ -181,7 +181,7 @@ def _chat(
                           effort=lambda: current["model"].effort,
                           set_effort=lambda level: switch(current["model"].name, level))
     return run_chat(lambda: ChatSession(args.runs_dir), turn, read, show_answers=args.quiet,
-                    models=models)  # fmt: skip
+                    models=models, limits=lambda: (args.time_limit_seconds, args.llm_call_limit))  # fmt: skip
 
 
 def _announce(artifact_dir: Path) -> None:

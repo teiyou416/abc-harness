@@ -16,7 +16,7 @@ from pathlib import Path
 
 from abc_harness.agent.model import EFFORTS, MODELS
 from abc_harness.agent.session import ChatSession, Turn
-from abc_harness.interfaces.console import Write, task_summary
+from abc_harness.interfaces.console import Write, cost_line, estimated_cost, task_summary
 
 Read = Callable[[str], str]
 PROMPT = "› "
@@ -24,6 +24,7 @@ HELP = """Type a research request and press Enter (Alt+Enter for a new line). Ea
   /tasks          list this conversation's tasks
   /model [name]   show the model, or switch the following tasks to another one
   /effort [level] show the effort, or set it for the following tasks
+  /status         show the model, effort, limits, tasks, and estimated cost of this conversation
   /new            start a new conversation; the agent forgets the earlier tasks
   /help           show this help
   /quit           leave (or Ctrl-D)
@@ -49,10 +50,12 @@ def run_chat(
     write: Write = print,
     show_answers: bool = False,
     models: ModelControl | None = None,
+    limits: Callable[[], tuple[float, int]] | None = None,
 ) -> int:
     """Run the conversation until the researcher leaves. Returns the exit status.
 
     `show_answers` prints each final answer after its task; leave it off when the live output already shows it.
+    `limits` returns the active runtime limit in seconds and the LLM call limit that each following task gets.
     """
     session = new_session()
     write(f"Conversation {session.session_id} (log: {session.dir / 'session.jsonl'}). /help lists the commands.")
@@ -73,6 +76,8 @@ def run_chat(
                 write(HELP)
             elif command == "/tasks":
                 write(_task_list(session))
+            elif command == "/status":
+                write(_status(session, models, limits))
             elif command == "/new":
                 session = new_session()
                 write(f"New conversation {session.session_id}; earlier tasks are forgotten.")
@@ -103,6 +108,32 @@ def _task_list(session: ChatSession) -> str:
             f"{' '.join(t.question.split())[:60]}"
             for i, t in enumerate(session.turns, 1)]  # fmt: skip
     return "\n".join(rows)
+
+
+def _status(
+    session: ChatSession, models: ModelControl | None, limits: Callable[[], tuple[float, int]] | None
+) -> str:
+    lines = [f"Conversation {session.session_id} (log: {session.dir / 'session.jsonl'})"]
+    if models is not None:
+        effort = f", effort {models.effort()}" if models.effort else ""
+        lines.append(f"Model: {models.current()}{effort} (for the following tasks)")
+    if limits is not None:
+        seconds, calls = limits()
+        lines.append(f"Limits per task: {seconds:g} s of active runtime, {calls} LLM calls")
+    if not session.turns:
+        lines.append("Tasks: none yet")
+        return "\n".join(lines)
+    counts: dict[str, int] = {}
+    total, priced, unknown = 0.0, set[str](), set[str]()
+    for t in session.turns:
+        counts[t.status] = counts.get(t.status, 0) + 1
+        trace = t.artifact_dir / "trace.jsonl"
+        if trace.exists():
+            cost, p, u = estimated_cost(trace, t.model)
+            total, priced, unknown = total + cost, priced | p, unknown | u
+    lines.append(f"Tasks: {len(session.turns)} ({', '.join(f'{n} {s}' for s, n in counts.items())}); /tasks lists them")
+    lines.append(cost_line(total, priced, unknown) if priced or unknown else "Estimated cost: no model call yet")
+    return "\n".join(lines)
 
 
 def _model_command(models: ModelControl | None, name: str) -> str:

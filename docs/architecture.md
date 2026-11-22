@@ -91,7 +91,7 @@ checks that every module appears in this table.
 | Layer (high to low) | File | What it does |
 |---|---|---|
 | Entry | `interfaces/__init__.py` | Names the entry points of the package. |
-| Entry | `interfaces/cli.py` | Commands `image build`, `run`, `ask`, `chat`, `trace summary`, `trace check`, `export`; shows plans and questions in the terminal. Holds no task logic. |
+| Entry | `interfaces/cli.py` | Commands `image build`, `run`, `ask`, `chat`, `trace summary`, `trace check`, `export`, `clean`; shows plans and questions in the terminal. Holds no task logic. |
 | Entry | `interfaces/chat.py` | The `chat` loop: reads a line (prompt_toolkit, with history), runs slash commands, sends anything else to the chat session, and turns Ctrl-C during a task into stopping that task. |
 | Entry | `interfaces/console.py` | Shows a status line redrawn in place for the current action, with each tool call, milestones, errors, and the final answer above it (`Console`) and the run statistics at the end of a task (`task_summary`). |
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
@@ -123,6 +123,7 @@ checks that every module appears in this table.
 | Execution | `execution/runner.py` | Docker: one container per simulation run, sandbox command, or PDF parse, no network, label-based cleanup. |
 | Execution | `execution/workspace.py` | The original, edited, and scratch trees; which paths a write may touch; the diff of the edits. |
 | Execution | `execution/figures.py` | Runs one figure script in the plot image with the results read-only, checks its PNG, and keeps script, PNG, SVG, and log in `figures/` with `figures/index.json`. |
+| Execution | `execution/cleanup.py` | `abc-harness clean` and `/clean`: lists, then on confirmation removes, the sandbox files in `workspace/scratch/` of ended tasks (leaving a `REMOVED.md` note) and, with an age limit, whole tasks that ran no simulation. Never removes raw output or evidence of other tasks. |
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
 | Execution | `execution/limits.py` | The active-time and model-call limits; waiting for the researcher and PDF parsing do not count. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl`, passes each redacted event to an optional listener (the live terminal output), and summarises it. |

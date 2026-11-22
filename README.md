@@ -141,7 +141,8 @@ conversation's tasks,
 `/model` shows the model and the available ones and `/model <name>` switches
 the following tasks to another listed model,
 `/effort` shows the effort and `/effort <level>` sets it for the following tasks,
-`/status` shows the model, effort, limits, task count, and estimated cost of the conversation,
+`/status` shows the model, effort, limits, task count, estimated cost, and disk use,
+`/clean [days]` frees disk space (see [Free disk space](#free-disk-space)),
 `/new` starts over, `/help`, and `/quit`. The conversation's log is
 `runs/sessions/<session_id>/session.jsonl`.
 
@@ -154,6 +155,23 @@ validation before formal runs, and checks completed runs against raw output, res
 metric tables in report.md. Custom metrics are checked against printed values only.
 Exit codes: 0 for consistent evidence, 1 for a contradiction, 2 for insufficient evidence
 (including older run starts without a plan version). It does not grade the agent's prose.
+
+## Free disk space
+
+`runs/` grows mostly with the agent's sandbox builds in each task's
+`workspace/scratch/`. `uv run abc-harness clean` lists what can go and removes
+nothing; add `--yes` to remove it. It removes only:
+
+- the sandbox files in `workspace/scratch/` of tasks that have ended, leaving a
+  `REMOVED.md` note in their place;
+- with `--older-than DAYS`, whole tasks that ran no simulation (rejected, or
+  ended without running a plan, chat replies included) and started more than
+  that many days ago.
+
+Raw output, plans, approvals, traces, and reports of every other task are
+kept, and a running task is never touched. In chat, `/clean` (or `/clean 30`)
+shows the same list and asks before removing; Enter means no. Chat also says
+so at startup when `runs/` is over 5 GB.
 
 ## Check a result
 

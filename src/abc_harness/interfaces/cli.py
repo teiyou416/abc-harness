@@ -25,7 +25,7 @@ from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LI
 from abc_harness.execution.runner import DockerRunner, build_image
 from abc_harness.execution.task import TaskResult, run_task
 from abc_harness.execution.trace import summarize_trace
-from abc_harness.interfaces.chat import ModelControl, run_chat, terminal_reader
+from abc_harness.interfaces.chat import ModelControl, clean_runs, run_chat, terminal_reader
 from abc_harness.interfaces.console import Console, task_summary
 from abc_harness.literature.pdf import PARSER_IMAGE
 from abc_harness.planning.plan import Plan, PlanError, load_plan
@@ -129,6 +129,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     trace = sub.add_parser("trace", help="inspect task traces")
     trace_sub = trace.add_subparsers(dest="trace_command", required=True)
+    clean = sub.add_parser("clean", help="free disk space in runs/: sandbox files, and optionally old unrun tasks")
+    clean.add_argument("--runs-dir", type=Path, default=Path("runs"))
+    clean.add_argument("--older-than", type=float, metavar="DAYS",
+                       help="also remove whole tasks that ran no simulation (rejected, or no plan executed) "
+                            "and started more than DAYS days ago")  # fmt: skip
+    clean.add_argument("--yes", action="store_true", help="remove without asking; without it, only list")
     export = sub.add_parser("export", help="package a task's modified simulator source")
     export.add_argument("task", help="runs/<task_id>, or a task ID under --runs-dir")
     export.add_argument("--runs-dir", type=Path, default=Path("runs"))
@@ -209,6 +215,10 @@ def main(argv: list[str] | None = None) -> int:
                 context, tag = get_simulator(name).docker_context, get_simulator(name).image_tag
             print(f"Built {tag} ({build_image(context, tag)})")
         return 0
+
+    if args.command == "clean":
+        return clean_runs(args.runs_dir, args.older_than, confirm=lambda: args.yes,
+                          dry_run_hint="Run again with --yes to remove them.")  # fmt: skip
 
     if args.command == "export":
         task_dir = Path(args.task) if Path(args.task).is_dir() else args.runs_dir / args.task

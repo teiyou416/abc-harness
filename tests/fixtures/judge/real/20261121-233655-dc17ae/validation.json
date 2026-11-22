@@ -1,0 +1,171 @@
+{
+  "passed": true,
+  "metric": "attacker_revenue_share",
+  "mean": 0.4807246543534586,
+  "n": 5,
+  "planned": 5,
+  "expected": 0.48866,
+  "tolerance": 0.05,
+  "runs": [
+    {
+      "run_id": "validation__seed-1",
+      "configuration": "validation",
+      "seed": 1,
+      "params": {
+        "NUM_OF_NODES": 100,
+        "END_BLOCK_HEIGHT": 1500,
+        "INTERVAL": 600000,
+        "BLOCK_SIZE": 535000,
+        "AVERAGE_MINING_POWER": 6061,
+        "STDEV_OF_MINING_POWER": 0,
+        "CBR_USAGE_RATE": 0.964,
+        "CHURN_NODE_RATE": 0.0
+      },
+      "status": "completed",
+      "exit_code": 0,
+      "duration_seconds": 8.115,
+      "metrics": {
+        "t90_ms": 83433.80533333334,
+        "orphan_rate": 0.3683101559207754,
+        "attacker_revenue_share": 0.49533333333333335,
+        "attacker_hash_share": 0.39998440060837626
+      },
+      "raw_files": [
+        "raw/validation__seed-1/stdout.txt",
+        "raw/validation__seed-1/stderr.txt",
+        "raw/validation__seed-1/blockList.txt",
+        "raw/validation__seed-1/static.json"
+      ],
+      "diff_file": "changes/validation__seed-1.diff",
+      "error": null
+    },
+    {
+      "run_id": "validation__seed-2",
+      "configuration": "validation",
+      "seed": 2,
+      "params": {
+        "NUM_OF_NODES": 100,
+        "END_BLOCK_HEIGHT": 1500,
+        "INTERVAL": 600000,
+        "BLOCK_SIZE": 535000,
+        "AVERAGE_MINING_POWER": 6061,
+        "STDEV_OF_MINING_POWER": 0,
+        "CBR_USAGE_RATE": 0.964,
+        "CHURN_NODE_RATE": 0.0
+      },
+      "status": "completed",
+      "exit_code": 0,
+      "duration_seconds": 8.891,
+      "metrics": {
+        "t90_ms": 138852.65158090513,
+        "orphan_rate": 0.3090741593735606,
+        "attacker_revenue_share": 0.442,
+        "attacker_hash_share": 0.39998440060837626
+      },
+      "raw_files": [
+        "raw/validation__seed-2/stdout.txt",
+        "raw/validation__seed-2/stderr.txt",
+        "raw/validation__seed-2/blockList.txt",
+        "raw/validation__seed-2/static.json"
+      ],
+      "diff_file": "changes/validation__seed-2.diff",
+      "error": null
+    },
+    {
+      "run_id": "validation__seed-3",
+      "configuration": "validation",
+      "seed": 3,
+      "params": {
+        "NUM_OF_NODES": 100,
+        "END_BLOCK_HEIGHT": 1500,
+        "INTERVAL": 600000,
+        "BLOCK_SIZE": 535000,
+        "AVERAGE_MINING_POWER": 6061,
+        "STDEV_OF_MINING_POWER": 0,
+        "CBR_USAGE_RATE": 0.964,
+        "CHURN_NODE_RATE": 0.0
+      },
+      "status": "completed",
+      "exit_code": 0,
+      "duration_seconds": 8.616,
+      "metrics": {
+        "t90_ms": 149815.98533163266,
+        "orphan_rate": 0.333926981300089,
+        "attacker_revenue_share": 0.5083388925950634,
+        "attacker_hash_share": 0.39998440060837626
+      },
+      "raw_files": [
+        "raw/validation__seed-3/stdout.txt",
+        "raw/validation__seed-3/stderr.txt",
+        "raw/validation__seed-3/blockList.txt",
+        "raw/validation__seed-3/static.json"
+      ],
+      "diff_file": "changes/validation__seed-3.diff",
+      "error": null
+    },
+    {
+      "run_id": "validation__seed-4",
+      "configuration": "validation",
+      "seed": 4,
+      "params": {
+        "NUM_OF_NODES": 100,
+        "END_BLOCK_HEIGHT": 1500,
+        "INTERVAL": 600000,
+        "BLOCK_SIZE": 535000,
+        "AVERAGE_MINING_POWER": 6061,
+        "STDEV_OF_MINING_POWER": 0,
+        "CBR_USAGE_RATE": 0.964,
+        "CHURN_NODE_RATE": 0.0
+      },
+      "status": "completed",
+      "exit_code": 0,
+      "duration_seconds": 8.727,
+      "metrics": {
+        "t90_ms": 144131.44014962594,
+        "orphan_rate": 0.33466666666666667,
+        "attacker_revenue_share": 0.49466666666666664,
+        "attacker_hash_share": 0.39998440060837626
+      },
+      "raw_files": [
+        "raw/validation__seed-4/stdout.txt",
+        "raw/validation__seed-4/stderr.txt",
+        "raw/validation__seed-4/blockList.txt",
+        "raw/validation__seed-4/static.json"
+      ],
+      "diff_file": "changes/validation__seed-4.diff",
+      "error": null
+    },
+    {
+      "run_id": "validation__seed-5",
+      "configuration": "validation",
+      "seed": 5,
+      "params": {
+        "NUM_OF_NODES": 100,
+        "END_BLOCK_HEIGHT": 1500,
+        "INTERVAL": 600000,
+        "BLOCK_SIZE": 535000,
+        "AVERAGE_MINING_POWER": 6061,
+        "STDEV_OF_MINING_POWER": 0,
+        "CBR_USAGE_RATE": 0.964,
+        "CHURN_NODE_RATE": 0.0
+      },
+      "status": "completed",
+      "exit_code": 0,
+      "duration_seconds": 8.476,
+      "metrics": {
+        "t90_ms": 114237.59205298014,
+        "orphan_rate": 0.32853285328532855,
+        "attacker_revenue_share": 0.46328437917222964,
+        "attacker_hash_share": 0.39998440060837626
+      },
+      "raw_files": [
+        "raw/validation__seed-5/stdout.txt",
+        "raw/validation__seed-5/stderr.txt",
+        "raw/validation__seed-5/blockList.txt",
+        "raw/validation__seed-5/static.json"
+      ],
+      "diff_file": "changes/validation__seed-5.diff",
+      "error": null
+    }
+  ]
+}

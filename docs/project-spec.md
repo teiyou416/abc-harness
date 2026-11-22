@@ -41,7 +41,7 @@ Every number that bounds a task lives in this table; other documents name the li
 | PDF parse container | 6 CPUs, 6 GB of memory, 15-minute timeout | `execution/runner.py`, `literature/pdf.py` |
 | Figure script container | the simulation container's CPU and memory, 120-second timeout | `execution/figures.py` |
 | Model calls per judgment (one retry for an unreadable verdict) | 2 | `agent/judge.py` |
-| Output per judge reply, thinking included | 4,096 tokens | `agent/judge.py` |
+| Output per judge reply, thinking included | 16,384 tokens | `agent/judge.py` |
 | Time per judge call, retries included | 120 seconds | `agent/judge.py` |
 | Docker Desktop memory | 12 GB, to parse a PDF beside a simulation run | the researcher's Docker settings |
 

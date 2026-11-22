@@ -1,0 +1,8 @@
+{
+ "lines": [
+  "PASS: trace.jsonl and approvals.jsonl: 35 recorded starts checked",
+  "PASS: raw/, results.json and report.md: 120 measurements checked (custom values checked against stdout only)",
+  "PASS: report.md Agent summary: 45 of 45 numbers found in the task's sources"
+ ],
+ "note": "the trace check of the original task, run on its full artifacts"
+}

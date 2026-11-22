@@ -241,7 +241,24 @@ def task_summary(task_dir: Path) -> list[str]:
     if records:
         done = sum(r.get("status") == "completed" for r in records)
         lines.append(f"Simulation runs: {done} of {len(records)} completed")
+    lines += _evidence_lines(task_dir)
     lines.append(f"Report: {task_dir / 'report.md'}")
+    return lines
+
+
+def _evidence_lines(task_dir: Path, shown: int = 5) -> list[str]:
+    """The verdict of the automatic `trace check`, with its problems when it did not pass."""
+    check = _read_json(task_dir / "trace_check.json")
+    if not check:
+        return []
+    passes = [line.removeprefix("PASS: ") for line in check["lines"] if line.startswith("PASS: ")]
+    if check["verdict"] == "PASS":
+        return [f"Evidence check: PASS ({'; '.join(passes)})"]
+    problems = [line for line in check["lines"] if not line.startswith(("PASS: ", "NOTE: "))]
+    lines = [f"Evidence check: {check['verdict']}; details in trace_check.json"]
+    lines += [f"  {p}" for p in problems[:shown]]
+    if len(problems) > shown:
+        lines.append(f"  … and {len(problems) - shown} more")
     return lines
 
 

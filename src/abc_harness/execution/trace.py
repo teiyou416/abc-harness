@@ -49,10 +49,18 @@ def read_trace(path: Path) -> list[dict[str, Any]]:
         return [json.loads(line) for line in f if line.strip()]
 
 
+# Events that each record one LLM call with its usage: an agent turn, and a summary of a full context window.
+MODEL_CALL_EVENTS = ("model_call", "compaction")
+
+
 def summarize_trace(path: Path) -> dict[str, Any]:
-    """Count model calls, tokens, latency, tool calls, and errors in one trace."""
+    """Count model calls, tokens, latency, tool calls, and errors in one trace.
+
+    Model calls and tokens include the calls that summarized a full context window, as the cost estimate and
+    the LLM call limit do; `compactions` says how many of the calls those were.
+    """
     events = read_trace(path)
-    calls = [e for e in events if e["event"] == "model_call"]
+    calls = [e for e in events if e["event"] in MODEL_CALL_EVENTS]
     tools = [e for e in events if e["event"] == "tool_call"]
     finished = next((e for e in reversed(events) if e["event"] == "task_finished"), {})
     tokens: Counter[str] = Counter()
@@ -63,6 +71,7 @@ def summarize_trace(path: Path) -> dict[str, Any]:
         "stop_reason": finished.get("stop_reason"),
         "active_seconds": finished.get("active_seconds"),
         "model_calls": len(calls),
+        "compactions": sum(1 for c in calls if c["event"] == "compaction"),
         "model_latency_seconds": round(sum(c.get("latency_seconds", 0) for c in calls), 3),
         "tokens": dict(tokens),
         "tool_calls": dict(Counter(t["tool"] for t in tools)),

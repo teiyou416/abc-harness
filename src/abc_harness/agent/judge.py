@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from abc_harness.agent.model import ModelClient, ModelDeadlineExceeded, price_for
-from abc_harness.execution.grounding import split_summary
+from abc_harness.execution.grounding import final_answer
 from abc_harness.execution.trace_check import check_task
 
 JUDGE_CALLS = 2
@@ -78,7 +78,7 @@ def prepare(task_dir: Path, redact: Callable[[str], str] = lambda s: s) -> Judge
     if not (task_dir / "plan.json").exists():
         raise JudgeRefused("this task executed no plan, so there are no results to judge its answer against")
     report = _read_text(task_dir / "report.md")
-    answer, _ = split_summary(report)
+    answer, rest = final_answer(task_dir, report)
     if not answer.strip():
         raise JudgeRefused("this task has no final answer from the agent to judge")
     check = _read_json(task_dir / "trace_check.json")
@@ -89,7 +89,7 @@ def prepare(task_dir: Path, redact: Callable[[str], str] = lambda s: s) -> Judge
                            f"anything; fix those first: {failures[0]}")  # fmt: skip
     plan = _read_json(task_dir / "plan.json") or {}
     plan_text = json.dumps({k: v for k, v in plan.items() if k not in ("citations",)}, ensure_ascii=False, indent=1)
-    tables = "\n\n".join(_section(report, heading) for heading in REPORT_SECTIONS if heading in report)
+    tables = "\n\n".join(_section(rest, heading) for heading in REPORT_SECTIONS if heading in rest)
     validation = _read_text(task_dir / "validation.json")
     parts = [
         ("The researcher's question", manifest.get("question") or "(none recorded; see the plan)", "question"),

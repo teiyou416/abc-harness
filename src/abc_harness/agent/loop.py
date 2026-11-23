@@ -243,22 +243,24 @@ def run_agent_task(
                 previous_tasks=list(previous_tasks), local_library=str(library_dir) if library_dir else None)  # fmt: skip
     if on_start:
         on_start(task.artifact_dir)
-    agent = Agent(task, model, ask, review, limits)
-    agent.tools.previous_tasks = dict(previous_tasks)
-    agent.tools.sees_images = getattr(model, "sees_images", True)
-    try:
-        runner.image_info(PARSER_IMAGE)
-        convert = task.convert_pdf
-    except RunnerError:
-        convert = None  # without the parser image, PDFs cannot be read; arXiv HTML still can
-    shelf = library_pdfs(library_dir) if library_dir else []
-    if len(shelf) > LIBRARY_WARN_PAPERS:
-        task.trace.event("library_large", library=str(library_dir), papers=len(shelf), threshold=LIBRARY_WARN_PAPERS)
-    if literature is not None or shelf:
-        agent.tools.library = Library(task.artifact_dir, literature, convert, library_dir=library_dir,
-                                      notify=lambda kind, fields: task.trace.event(kind, **fields))  # fmt: skip
     status, stop_reason = FAILED, "unknown"
-    try:
+    agent: Agent | None = None
+    try:  # from here on, any failure still ends in task.close(): the task gets a report and a reason
+        agent = Agent(task, model, ask, review, limits)
+        agent.tools.previous_tasks = dict(previous_tasks)
+        agent.tools.sees_images = getattr(model, "sees_images", True)
+        try:
+            runner.image_info(PARSER_IMAGE)
+            convert = task.convert_pdf
+        except RunnerError:
+            convert = None  # without the parser image, PDFs cannot be read; arXiv HTML still can
+        shelf = library_pdfs(library_dir) if library_dir else []
+        if len(shelf) > LIBRARY_WARN_PAPERS:
+            task.trace.event("library_large", library=str(library_dir), papers=len(shelf),
+                             threshold=LIBRARY_WARN_PAPERS)  # fmt: skip
+        if literature is not None or shelf:
+            agent.tools.library = Library(task.artifact_dir, literature, convert, library_dir=library_dir,
+                                          notify=lambda kind, fields: task.trace.event(kind, **fields))  # fmt: skip
         parts = [_shelve_papers(agent.tools.library, shelf, library_dir, task) if shelf else "", preface]
         status, stop_reason = agent.run(question, "\n\n".join(p for p in parts if p))
     except EndTask as e:
@@ -273,14 +275,15 @@ def run_agent_task(
         status, stop_reason = FAILED, f"{type(e).__name__}: {e}"
         task.trace.event("error", error=stop_reason)
     finally:
-        execution = agent.tools.execution
+        execution = agent.tools.execution if agent else None
         if execution and status != STOPPED:
             # The simulation results stand even if the agent's last turn failed.
             run_status, run_reason = execution
             if (status, stop_reason) != execution:
                 run_reason = f"{run_reason}; afterwards: {stop_reason}"
             status, stop_reason = run_status, run_reason
-        task.manifest["context_windows"] = agent.history.window
+        if agent:
+            task.manifest["context_windows"] = agent.history.window
         result = task.close(status, stop_reason)
     return result
 

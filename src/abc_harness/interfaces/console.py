@@ -15,7 +15,7 @@ from typing import Any, TextIO
 
 from abc_harness.agent.judge import latest as latest_judgment
 from abc_harness.agent.model import price_for
-from abc_harness.execution.trace import read_trace, summarize_trace
+from abc_harness.execution.trace import MODEL_CALL_EVENTS, read_trace, summarize_trace
 
 Write = Callable[[str], None]
 
@@ -231,7 +231,9 @@ def task_summary(task_dir: Path) -> list[str]:
         time_line += f", {manifest['pdf_parse_seconds']:.1f}s parsing PDFs (not counted)"
     lines.append(time_line)
     if trace.get("model_calls"):
-        lines.append(f"Model: {trace['model_calls']} calls of {(manifest.get('limits') or {}).get('llm_call_limit')}, "
+        compactions = f" ({trace['compactions']} summarizing the context)" if trace.get("compactions") else ""
+        lines.append(f"Model: {trace['model_calls']} calls of {(manifest.get('limits') or {}).get('llm_call_limit')}"
+                     f"{compactions}, "
                      f"{trace.get('model_latency_seconds', 0):.1f}s waiting for answers; tokens {tokens_in:,} in "
                      f"({cached:,} from cache), {tokens.get('output_tokens', 0):,} out")  # fmt: skip
     if trace.get("model_calls"):
@@ -292,7 +294,7 @@ def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[dict[str,
     totals: dict[str, float] = {}
     priced, unknown = set(), set()
     for e in read_trace(trace_file):
-        if e["event"] not in ("model_call", "compaction"):
+        if e["event"] not in MODEL_CALL_EVENTS:
             continue
         model = str(e.get("model") or default_model)
         price = price_for(model)

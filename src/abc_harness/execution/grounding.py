@@ -1,6 +1,6 @@
 """Grounded numbers: does every number in the agent's final answer appear in what the task saw or produced?
 
-The final answer is the "Agent summary" section of `report.md`. Its sources are what the harness or the
+The final answer is `answer.md` (in tasks from before it existed, the "Agent summary" section of `report.md`). Its sources are what the harness or the
 outside world wrote, never the agent's own words: tool results and the researcher's messages in
 `history.md` (assistant turns, the model's window summaries, and earlier final answers are left out), the
 plan, `results.json`, `validation.json`, and `report.md` without the summary.
@@ -24,6 +24,8 @@ import statistics
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+
+from abc_harness.execution.report import ANSWER_FILE
 
 SUMMARY_HEADING = "## Agent summary"
 _NUMBER = re.compile(r"(?<![A-Za-z0-9_.])(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?"
@@ -58,7 +60,7 @@ def check_answer(root: Path) -> Grounding | None:
     if not report_path.exists():
         return None
     report = report_path.read_text(encoding="utf-8")
-    answer, rest = split_summary(report)
+    answer, rest = final_answer(root, report)
     if not answer.strip():
         return None
     texts = [rest, *(_read(root / name) for name in ("plan.json", "results.json", "validation.json"))]
@@ -68,6 +70,19 @@ def check_answer(root: Path) -> Grounding | None:
     sources = sorted({v for text in texts for v in numbers_in(text)} | set(_summary_statistics(root)))
     claims = claims_in(answer)
     return Grounding(claims, [c for c in claims if not grounded(c, sources)])
+
+
+def final_answer(root: Path, report: str) -> tuple[str, str]:
+    """(the agent's final answer, the report without it).
+
+    The answer is answer.md. A task from before answer.md existed falls back to split_summary, which cannot
+    tell where an answer with its own level-two heading ends.
+    """
+    path = root / ANSWER_FILE
+    if not path.exists():
+        return split_summary(report)
+    answer = path.read_text(encoding="utf-8").strip()
+    return answer, report.replace(answer, "", 1) if answer else report
 
 
 def split_summary(report: str) -> tuple[str, str]:

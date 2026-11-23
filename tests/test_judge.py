@@ -159,3 +159,13 @@ def test_judge_in_chat_takes_the_latest_task_with_a_plan_or_a_number(tmp_path):
     run_chat(lambda: session, lambda s, t: None, lambda _p: next(inputs), out.append, judge=judged.append)
     assert judged == [task_dir, session.turns[1].artifact_dir]
     assert "! /judge takes a task number from /tasks (1 to 2), not '9'" in out
+
+
+def test_an_answer_with_its_own_headings_is_judged_and_checked_whole(tmp_path):
+    answer = "The 60 s delay raised the stale rate.\n\n## Limitations\n\nOnly 2 runs; the true rate may be 0.47."
+    _, task_dir = finished_task(tmp_path, answer)
+    assert (task_dir / "answer.md").read_text().strip() == answer
+    message = prepare(task_dir).message
+    assert "## Limitations\n\nOnly 2 runs; the true rate may be 0.47." in message.split("The agent's final answer")[1]
+    lines = json.loads((task_dir / "trace_check.json").read_text())["lines"]
+    assert any(line.startswith("WARN") and "0.47" in line for line in lines)  # the answer is no source for itself

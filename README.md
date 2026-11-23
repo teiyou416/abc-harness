@@ -233,6 +233,7 @@ entry in `runs/<task_id>/results.json`. For a BlockSim run, leave out
 | `literature.json`, `papers/` | (agent tasks) searches, found and opened library papers, full texts, PDFs and their parser output, viewed figures |
 | `manifest.json` | simulator commit, image ID, command, limits, PDF parses, and task status |
 | `results.json`, `report.md` | per-run status and metrics, and the readable report |
+| `answer.md` | the agent's final answer on its own (also in `report.md` under "Agent summary"); the judge and the number check read it |
 | `raw/<run_id>/` | the simulator's own output: `stdout.txt`, `blockList.txt`, `static.json` from SimBlock; `result.xlsx` and one CSV per sheet from BlockSim |
 | `changes/<run_id>.diff`, `changes/edits.diff` | the parameter and seed edits applied to each run's source, and the agent's permitted edits |
 | `validation.json` | the validation check's runs and verdict, for a plan with permitted edits |

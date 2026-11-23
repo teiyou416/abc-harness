@@ -75,12 +75,12 @@ A fixed set of benchmark tasks that several models each run a fixed number of ti
 _Avoid_: evaluation (a judgment is not an evaluation suite), eval, leaderboard
 
 **Benchmark task** (planned):
-One research request in a benchmark, with the checks its result must pass and its kind: `parameter` (the simulator's own parameters suffice) or `code` (it needs a permitted edit and a fixed validation check). Each run of it by a model is an ordinary task.
+One research request in a benchmark, with the checks its result must pass and its kind: `parameter` (the simulator's own parameters suffice) or `code` (it needs a permitted edit and a fixed validation check). The benchmark command approves each plan for it, and the approval record says so. Each run of it by a model is an ordinary task.
 _Avoid_: test case, scenario
 
-**Benchmark envelope** (planned):
-The limits the researcher approves once before a benchmark: simulators, parameter ranges, metrics, and for each `code` task the permitted edits and its fixed validation check. The harness approves a plan version inside it in code and refuses any other.
-_Avoid_: auto-approval, policy
+**Plan deviation** (planned):
+A recorded difference between a benchmark task and the plan a model executed for it, such as a loosened validation check or an edit in a `parameter` task. It is a fact in `results.jsonl` and a mark on the benchmark charts, never a verdict, and does not change the task's status.
+_Avoid_: violation, cheating
 
 **Benchmark chart** (planned):
 A PNG the chart command draws with matplotlib from a benchmark's `results.jsonl` alone. Not a result figure, which the agent draws from one task's results.

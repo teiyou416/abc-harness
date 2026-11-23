@@ -231,7 +231,7 @@ Tools and controls added while preparing M6, after real tasks showed they were n
 
 **What the researcher can do.** Run the same benchmark tasks with several models, then compare in charts how often each model completes a task, how well its conclusions are supported, and what it costs, separately for tasks that need only parameters and tasks that need edits to simulator source.
 
-**Scope:** as specified in [Benchmark](project-spec.md#benchmark): approval by the benchmark command and its record, `parameter` and `code` benchmark tasks in the repository, a benchmark command that runs the matrix and appends to `results.jsonl`, and a separate chart command (also `make bench-plot BENCH=<bench_id>`) that draws PNG charts from `results.jsonl` alone. matplotlib becomes a development dependency of the host, not of the execution image. No new evaluation framework: the signals are the task status, the validation verdict, `trace check`, the [judge](project-spec.md#judge), and the run statistics.
+**Scope:** as specified in [Benchmark](project-spec.md#benchmark): approval by the benchmark command and its record, `parameter` and `code` benchmark tasks in `examples/bench/tasks.toml` (P1 to P3 and C1 to C2, agreed 2026-11-23), a benchmark command that runs the matrix and appends to `results.jsonl`, and a separate chart command (also `make bench-plot BENCH=<bench_id>`) that draws PNG charts from `results.jsonl` alone. matplotlib becomes a development dependency of the host, not of the execution image. No new evaluation framework: the signals are the task status, the validation verdict, `trace check`, the [judge](project-spec.md#judge), and the run statistics.
 
 **Order of work**
 

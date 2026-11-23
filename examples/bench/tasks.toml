@@ -1,0 +1,101 @@
+# Benchmark tasks for M5.3 (docs/project-spec.md#benchmark).
+#
+# Each task is one research request that every benchmarked model receives
+# unchanged. `kind` is "parameter" (the simulator's own parameters suffice) or
+# "code" (it needs a permitted edit and a fixed validation check). Tasks of one
+# kind are listed in difficulty order, which is the order on the charts.
+#
+# [tasks.checks] are what the benchmark command compares with the executed plan;
+# each difference is recorded as a plan deviation, never as a failure.
+# `reference` is the expected answer for the researcher and the judge. It is not
+# scored. The validation numbers of the code tasks are not yet measured: the
+# pilot checks their run time and stability before the full benchmark.
+# None of these tasks needs a literature search.
+
+[[tasks]]
+id = "P1"
+kind = "parameter"
+title = "SimBlock: orphan rate at a 30 s versus a 600 s block interval"
+request = "In SimBlock, with 300 nodes and 100 blocks, is the orphan rate higher at a 30 s block interval than at 600 s?"
+reference = "Yes: the orphan rate is higher at 30 s, because more blocks are found before the previous one has propagated."
+
+[tasks.checks]
+simulator = "simblock"
+metrics = ["orphan_rate"]
+params = { NUM_OF_NODES = 300, END_BLOCK_HEIGHT = 100 }
+values = { INTERVAL = [600000, 30000] }
+min_seeds = 3
+edits = false
+
+[[tasks]]
+id = "P2"
+kind = "parameter"
+title = "Simulator choice: propagation delay versus stale rate and the largest miner's share"
+request = "Three miners hold 50%, 20% and 30% of the hash power. How do the stale rate and the largest miner's share of main-chain blocks change when the mean block propagation delay grows from 0.42 s to 60 s?"
+reference = "BlockSim fits, because SimBlock cannot give each miner a set hash power or take a propagation delay. The stale rate rises with the delay, and the largest miner's share of main-chain blocks rises above its 50% of the hash power."
+
+[tasks.checks]
+simulator = "blocksim"
+metrics = ["stale_rate", "node0_block_share"]
+params = { HASH_POWERS = [50, 20, 30] }
+values = { Bdelay = [0.42, 60] }
+min_seeds = 3
+edits = false
+
+[[tasks]]
+id = "P3"
+kind = "parameter"
+title = "SimBlock: block size sweep with a figure and the spread across seeds"
+request = "In SimBlock, how do t90 and the orphan rate change as the block size grows from 0.5 MB to 8 MB? Use at least five sizes and draw a figure, and say which differences are larger than the spread across seeds."
+reference = "t90 rises with the block size. The answer should separate differences larger than the spread across seeds from those within it."
+
+[tasks.checks]
+simulator = "simblock"
+metrics = ["t90_ms", "orphan_rate"]
+min_values = { BLOCK_SIZE = 5 }
+value_range = { BLOCK_SIZE = [500000, 8000000] }
+min_seeds = 5
+figure = true
+edits = false
+
+[[tasks]]
+id = "C1"
+kind = "code"
+title = "BlockSim: selfish mining for node 0 at 40% hash power"
+request = "In BlockSim, implement Eyal and Sirer's selfish mining for node 0 with gamma = 0, and compare its share of main-chain blocks at 40% hash power with honest mining."
+reference = "Selfish mining at alpha = 0.4 and gamma = 0 gives node 0 about 0.484 of the main-chain blocks (Eyal and Sirer, 2014), against about 0.40 when it mines honestly on the original source."
+
+[tasks.checks]
+simulator = "blocksim"
+metrics = ["node0_block_share"]
+edits = true
+permitted_paths = ["Models/Bitcoin/BlockCommit.py", "Models/Bitcoin/Node.py"]
+honest_baseline = true  # a configuration runs the original source
+
+[tasks.checks.validation]
+params = { HASH_POWERS = [40, 60], Bdelay = 0, hasTrans = false, simTime = 2000000 }
+seeds = 5
+metric = "node0_block_share"
+expected = 0.484
+tolerance = 0.03
+
+[[tasks]]
+id = "C2"
+kind = "code"
+title = "SimBlock: selfish mining for node 0 at 20%, 30% and 40% of the mining power"
+request = "In SimBlock, implement selfish mining for node 0 and measure its share of main-chain blocks at 20%, 30% and 40% of the total mining power, next to honest mining."
+reference = "SimBlock reports no per-node block share, so the plan needs a custom metric. With network delay, gamma lies between 0 and 1, so at 40% the share lies between 0.484 (gamma = 0) and 0.567 (gamma = 1); below about 33% selfish mining earns less than honest mining when gamma is near 0."
+
+[tasks.checks]
+simulator = "simblock"
+custom_metric = true  # the agent names it; the check compares only its numbers
+edits = true
+permitted_paths = ["main/java/simblock/node/Node.java", "main/java/simblock/task/MiningTask.java"]
+honest_baseline = true
+
+[tasks.checks.validation]
+# Node 0's 40% share is set in the edited code, not by a plan parameter.
+params = { NUM_OF_NODES = 300, END_BLOCK_HEIGHT = 2000 }
+seeds = 5
+expected = 0.525
+tolerance = 0.045

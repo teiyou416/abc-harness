@@ -163,3 +163,15 @@ def test_prices_cover_the_listed_models_haiku_tiers_and_deepseek_hours():
     assert round(flash.cost(usage, peak), 6) == round(0.30 + 0.006 + 1.20, 6)
     assert round(flash.cost(usage, night), 6) == round((0.30 + 0.006 + 1.20) / 2, 6)
     assert flash.cost(usage, saturday) == flash.cost(usage, night)
+
+
+def test_token_totals_include_the_calls_that_summarized_the_context(tmp_path):
+    from abc_harness.execution.trace import Trace, summarize_trace
+
+    trace = Trace(tmp_path / "trace.jsonl")
+    trace.event("model_call", usage={"input_tokens": 100, "output_tokens": 10})
+    trace.event("compaction", usage={"input_tokens": 1_000, "output_tokens": 50})
+    trace.close()
+    summary = summarize_trace(tmp_path / "trace.jsonl")
+    assert summary["model_calls"] == 2 and summary["compactions"] == 1
+    assert summary["tokens"] == {"input_tokens": 1_100, "output_tokens": 60}

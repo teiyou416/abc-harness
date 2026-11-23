@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -441,13 +442,20 @@ def sync_index(library_dir: Path) -> dict[str, dict[str, Any]]:
 
     The index maps each file's SHA-256 to its path, title, arXiv id, and DOI, so a file the researcher moves or
     renames keeps its record; a removed file loses it, and a file added by hand gets a record titled by its name.
-    An older index keyed by path is carried over.
+    An older index keyed by path is carried over. An index that exists but cannot be read is moved aside to
+    `index.json.damaged-<time>` before a new one is written, so the DOIs and ids it held can be recovered; if it
+    cannot be moved, it is left as it is and nothing is written.
     """
+    index_path = library_dir / LIBRARY_INDEX
+    damaged = False
     try:
-        raw = json.loads((library_dir / LIBRARY_INDEX).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        raw = json.loads(index_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
         raw = {}
-    raw = raw if isinstance(raw, dict) else {}
+    except (OSError, ValueError):
+        raw, damaged = {}, True
+    if not isinstance(raw, dict):
+        raw, damaged = {}, True
     by_digest = {k: v for k, v in raw.items() if isinstance(v, dict) and len(k) == 64}
     by_path = {k: v for k, v in raw.items() if isinstance(v, dict) and len(k) != 64}
     index: dict[str, dict[str, Any]] = {}
@@ -457,6 +465,11 @@ def sync_index(library_dir: Path) -> dict[str, dict[str, Any]]:
         entry = dict(by_digest.get(digest) or by_path.get(relative) or {"title": path.stem})
         entry["path"] = relative
         index[digest] = entry
+    if damaged:
+        try:
+            index_path.replace(index_path.with_name(f"{LIBRARY_INDEX}.damaged-{time.strftime('%Y%m%d-%H%M%S')}"))
+        except OSError:
+            return index
     if index != raw and (index or raw):
         write_index(library_dir, index)
     return index

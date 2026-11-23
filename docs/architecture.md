@@ -46,7 +46,7 @@ flowchart TB
     end
 
     subgraph ART["runs/task_id/"]
-        FILES["approvals.jsonl, plans/, plan.json<br/>raw/, changes/, results.json<br/>report.md, manifest.json<br/>trace.jsonl, history.md<br/>trace_check.json"]
+        FILES["approvals.jsonl, plans/, plan.json<br/>raw/, changes/, results.json<br/>report.md, answer.md, manifest.json<br/>trace.jsonl, history.md<br/>trace_check.json"]
     end
 
     subgraph LIT["Literature: literature/"]
@@ -131,7 +131,7 @@ checks that every module appears in this table.
 | Execution | `execution/grounding.py` | Grounded numbers: finds each number of the agent's final answer in what the task saw or produced (tool results, the researcher's messages, plan, results, report tables), never in the agent's own words; `trace check` reports one without a source as a warning. |
 | Execution | `execution/trace_check.py` | Audits approval and validation order and checks saved result tables offline; `execution/task.py` also runs it when a task that executed a plan ends and keeps the verdict in `trace_check.json`. |
 | Execution | `execution/recompute.py` | Independent standard-library metric calculations, also available as the standalone recomputation script. |
-| Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
+| Execution | `execution/report.py` | Writes `report.md`, `answer.md` (the final answer alone), `results.json`, and `manifest.json`. |
 | Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |
 | Planning | `planning/approval.py` | Records decisions in `approvals.jsonl` and refuses unapproved versions. |
 | Literature | `literature/__init__.py` | The public names of the literature layer. |

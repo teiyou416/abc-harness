@@ -77,3 +77,10 @@ def test_chat_clean_asks_first_and_defaults_to_no(tmp_path):
     assert "Nothing was removed." in out and "! /clean takes a number of days, not 'abc'" in out
     assert "Removed 100 B." in out and f"Nothing to remove in {runs}." in out
     assert not (task / "workspace" / "scratch" / "build").exists()
+
+
+def test_sizes_are_shown_in_the_largest_fitting_unit():
+    from abc_harness.execution.cleanup import human_size
+
+    assert [human_size(n) for n in (512, 2048, 5 * 1024**2, 3 * 1024**3, 2048 * 1024**3)] == [
+        "512 B", "2.0 KB", "5.0 MB", "3.0 GB", "2048.0 GB"]  # fmt: skip

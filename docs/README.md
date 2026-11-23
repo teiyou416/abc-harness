@@ -18,6 +18,10 @@ change to the one file that covers it. This folder holds those files.
 | [architecture.md](architecture.md) | the current architecture diagram, how the system works, and which module is which part |
 | [glossary.md](glossary.md) | the project's terms and the words to avoid |
 
+## Reviews
+
+- [Code health review](code-health-review.md) covers maintenance risks, supporting evidence, and the three recommended refactors.
+
 ## The rulebook
 
 | File | What it answers |

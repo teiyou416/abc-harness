@@ -208,3 +208,14 @@ def test_the_agent_cannot_choose_the_execution_image(tmp_path):
     assert result.status == "not_executed"
     assert review.seen == [] and runner.runs == []
     assert "harness pins the image" in model.calls[1][-1]["content"][0]["content"]
+
+
+def test_a_failure_while_the_task_is_set_up_still_ends_the_task_with_a_report(tmp_path):
+    class NoDocker(FakeRunner):
+        def image_info(self, image):
+            raise FileNotFoundError("docker")  # what subprocess raises when the docker executable is missing
+
+    result, _ = run(ScriptedModel([]), decisions(), tmp_path, runner=NoDocker())
+    assert result.status == "failed" and "FileNotFoundError" in result.stop_reason
+    assert (result.artifact_dir / "report.md").exists()
+    assert read_trace(result.artifact_dir / "trace.jsonl")[-1]["event"] == "task_finished"

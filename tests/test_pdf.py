@@ -397,3 +397,17 @@ def test_a_large_library_is_reported(tmp_path):
                    runs_root=tmp_path / "runs", library_dir=library,
                    on_event=cli.Console(lines.append, color=False, live=False))  # fmt: skip
     assert any(line.startswith("! The local library ") and "holds 101 PDFs, more than 100" in line for line in lines)
+
+
+def test_a_damaged_library_index_is_set_aside_not_overwritten(tmp_path):
+    from abc_harness.literature.library import sync_index
+
+    library = tmp_path / "papers"
+    library.mkdir()
+    (library / "a.pdf").write_bytes(b"%PDF-1.4 a")
+    (library / "index.json").write_text('{"truncated": ', encoding="utf-8")
+    index = sync_index(library)
+    (kept,) = library.glob("index.json.damaged-*")
+    assert kept.read_text() == '{"truncated": '
+    assert [e["path"] for e in index.values()] == ["a.pdf"]
+    assert json.loads((library / "index.json").read_text()) == index

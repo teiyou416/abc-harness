@@ -70,6 +70,22 @@ _Avoid_: plot, chart, graph
 The container image that runs the agent's figure scripts, with the task's results read-only and no network.
 _Avoid_: plotting container, matplotlib sandbox
 
+**Benchmark** (planned):
+A fixed set of benchmark tasks that several models each run a fixed number of times, so their task completion, judgment scores, and cost can be compared. Its data lives in `runs/bench/<bench_id>/`.
+_Avoid_: evaluation (a judgment is not an evaluation suite), eval, leaderboard
+
+**Benchmark task** (planned):
+One research request in a benchmark, with the checks its result must pass and its kind: `parameter` (the simulator's own parameters suffice) or `code` (it needs a permitted edit and a fixed validation check). Each run of it by a model is an ordinary task.
+_Avoid_: test case, scenario
+
+**Benchmark envelope** (planned):
+The limits the researcher approves once before a benchmark: simulators, parameter ranges, metrics, and for each `code` task the permitted edits and its fixed validation check. The harness approves a plan version inside it in code and refuses any other.
+_Avoid_: auto-approval, policy
+
+**Benchmark chart** (planned):
+A PNG the chart command draws with matplotlib from a benchmark's `results.jsonl` alone. Not a result figure, which the agent draws from one task's results.
+_Avoid_: figure, report
+
 ## Evidence
 
 **Judgment**:

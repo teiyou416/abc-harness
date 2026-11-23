@@ -235,7 +235,10 @@ def test_compatible_provider_answers_a_tool_call_and_reports_usage(name):
                                                           "peer-to-peer network."}]}]  # fmt: skip
     after = model.create(system, messages, TOOLS, max_tokens=4000, timeout_seconds=120)
     # "propagat": the model may say "propagation" or "blocks propagate"
-    assert after.stop_reason == "end_turn" and "propagat" in after.text().lower(), (after.stop_reason, after.text())
+    # On failure, show any further tool calls: a model may call another tool instead of answering
+    further = [(u["name"], u.get("input")) for u in after.tool_uses()]
+    assert after.stop_reason == "end_turn" and "propagat" in after.text().lower(), (after.stop_reason, after.text(),
+                                                                                    further)  # fmt: skip
 
 
 JUDGE_BAD = ("The 60 s delay clearly produces more stale blocks: the stale rate rose from 0.200 to 0.210, so a "

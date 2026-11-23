@@ -255,3 +255,24 @@ def test_status_command_shows_settings_tasks_and_cost(tmp_path):
     assert "Tasks: none yet" in before
     assert "Tasks with a plan: 0; replies without a plan: 1; /tasks lists both" in after
     assert "Estimated cost:" in after
+
+
+def test_switching_to_a_model_without_the_current_effort_moves_to_its_nearest_level(tmp_path):
+    from abc_harness.agent.model import closest_effort
+
+    assert closest_effort("qwen3.8-flash", "high") == "medium"  # medium and xhigh are as near; the lower wins
+    assert closest_effort("qwen4-max", "medium") == "low" and closest_effort("qwen4-max", "max") == "xhigh"
+    assert closest_effort("kimi-k3", "xhigh") == "high" and closest_effort("claude-opus-5-5", "max") == "max"
+
+    current = {"name": "claude-opus-5-5", "effort": "high"}
+
+    def switch(name):
+        current["name"], current["effort"] = name, closest_effort(name, current["effort"])
+
+    models = ModelControl(lambda: current["name"], switch, list, effort=lambda: current["effort"],
+                          set_effort=lambda level: None)  # fmt: skip
+    out = []
+    run_chat(lambda: ChatSession(tmp_path / "runs"), lambda s, t: None, Inputs("/model qwen3.8-flash", "/quit"),
+             out.append, models=models)  # fmt: skip
+    assert "The following tasks use qwen3.8-flash. It cannot see images" in "\n".join(out)
+    assert "It has no effort high, so the effort is now medium." in "\n".join(out)

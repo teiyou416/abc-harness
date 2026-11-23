@@ -7,13 +7,17 @@ The library is the only record of what the agent found. It is saved to
 found paper, and a figure reading only if the agent viewed that figure.
 
 Full text comes from one of two tracks (`sources` records which): arXiv's
-HTML rendering, or a PDF parsed by MinerU. A PDF is either one the researcher
-supplied (`add_local`) or, when arXiv has no HTML for a paper, the arXiv PDF.
+HTML rendering, or a PDF parsed by MinerU. A PDF is either one from the
+researcher's local library (`shelve`, parsed on first read) or, when arXiv has
+no HTML for a paper, the arXiv PDF.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,6 +35,8 @@ PAPERS_DIR = "papers"
 VENUES = ("FC", "AFT", "ICBC")
 MIN_QUOTE_CHARS = 20
 MAX_RESULTS = 10
+FOLDER_PART = re.compile(r"[\w][\w .-]{0,59}")  # one folder name inside the local library
+LIBRARY_INDEX = "index.json"  # in the local library: what the harness kept there
 
 
 @dataclass
@@ -83,9 +89,17 @@ class Literature:
 
 class Library:
     def __init__(
-        self, artifact_dir: Path, literature: Literature | None = None, convert: PdfConvert | None = None
+        self,
+        artifact_dir: Path,
+        literature: Literature | None = None,
+        convert: PdfConvert | None = None,
+        library_dir: Path | None = None,
+        notify: Callable[[str, dict[str, Any]], None] | None = None,
     ) -> None:
         self.artifact_dir = artifact_dir
+        self.library_dir = library_dir  # the researcher's local library, where `keep` saves papers
+        self.notify = notify  # tells the trace when a paper is kept
+        self.kept: dict[str, str] = {}  # paper id -> file name in the local library
         self.literature = literature
         self.convert = convert  # parses PDFs; None when the task has no PDF parser
         self.papers: dict[str, Paper] = {}
@@ -148,54 +162,115 @@ class Library:
     def read(self, paper_id: str, time_left: float) -> tuple[str, list[str]]:
         """Fetch and save a paper's full text. Returns (path relative to the artifact directory, lines).
 
-        arXiv HTML first; if arXiv has none and a PDF parser is available, the arXiv PDF parsed by MinerU.
-        Raises FetchError or PdfError.
+        arXiv HTML first; if arXiv has none and a PDF parser is available, the arXiv PDF parsed by MinerU. A
+        local-library paper with an arXiv id is read the same way, falling back to its own PDF. Reading keeps
+        nothing in the local library; `keep` does. Raises FetchError or PdfError.
         """
         rel = self.full_texts.get(paper_id)
-        if rel is None and paper_id in self.shelf:
+        if rel is not None:
+            return rel, (self.artifact_dir / rel).read_text(encoding="utf-8").splitlines()
+        paper = self.papers[paper_id]
+        local = self.shelf.get(paper_id)
+        if paper.arxiv_id and self.literature is not None:
+            try:
+                rel = self._read_arxiv(paper_id, paper.arxiv_id, time_left, pdf_fallback=local is None)
+            except (FetchError, PdfError):
+                if local is None:
+                    raise
+        if rel is None:
+            assert local is not None
             if self.convert is None:
                 raise PdfError("this task has no PDF parser")
             label = self.shelf_labels[paper_id]
-            rel = self._parse_local(paper_id, self.shelf[paper_id], f"PDF from the researcher's local library ({label})")
-        elif rel is None:
-            assert self.literature is not None
-            paper = self.papers[paper_id]
-            assert paper.arxiv_id
-            stem = _file_stem(paper.arxiv_id)
-            try:
-                url, lines, figures = self.literature.full_text(paper.arxiv_id, time_left)
-                header, source = [f"# Source: {url}"], {"kind": "arxiv_html", "url": url}
-            except FetchError as html_error:
-                if self.convert is None:
-                    raise
-                url = pdf.ARXIV_PDF_URL.format(id=paper.arxiv_id)
-                data = self.literature.client.get(url, time_left)
-                if not data.startswith(b"%PDF"):
-                    raise FetchError(url, None, "the response is not a PDF") from html_error
-                pdf_rel = f"{PAPERS_DIR}/{stem}.pdf"
-                (self.artifact_dir / pdf_rel).parent.mkdir(exist_ok=True)
-                (self.artifact_dir / pdf_rel).write_bytes(data)
-                parsed, source = self._parse_pdf(pdf_rel, stem)
-                source = {**source, "url": url, "html_error": str(html_error)}
-                lines, figures, header = parsed.lines, parsed.figures, _pdf_header(f"{url} (no HTML on arXiv)", source)
-            rel = self._save_text(paper_id, stem, header, lines, figures, source)
+            rel = self._parse_local(paper_id, local, f"PDF from the researcher's local library ({label})")
         return rel, (self.artifact_dir / rel).read_text(encoding="utf-8").splitlines()
 
-    def add_local(self, path: Path) -> Paper:
-        """Add a PDF the researcher supplied: copy it into the task, parse it, and make it citable. Raises PdfError."""
-        if self.convert is None:
-            raise PdfError("this task has no PDF parser")
-        paper = self._register_local(path, path.name, "")
-        self._parse_local(paper.id, path, f"PDF supplied by the researcher ({path.name})")
-        return self.papers[paper.id]
+    def _read_arxiv(self, paper_id: str, arxiv_id: str, time_left: float, pdf_fallback: bool) -> str:
+        assert self.literature is not None
+        stem = _file_stem(arxiv_id)
+        try:
+            url, lines, figures = self.literature.full_text(arxiv_id, time_left)
+            header, source = [f"# Source: {url}"], {"kind": "arxiv_html", "url": url}
+        except FetchError as html_error:
+            if self.convert is None or not pdf_fallback:
+                raise
+            url = pdf.ARXIV_PDF_URL.format(id=arxiv_id)
+            data = self.literature.client.get(url, time_left)
+            if not data.startswith(b"%PDF"):
+                raise FetchError(url, None, "the response is not a PDF") from html_error
+            pdf_rel = f"{PAPERS_DIR}/{stem}.pdf"
+            (self.artifact_dir / pdf_rel).parent.mkdir(exist_ok=True)
+            (self.artifact_dir / pdf_rel).write_bytes(data)
+            parsed, source = self._parse_pdf(pdf_rel, stem)
+            source = {**source, "url": url, "html_error": str(html_error)}
+            lines, figures, header = parsed.lines, parsed.figures, _pdf_header(f"{url} (no HTML on arXiv)", source)
+        return self._save_text(paper_id, stem, header, lines, figures, source)
 
-    def shelve(self, path: Path, label: str, cached_output: Path | None = None) -> Paper:
+    def keep(self, paper_id: str, folder: str, time_left: float) -> tuple[str, str | None]:
+        """Save a read paper's PDF in the local library under `folder` and record it in the index.
+
+        Returns (path relative to the library, None) for a new file, or (path, why) when the library already
+        holds the paper: the same file, arXiv id, DOI, or title. Raises KeepError.
+        """
+        if self.library_dir is None:
+            raise KeepError("this task has no local library")
+        paper = self.papers.get(paper_id)
+        if paper is None:
+            raise KeepError(f"unknown paper {paper_id!r}")
+        if paper_id in self.shelf:
+            return self.shelf_labels[paper_id].split("/", 1)[1], "it is a local-library paper already"
+        if paper_id not in self.full_texts:
+            raise KeepError(f"read {paper_id} with read_paper first, then decide whether to keep it")
+        parts = [part for part in folder.replace("\\", "/").split("/") if part]
+        if len(parts) > 3 or any(part in (".", "..") or part.startswith(".") or not FOLDER_PART.fullmatch(part)
+                                 for part in parts):  # fmt: skip
+            raise KeepError("folder must be up to three plain names such as security or security/mev")
+        index = sync_index(self.library_dir)
+        duplicate = _find_duplicate(index, paper)
+        if duplicate:
+            return duplicate
+        pdf_rel = self.sources.get(paper_id, {}).get("pdf")
+        if pdf_rel:
+            data = (self.artifact_dir / pdf_rel).read_bytes()
+        elif paper.arxiv_id and self.literature is not None:
+            url = pdf.ARXIV_PDF_URL.format(id=paper.arxiv_id)
+            try:
+                data = self.literature.client.get(url, time_left)
+            except FetchError as e:
+                raise KeepError(f"could not download the PDF: {e}") from e
+            if not data.startswith(b"%PDF"):
+                raise KeepError(f"{url} did not return a PDF")
+        else:
+            raise KeepError(f"{paper_id} has no PDF to keep")
+        digest = hashlib.sha256(data).hexdigest()
+        if digest in index:
+            return index[digest]["path"], "the same file is already there"
+        target = self.library_dir.joinpath(*parts)
+        name = library_file_name(paper.title, paper.arxiv_id or paper_id, target)
+        target.mkdir(parents=True, exist_ok=True)
+        staging = target / f".{name}.part"
+        staging.write_bytes(data)
+        staging.rename(target / name)
+        path = (target / name).relative_to(self.library_dir).as_posix()
+        index[digest] = {"path": path, "title": paper.title, "arxiv_id": paper.arxiv_id, "doi": paper.doi,
+                         "added_by_task": self.artifact_dir.name}  # fmt: skip
+        write_index(self.library_dir, index)
+        self.kept[paper_id] = path
+        self.save()
+        if self.notify:
+            self.notify("library_paper_added", {"paper": paper_id, "file": path})
+        return path, None
+
+    def shelve(self, path: Path, label: str, cached_output: Path | None = None,
+               entry: dict[str, Any] | None = None) -> Paper:
         """List a PDF from the researcher's local library without parsing it; `read` parses it on first use.
 
         `label` is how the agent sees the file (e.g. papers/Some Title.pdf). With `cached_output`, an earlier
-        parse of the same bytes, the entry shows the paper's own title and first abstract sentence.
+        parse of the same bytes, the entry shows the paper's own title and first abstract sentence. `entry` is
+        the file's record in the library index (title, arXiv id, DOI) when the harness kept it there.
         """
-        title, abstract = path.stem, ""
+        entry = entry or {}
+        title, abstract = entry.get("title") or path.stem, ""
         if cached_output is not None:
             try:
                 data = json.loads((cached_output / pdf.OUTPUT_FILE).read_text(encoding="utf-8"))
@@ -204,6 +279,7 @@ class Library:
             except (OSError, ValueError, AttributeError, TypeError):
                 pass  # the file name still identifies it
         paper = self._register_local(path, title, abstract)
+        paper.arxiv_id, paper.doi = entry.get("arxiv_id"), entry.get("doi")
         self.shelf[paper.id] = path
         self.shelf_labels[paper.id] = label
         self.save()
@@ -351,9 +427,95 @@ class Library:
             "viewed": self.viewed,
             "sources": self.sources,
             "local_library": self.shelf_labels,
+            "kept_in_library": self.kept,
         }
         (self.artifact_dir / LITERATURE_FILE).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
                                                       encoding="utf-8")  # fmt: skip
+
+
+class KeepError(Exception):
+    """A paper could not be kept in the local library."""
+
+
+def sync_index(library_dir: Path) -> dict[str, dict[str, Any]]:
+    """Bring the library's index.json in line with the PDFs on disk and return it.
+
+    The index maps each file's SHA-256 to its path, title, arXiv id, and DOI, so a file the researcher moves or
+    renames keeps its record; a removed file loses it, and a file added by hand gets a record titled by its name.
+    An older index keyed by path is carried over. An index that exists but cannot be read is moved aside to
+    `index.json.damaged-<time>` before a new one is written, so the DOIs and ids it held can be recovered; if it
+    cannot be moved, it is left as it is and nothing is written.
+    """
+    index_path = library_dir / LIBRARY_INDEX
+    damaged = False
+    try:
+        raw = json.loads(index_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raw = {}
+    except (OSError, ValueError):
+        raw, damaged = {}, True
+    if not isinstance(raw, dict):
+        raw, damaged = {}, True
+    by_digest = {k: v for k, v in raw.items() if isinstance(v, dict) and len(k) == 64}
+    by_path = {k: v for k, v in raw.items() if isinstance(v, dict) and len(k) != 64}
+    index: dict[str, dict[str, Any]] = {}
+    for path in library_pdfs(library_dir):
+        relative = path.relative_to(library_dir).as_posix()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        entry = dict(by_digest.get(digest) or by_path.get(relative) or {"title": path.stem})
+        entry["path"] = relative
+        index[digest] = entry
+    if damaged:
+        try:
+            index_path.replace(index_path.with_name(f"{LIBRARY_INDEX}.damaged-{time.strftime('%Y%m%d-%H%M%S')}"))
+        except OSError:
+            return index
+    if index != raw and (index or raw):
+        write_index(library_dir, index)
+    return index
+
+
+def library_pdfs(library_dir: Path) -> list[Path]:
+    """Every PDF in the library and its folders, leaving out unfinished downloads."""
+    if not library_dir.is_dir():
+        return []
+    return sorted(p for p in library_dir.rglob("*") if p.suffix.lower() == ".pdf" and p.is_file()
+                  and not p.name.startswith("."))  # fmt: skip
+
+
+def _find_duplicate(index: dict[str, dict[str, Any]], paper: Paper) -> tuple[str, str] | None:
+    title = _title_key(paper.title)
+    for entry in index.values():
+        if paper.arxiv_id and entry.get("arxiv_id") == paper.arxiv_id:
+            return entry["path"], "the same arXiv id is already there"
+        if paper.doi and entry.get("doi") and entry["doi"].lower() == paper.doi.lower():
+            return entry["path"], "the same DOI is already there"
+        if title and _title_key(entry.get("title") or "") == title:
+            return entry["path"], "a paper with the same title is already there"
+    return None
+
+
+def _title_key(title: str) -> str:
+    """A title reduced to letters and digits, so "A: B" and the file name "A B" match."""
+    return re.sub(r"[\W_]+", "", normalize(title))
+
+
+def write_index(library_dir: Path, index: dict[str, dict[str, Any]]) -> None:
+    library_dir.mkdir(parents=True, exist_ok=True)
+    staging = library_dir / f".{LIBRARY_INDEX}.part"
+    staging.write_text(json.dumps(index, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    staging.replace(library_dir / LIBRARY_INDEX)
+
+
+def library_file_name(title: str, paper_ref: str, folder: Path) -> str:
+    """A file name from the paper's title, as researchers name their own; the paper's id settles a clash."""
+    clean = "".join(c if c.isalnum() or c in " -_,.()'" else " " for c in title)
+    ref = "".join(c if c.isalnum() or c in "-." else "-" for c in paper_ref)
+    clean = " ".join(clean.split()).strip(" .")[:120] or ref
+    name = f"{clean}.pdf"
+    if (folder / name).exists():
+        name = f"{clean} ({ref}).pdf"
+    return name
 
 
 def _pdf_header(origin: str, source: dict[str, Any]) -> list[str]:

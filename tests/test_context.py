@@ -256,6 +256,23 @@ def test_make_model_takes_listed_models_with_their_provider_key():
         make_model("deepseek-flash", "high", {"ANTHROPIC_API_KEY": "sk-ant-x"}.get)
 
 
+def test_kimi_uses_the_china_endpoint_and_only_its_effort_levels():
+    from abc_harness.agent.model import KIMI, ModelUnavailable, make_model
+
+    keys = {"MOONSHOT_API_KEY": "sk-kimi-x"}
+    kimi = make_model("kimi-k3.1-pro", "high", keys.get)
+    assert kimi.provider is KIMI and kimi.sees_images
+    assert str(kimi._client.base_url).startswith("https://api.moonshot.cn/anthropic")
+    with pytest.raises(ModelUnavailable, match="accepts effort low, high, max, not medium"):
+        make_model("kimi-k3", "medium", keys.get)
+    with pytest.raises(ModelUnavailable, match="needs MOONSHOT_API_KEY in .env"):
+        make_model("kimi-k3", "high", {}.get)
+    sent = _capturing(kimi)
+    kimi.create("s", [{"role": "user", "content": "q"}], [])
+    (request,) = sent["plain"]
+    assert request["output_config"] == {"effort": "high"} and "betas" not in request
+
+
 def test_deepseek_requests_leave_out_the_anthropic_only_extras():
     from abc_harness.agent.model import make_model
 

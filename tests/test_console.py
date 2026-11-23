@@ -36,9 +36,10 @@ def test_a_status_line_shows_the_current_action_and_milestones_stay(tmp_path):
         text_turn("Done."),
     ])  # fmt: skip
     assert result.status == "completed", result.stop_reason
-    # Lasting lines: the approval and the final answer, nothing per step.
-    assert len(lines) == 2 and lines[0].startswith("✓ Plan ") and "approved (4 runs)" in lines[0]
-    assert lines[1] == "Done."
+    # Lasting lines: each tool call, the approval, and the final answer; not each model call or run.
+    assert lines[:2] == ["● describe_simulator blocksim", "● propose_plan blocksim"]
+    assert lines[2].startswith("✓ Plan ") and "approved (4 runs)" in lines[2]
+    assert lines[3:] == ["● run_plan", "Done."]
     # The status line is redrawn in place (\r) and says what is happening now.
     drawn = [part.split(" · ")[0][2:] for part in screen.split("\r") if " · " in part]
     states = [s for i, s in enumerate(drawn) if i == 0 or s != drawn[i - 1]]
@@ -115,10 +116,24 @@ def test_estimated_cost_prices_each_call_from_its_usage(tmp_path):
     trace.event("compaction", usage={"input_tokens": 10_000, "output_tokens": 1_000})  # priced as the task's model
     trace.close()
     # 0.05*4 + 0.03*20 + 0.5*0.20 + 0.02*5 = 1.00; the summary call: 0.01*4 + 0.001*20 = 0.06
-    total, priced, unknown = console.estimated_cost(tmp_path / "trace.jsonl", "claude-opus-5-5")
-    assert round(total, 6) == 1.06 and priced == {"claude-opus-5-5"} and unknown == set()
+    totals, priced, unknown = console.estimated_cost(tmp_path / "trace.jsonl", "claude-opus-5-5")
+    assert round(totals["USD"], 6) == 1.06 and priced == {"claude-opus-5-5"} and unknown == set()
     line = console.estimated_cost_line(tmp_path / "trace.jsonl", "claude-opus-5-5")
     assert line == "Estimated cost: $1.06 at list prices for claude-opus-5-5 (an estimate, not a bill)"
+
+
+def test_cny_and_usd_prices_are_summed_apart(tmp_path):
+    from abc_harness.execution.trace import Trace
+
+    trace = Trace(tmp_path / "trace.jsonl")
+    trace.event("model_call", model="claude-opus-5-5", usage={"input_tokens": 1_000_000})
+    # kimi-k3.1-pro, CNY: 0.1M uncached input * 13 + 1M cache reads * 1.30 + 0.1M output * 68 = 1.3 + 1.3 + 6.8
+    trace.event("model_call", model="kimi-k3.1-pro",
+                usage={"input_tokens": 100_000, "cache_read_input_tokens": 1_000_000, "output_tokens": 100_000})
+    trace.close()
+    totals, _, _ = console.estimated_cost(tmp_path / "trace.jsonl")
+    assert round(totals["USD"], 6) == 4.0 and round(totals["CNY"], 6) == 9.4
+    assert console.estimated_cost_line(tmp_path / "trace.jsonl").startswith("Estimated cost: $4.00 + ¥9.40 at")
 
 
 def test_unknown_models_are_named_not_guessed(tmp_path):
@@ -148,3 +163,15 @@ def test_prices_cover_the_listed_models_haiku_tiers_and_deepseek_hours():
     assert round(flash.cost(usage, peak), 6) == round(0.30 + 0.006 + 1.20, 6)
     assert round(flash.cost(usage, night), 6) == round((0.30 + 0.006 + 1.20) / 2, 6)
     assert flash.cost(usage, saturday) == flash.cost(usage, night)
+
+
+def test_token_totals_include_the_calls_that_summarized_the_context(tmp_path):
+    from abc_harness.execution.trace import Trace, summarize_trace
+
+    trace = Trace(tmp_path / "trace.jsonl")
+    trace.event("model_call", usage={"input_tokens": 100, "output_tokens": 10})
+    trace.event("compaction", usage={"input_tokens": 1_000, "output_tokens": 50})
+    trace.close()
+    summary = summarize_trace(tmp_path / "trace.jsonl")
+    assert summary["model_calls"] == 2 and summary["compactions"] == 1
+    assert summary["tokens"] == {"input_tokens": 1_100, "output_tokens": 60}

@@ -43,9 +43,9 @@ uv run abc-harness run examples/simblock-baseline.toml
 `uv run abc-harness run examples/blocksim-baseline.toml` runs the BlockSim
 example the same way.
 
-`run` prints the plan and asks `Approve this plan? [approve/reject]:`.
+`run` prints the plan and asks `Approve this plan? [approve(default)/reject]:`.
 
-- Answer `approve` to run the 10 simulation runs (about 30 seconds). The
+- Answer `approve`, or press Enter, to run the 10 simulation runs (about 30 seconds). The
   command prints `Artifacts: runs/<task_id>`.
 - Answer `reject` to stop. The command prints `No simulator was started.` and
   still writes the decision, the trace and a report.
@@ -63,7 +63,7 @@ uv run abc-harness ask "With 300 nodes, does a 30 s block interval produce more 
 ```
 
 The agent may ask clarification questions, then shows a plan and asks
-`Approve this plan? [approve/revise/reject]:`. Choose `revise` to send it
+`Approve this plan? [approve(default)/revise/reject]:`. Choose `revise` to send it
 back with a comment; every new version needs a fresh approval.
 
 Each task stops at its limits on active runtime and model calls; change them
@@ -73,36 +73,51 @@ with `--time-limit-seconds` and `--llm-call-limit` (defaults in
 During a task, one status line at the bottom of the terminal says what the
 task is doing now, such as `Thinking`, `Using read_file task/plan.json`, or
 `Running simulation 132/216`, with the task's elapsed time; it is redrawn in
-place, not scrolled. Milestones (plan decisions, the validation result, saved
-figures), retries, errors, and the final answer stay on screen above it. Use
+place, not scrolled. Each tool call (`● read_file task/plan.json`), milestones
+(plan decisions, the validation result, saved figures), retries, errors, and
+the final answer stay on screen above it. Use
 `--quiet` to hide live progress. See `trace.jsonl` and `history.md` for details. At the
 end, `ask` and `run` print the agent's summary and the run statistics: active
 and waiting time, model calls and tokens, an estimated cost at list prices
 (`MODELS` in `src/abc_harness/agent/model.py`, from the official pricing page; not a bill), tool
 calls, and completed simulation runs. The experiment's results are in `report.md`.
 
-To have the agent read a paper you choose, pass the PDF; repeat `--paper` for
-several. The harness parses each one before the agent starts (1 to 6 minutes
-for a 20-page paper, not counted toward the task's time limit, and cached for
-the next task), and the agent can cite them:
+To have the agent read a paper you choose, put its PDF in `papers/` and name
+it in the request. The harness parses a PDF when the agent opens it (1 to 6
+minutes for a 20-page paper, not counted toward the task's time limit, and
+cached for the next task), and the agent can cite it:
 
 ```bash
-uv run abc-harness ask "Reproduce Figure 2 of this paper." --paper ~/papers/selfish-mining.pdf
+uv run abc-harness ask "Reproduce Figure 2 of papers/selfish-mining.pdf."
 ```
 
 Papers you keep for reference go in `papers/` (another folder with
 `--library DIR`), named by their titles. The agent sees the list, checks it
 before searching online, and parses only the papers it opens; a parsed paper's
-own title appears in the list from then on.
+own title appears in the list from then on. Ask the agent to keep papers it
+found ("save these in a folder called security") and it saves their PDFs
+there, named by title; `papers/index.json` records each one's arXiv id and DOI
+and stops the same paper being saved twice. You can move or rename the files;
+the index follows them. Above 100 PDFs, the terminal
+suggests removing some.
 
 ### Models
 
 `--model` (and `/model` in chat) takes one of: `deepseek-flash` (default),
 `deepseek-v4-pro`, `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`,
-and `claude-fable-5-2`. The DeepSeek models need `DEEPSEEK_API_KEY` in `.env`
+`claude-fable-5-2`, `kimi-k3.1-pro`, `kimi-k3.1-pro-highspeed`, and `kimi-k3`. The DeepSeek models need `DEEPSEEK_API_KEY` in `.env`
 and send your question, papers, and results to DeepSeek's servers.
 `deepseek-v4-pro` cannot see images, so it cannot read figures in papers or
 check the figures it draws.
+
+The Kimi models `kimi-k3.1-pro`, `kimi-k3.1-pro-highspeed`, and `kimi-k3` need
+`MOONSHOT_API_KEY` in `.env`, from the China platform (platform.moonshot.cn),
+and send your question, papers, and results to Moonshot's servers. They accept
+only effort `low`, `high`, or `max`, and their cost estimate is in CNY (`¥`).
+
+`--effort` (and `/effort` in chat) sets how hard the model thinks: `low`,
+`medium`, `high` (default), `xhigh`, or `max`. Each task records its model and
+effort in `manifest.json`.
 
 ### Chat
 
@@ -113,7 +128,7 @@ experiment from a paper and draws a comparison figure.
 For follow-up questions, start a conversation instead:
 
 ```bash
-uv run abc-harness chat [--paper paper.pdf]
+uv run abc-harness chat
 ```
 
 Type a request and press Enter (Alt+Enter, or Esc then Enter, for a new
@@ -122,11 +137,18 @@ task, with its own directory, approval, report, and limits, so a
 follow-up such as "now with 1000 nodes" gets a new plan to approve. The agent
 remembers the earlier tasks of the conversation: the harness gives it each
 one's question, plan, results, figures, and final answer, and it can read
-their files. Ctrl-C during a task stops that task and returns to the prompt;
+their files. A request the agent answers without proposing a plan is a chat
+reply: it is still recorded, but under
+`runs/sessions/<session_id>/replies/<task_id>/`, so `runs/` lists only tasks
+with a plan. Ctrl-C during a task stops that task and returns to the prompt;
 Ctrl-C or Ctrl-D at an empty prompt leaves. Commands: `/tasks` lists the
-conversation's tasks, `/paper <pdf>` adds a paper for every following task,
+conversation's tasks,
 `/model` shows the model and the available ones and `/model <name>` switches
 the following tasks to another listed model,
+`/effort` shows the effort and `/effort <level>` sets it for the following tasks,
+`/status` shows the model, effort, limits, task count, estimated cost, and disk use,
+`/judge [n]` asks a model to judge a task's answer (see [Ask a model to judge the answer](#ask-a-model-to-judge-the-answer)),
+`/clean [days]` frees disk space (see [Free disk space](#free-disk-space)),
 `/new` starts over, `/help`, and `/quit`. The conversation's log is
 `runs/sessions/<session_id>/session.jsonl`.
 
@@ -138,7 +160,47 @@ It compares run starts with the plan version and approval records, checks that e
 validation before formal runs, and checks completed runs against raw output, results.json, and the two
 metric tables in report.md. Custom metrics are checked against printed values only.
 Exit codes: 0 for consistent evidence, 1 for a contradiction, 2 for insufficient evidence
-(including older run starts without a plan version). It does not grade the agent's prose.
+(including older run starts without a plan version). It does not grade the agent's prose,
+but it does look for every number of the agent's final answer in what the task saw or produced
+(tool results, your messages, the plan, results, and report tables, never the agent's own words).
+A number without a source is a `WARN` line, not a failure: it may be one the agent derived, such
+as a ratio, or one it got wrong, so check it. Warnings do not change the exit code.
+The harness runs this check by itself when a task that executed a plan ends:
+the run statistics show its verdict (with the problems found, if any), and
+`trace_check.json` in the task directory keeps the full result.
+
+## Ask a model to judge the answer
+
+`uv run abc-harness judge runs/<task_id>` (or `/judge` in chat, `/judge 2`
+for task 2 of `/tasks`) asks a model whether the agent's final answer follows
+from the task's results: does it call a difference within the spread "clear",
+or generalise past the tested parameters? It shows the judge model and an
+estimated cost first; Enter judges. The default judge is another model than
+the task's own, since a model favours its own answers; `--model` picks one.
+
+It only judges a task that executed a plan and whose evidence check found no
+contradiction, and it sees only saved artifacts: your question, the plan, the
+harness's tables, the validation check, the evidence check, and the answer.
+The score (0 to 10), the reason, and the sentences it faults go to
+`judge.jsonl` and the run statistics, labelled as model-assessed. It is
+advice: it never changes the task, its report, or its status.
+
+## Free disk space
+
+`runs/` grows mostly with the agent's sandbox builds in each task's
+`workspace/scratch/`. `uv run abc-harness clean` lists what can go and removes
+nothing; add `--yes` to remove it. It removes only:
+
+- the sandbox files in `workspace/scratch/` of tasks that have ended, leaving a
+  `REMOVED.md` note in their place;
+- with `--older-than DAYS`, whole tasks that ran no simulation (rejected, or
+  ended without running a plan, chat replies included) and started more than
+  that many days ago.
+
+Raw output, plans, approvals, traces, and reports of every other task are
+kept, and a running task is never touched. In chat, `/clean` (or `/clean 30`)
+shows the same list and asks before removing; Enter means no. Chat also says
+so at startup when `runs/` is over 5 GB.
 
 ## Check a result
 
@@ -168,12 +230,15 @@ entry in `runs/<task_id>/results.json`. For a BlockSim run, leave out
 | `trace.jsonl` | every event, with active and waiting time and the stop reason |
 | `history.md` | (agent tasks) every message of every context window, with full tool results |
 | `figures/` | (agent tasks) each figure the agent drew: PNG, SVG, the script that drew it, its output, and `index.json` with the captions; the report shows them |
-| `literature.json`, `papers/` | (agent tasks) searches, found and supplied papers, full texts, PDFs and their parser output, viewed figures |
+| `literature.json`, `papers/` | (agent tasks) searches, found and opened library papers, full texts, PDFs and their parser output, viewed figures |
 | `manifest.json` | simulator commit, image ID, command, limits, PDF parses, and task status |
 | `results.json`, `report.md` | per-run status and metrics, and the readable report |
+| `answer.md` | the agent's final answer on its own (also in `report.md` under "Agent summary"); the judge and the number check read it |
 | `raw/<run_id>/` | the simulator's own output: `stdout.txt`, `blockList.txt`, `static.json` from SimBlock; `result.xlsx` and one CSV per sheet from BlockSim |
 | `changes/<run_id>.diff`, `changes/edits.diff` | the parameter and seed edits applied to each run's source, and the agent's permitted edits |
 | `validation.json` | the validation check's runs and verdict, for a plan with permitted edits |
+| `judge.jsonl` | every judgment you asked for: score, reason, faulted sentences, judge model, prompt hash, tokens, and estimated cost |
+| `trace_check.json` | the verdict and findings of the `trace check` the harness ran when the task ended (only for a task that executed a plan) |
 | `sandbox/` | every sandbox exec command and its output |
 | `workspace/` | `original/` (the simulator source copied from the image, never changed), `edited/` (the agent's copy), `scratch/` (its builds and tests), and `runs/` (each simulation run's source copy, removed after its output is saved) |
 

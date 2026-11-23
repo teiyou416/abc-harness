@@ -55,7 +55,9 @@ The package `src/abc_harness/` has one folder per layer: `agent/`, `tools/`,
 
 - Tests live in `tests/`. Plain tests run offline with no Docker and no API
   key. Tests that need Docker carry `@pytest.mark.docker`, and tests that call
-  a real model or API carry `@pytest.mark.live`.
+  a real model or API carry `@pytest.mark.live`. The judge evaluation, which
+  scores the gold cases in `tests/fixtures/judge/` with a real model, carries
+  `@pytest.mark.judge_eval` and runs only with `make eval-judge`.
 - Every behaviour change gets a test. A bug fix adds the case that would have
   caught the bug.
 - **Prove the test can fail.** Break the code it guards, watch it go red, and

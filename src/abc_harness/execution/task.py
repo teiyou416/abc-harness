@@ -26,6 +26,7 @@ from abc_harness.execution.limits import Budget, LimitReached
 from abc_harness.execution.report import write_json, write_report
 from abc_harness.execution.runner import Runner, RunnerError, RunOutcome
 from abc_harness.execution.trace import Trace
+from abc_harness.execution.trace_check import check_task
 from abc_harness.execution.workspace import Workspace
 from abc_harness.literature.pdf import (
     OUTPUT_FILE,
@@ -422,7 +423,27 @@ class Task:
         self.trace.event("task_finished", status=status, stop_reason=stop_reason,
                          active_seconds=self.budget.active_seconds, llm_calls=self.budget.llm_calls)  # fmt: skip
         self.trace.close()
+        if self.executed is not None:
+            self._check_evidence()
         return TaskResult(self.task_id, self.artifact_dir, status, stop_reason, self.records, self.summary)
+
+    def _check_evidence(self) -> None:
+        """Run `trace check` on the closed task and keep its verdict in trace_check.json.
+
+        Only a task that executed a plan has evidence to check. The check reads the finished artifacts and
+        changes none of them; a failure of the check itself is recorded, never raised.
+        """
+        try:
+            code, lines = check_task(self.artifact_dir)
+        except (ArithmeticError, AttributeError, LookupError, OSError, TypeError, ValueError) as e:
+            # check_task reports unreadable evidence itself; this keeps a checker bug from failing an ended task
+            code, lines = 3, [f"ERROR: the check itself failed: {type(e).__name__}: {e}"]
+        verdict = {0: "PASS", 1: "FAIL", 2: "INSUFFICIENT"}.get(code, "ERROR")
+        write_json(self.artifact_dir / "trace_check.json", {
+            "verdict": verdict, "exit_code": code, "lines": lines,
+            "checked_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "rerun": "uv run abc-harness trace check <this directory>",
+        })  # fmt: skip
 
 
 def run_task(

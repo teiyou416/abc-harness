@@ -32,8 +32,8 @@ from abc_harness.execution.limits import Budget, LimitReached
 from abc_harness.execution.runner import Runner, RunnerError
 from abc_harness.execution.task import FAILED, NOT_EXECUTED, STOPPED, DecideFn, Task, TaskResult
 from abc_harness.literature.figures import media_type
-from abc_harness.literature.library import Library, Literature
-from abc_harness.literature.pdf import PARSER_IMAGE, PdfError
+from abc_harness.literature.library import Library, Literature, library_pdfs, sync_index
+from abc_harness.literature.pdf import PARSER_IMAGE
 from abc_harness.tools import HANDLERS, TOOLS, EndTask, ToolContext, ToolError, ToolOutput
 from abc_harness.tools.base import AskFn
 
@@ -68,7 +68,7 @@ class Agent:
     # ----- the loop -----
 
     def run(self, question: str, preface: str = "") -> tuple[str, str]:
-        """Run the loop. `preface` is harness text added after the question, e.g. the papers the researcher supplied."""
+        """Run the loop. `preface` is harness text added after the question, e.g. the local library's papers."""
         self.question = question
         system = system_prompt()
         first = "\n\n".join(p for p in (question, preface, limits_note(self.task.budget)) if p)
@@ -221,7 +221,6 @@ def run_agent_task(
     limits: ContextLimits | None = None,
     literature: Literature | None = None,
     on_start: Callable[[Path], None] | None = None,
-    papers: Sequence[Path] = (),
     on_event: Callable[[dict[str, Any]], None] | None = None,
     preface: str = "",
     previous_tasks: dict[str, Path] | None = None,
@@ -230,35 +229,39 @@ def run_agent_task(
 ) -> TaskResult:
     """Run one agent task.
 
-    `papers` are PDFs the researcher supplied; they are parsed before the first model call. In a chat session,
-    `preface` is the harness's account of the earlier tasks, added to the first message, and `previous_tasks`
-    are their artifact directories, which the agent may read. PDFs under `library_dir`, the researcher's local
-    library, are listed for the agent and parsed only when it reads one.
+    PDFs under `library_dir`, the researcher's local library, are listed for the agent and parsed only when it
+    reads one. In a chat session, `preface` is the harness's account of the earlier tasks, added to the first
+    message, and `previous_tasks` are their artifact directories, which the agent may read.
     """
     previous_tasks = previous_tasks or {}
     limits = limits or ContextLimits()
     task = Task(runner, runs_root, budget, redact=redact, on_event=on_event, mode="agent", question=question, model=model.name,
+                effort=getattr(model, "effort", None),
                 prompts=prompt_hashes(), context_limits=limits.__dict__,
                 literature_services=literature.services if literature else [],
-                supplied_papers=[p.name for p in papers], session_id=session_id,
+                session_id=session_id,
                 previous_tasks=list(previous_tasks), local_library=str(library_dir) if library_dir else None)  # fmt: skip
     if on_start:
         on_start(task.artifact_dir)
-    agent = Agent(task, model, ask, review, limits)
-    agent.tools.previous_tasks = dict(previous_tasks)
-    agent.tools.sees_images = getattr(model, "sees_images", True)
-    try:
-        runner.image_info(PARSER_IMAGE)
-        convert = task.convert_pdf
-    except RunnerError:
-        convert = None  # without the parser image, PDFs cannot be read; arXiv HTML still can
-    shelf = local_library_pdfs(library_dir, papers)
-    if literature is not None or papers or shelf:
-        agent.tools.library = Library(task.artifact_dir, literature, convert)
     status, stop_reason = FAILED, "unknown"
-    try:
-        parts = [_supply_papers(agent.tools.library, papers) if papers else "",
-                 _shelve_papers(agent.tools.library, shelf, library_dir, task) if shelf else "", preface]
+    agent: Agent | None = None
+    try:  # from here on, any failure still ends in task.close(): the task gets a report and a reason
+        agent = Agent(task, model, ask, review, limits)
+        agent.tools.previous_tasks = dict(previous_tasks)
+        agent.tools.sees_images = getattr(model, "sees_images", True)
+        try:
+            runner.image_info(PARSER_IMAGE)
+            convert = task.convert_pdf
+        except RunnerError:
+            convert = None  # without the parser image, PDFs cannot be read; arXiv HTML still can
+        shelf = library_pdfs(library_dir) if library_dir else []
+        if len(shelf) > LIBRARY_WARN_PAPERS:
+            task.trace.event("library_large", library=str(library_dir), papers=len(shelf),
+                             threshold=LIBRARY_WARN_PAPERS)  # fmt: skip
+        if literature is not None or shelf:
+            agent.tools.library = Library(task.artifact_dir, literature, convert, library_dir=library_dir,
+                                          notify=lambda kind, fields: task.trace.event(kind, **fields))  # fmt: skip
+        parts = [_shelve_papers(agent.tools.library, shelf, library_dir, task) if shelf else "", preface]
         status, stop_reason = agent.run(question, "\n\n".join(p for p in parts if p))
     except EndTask as e:
         status, stop_reason = e.status, e.reason
@@ -272,54 +275,39 @@ def run_agent_task(
         status, stop_reason = FAILED, f"{type(e).__name__}: {e}"
         task.trace.event("error", error=stop_reason)
     finally:
-        execution = agent.tools.execution
+        execution = agent.tools.execution if agent else None
         if execution and status != STOPPED:
             # The simulation results stand even if the agent's last turn failed.
             run_status, run_reason = execution
             if (status, stop_reason) != execution:
                 run_reason = f"{run_reason}; afterwards: {stop_reason}"
             status, stop_reason = run_status, run_reason
-        task.manifest["context_windows"] = agent.history.window
+        if agent:
+            task.manifest["context_windows"] = agent.history.window
         result = task.close(status, stop_reason)
     return result
 
 
-def _supply_papers(library: Library | None, papers: Sequence[Path]) -> str:
-    """Parse the researcher's PDFs into the library and say so to the agent. A PDF that fails ends the task."""
-    assert library is not None
-    added = []
-    for path in papers:
-        try:
-            added.append(library.add_local(path))
-        except PdfError as e:
-            raise EndTask(FAILED, f"could not parse the supplied paper {path.name}: {e}") from e
-    lines = [("The researcher supplied these papers as PDFs. The harness has parsed them; open one with read_paper. "
-             "They can be cited like papers found by search_papers.")]  # fmt: skip
-    lines += [f"- `{p.id}`: {p.title}" for p in added]
-    return "\n".join(lines)
-
-
-def local_library_pdfs(library_dir: Path | None, supplied: Sequence[Path] = ()) -> list[Path]:
-    """The PDFs under the local library directory, minus any also supplied with --paper."""
-    if library_dir is None or not library_dir.is_dir():
-        return []
-    skip = {p.resolve() for p in supplied}
-    return sorted(p for p in library_dir.rglob("*") if p.suffix.lower() == ".pdf" and p.is_file() and p.resolve() not in skip)
+LIBRARY_WARN_PAPERS = 100  # above this, the terminal suggests tidying the local library
 
 
 def _shelve_papers(library: Library | None, pdfs: Sequence[Path], library_dir: Path | None, task: Task) -> str:
     """List the local library for the agent; nothing is parsed until it reads a paper."""
     assert library is not None and library_dir is not None
     lines = [(f"The researcher keeps these papers as PDFs in a local library ({library_dir}/). They are not parsed "
-              "yet: open one with read_paper only if you need it (the first parse takes 1 to 6 minutes, outside "
-              "the time limit). Before searching online, check this list; if a paper you need is here, read it "
-              "instead of searching for it. Once read, it can be cited like papers found by search_papers.")]  # fmt: skip
+              "yet: open one with read_paper when you need it (the first parse takes 1 to 6 minutes, outside the "
+              "time limit). A paper the researcher names in the request is the one they care about most: read it "
+              "first. Before searching online, check this list; if a paper you need is here, read it instead of "
+              "searching for it. Once read, it can be cited like papers found by search_papers.")]  # fmt: skip
+    index = {entry["path"]: entry for entry in sync_index(library_dir).values()}
     for path in pdfs:
-        label = f"{library_dir.name}/{path.relative_to(library_dir)}"
-        paper = library.shelve(path, label, task.cached_pdf_output(path))
+        relative = path.relative_to(library_dir).as_posix()
+        label = f"{library_dir.name}/{relative}"
+        paper = library.shelve(path, label, task.cached_pdf_output(path), index.get(relative))
         first = paper.abstract.split(". ")[0].strip()
         title = f" ({paper.title})" if paper.title != path.stem else ""
-        lines.append(f"- `{paper.id}`: {label}{title}" + (f". {first[:200]}" if first else ""))
+        arxiv = f" [arXiv {paper.arxiv_id}]" if paper.arxiv_id else ""
+        lines.append(f"- `{paper.id}`: {label}{title}{arxiv}" + (f". {first[:200]}" if first else ""))
     return "\n".join(lines)
 
 

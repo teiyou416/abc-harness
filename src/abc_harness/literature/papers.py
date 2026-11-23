@@ -42,7 +42,7 @@ class Paper:
 
     def full_text_note(self) -> str:
         if self.source == "local":
-            return "a PDF the researcher supplied; read_paper opens it"
+            return "a PDF in the researcher's local library; read_paper opens it"
         return "read_paper can fetch it" if self.arxiv_id else "not available (no arXiv version)"
 
 

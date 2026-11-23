@@ -18,6 +18,8 @@ from abc_harness.execution.figures import load_index
 from abc_harness.literature.library import Library
 from abc_harness.planning.plan import Plan
 
+ANSWER_FILE = "answer.md"  # the agent's final answer, also shown in report.md under "## Agent summary"
+
 
 def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
@@ -34,6 +36,10 @@ def write_report(
     manifest: dict[str, Any],
     summary: str | None = None,
 ) -> None:
+    if summary and summary.strip():
+        # The answer on its own, so readers need not find where it ends inside report.md: an answer may
+        # contain level-two headings of its own.
+        (artifact_dir / ANSWER_FILE).write_text(summary.strip() + "\n", encoding="utf-8")
     if plan is None:
         _write_planless_report(artifact_dir, manifest, summary)
         return

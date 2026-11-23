@@ -144,6 +144,11 @@ def test_end_of_input_counts_as_rejection(write_plan):
     assert decision == "reject"
 
 
+def test_empty_answer_approves(write_plan):
+    decision, _ = cli.prompt_decision(load_plan(write_plan()), read=lambda _p: "  ", write=lambda _s: None)
+    assert decision == "approve"
+
+
 def test_cli_rejection_starts_no_container(write_plan, tmp_path, monkeypatch, capsys):
     # Before approval the harness may only read the image ID it pins into the plan.
     def inspect_only(cmd, **kwargs):
@@ -217,3 +222,35 @@ def test_rerunning_a_saved_plan_reuses_its_version_and_image(write_plan, tmp_pat
     again = run_task(first.artifact_dir / "plan.json", runner, approve, runs_root=tmp_path / "runs")
     assert read_decisions(again.artifact_dir)[0].plan_version == read_decisions(first.artifact_dir)[0].plan_version
     assert runner.images[-1] == approved_id
+
+
+def test_an_executed_task_is_checked_when_it_ends(write_plan, tmp_path):
+    from abc_harness.interfaces.console import task_summary
+
+    result = run_task(write_plan(), FakeRunner(), approve, runs_root=tmp_path / "runs")
+    check = json.loads((result.artifact_dir / "trace_check.json").read_text())
+    assert check["verdict"] == "PASS" and check["exit_code"] == 0
+    assert "NOTE: measurements come from a test double." in check["lines"]
+    summary = "\n".join(task_summary(result.artifact_dir))
+    assert "Evidence check: PASS (" in summary and "measurements checked" in summary
+    # The check reads the artifacts and changes none: running it again by hand gives the same verdict.
+    from abc_harness.execution.trace_check import check_task
+    assert check_task(result.artifact_dir) == (0, check["lines"])
+
+
+def test_a_task_that_ran_nothing_is_not_checked(write_plan, tmp_path):
+    result = run_task(write_plan(), FakeRunner(), reject, runs_root=tmp_path / "runs")
+    assert not (result.artifact_dir / "trace_check.json").exists()
+
+
+def test_the_summary_shows_what_a_failed_check_found(write_plan, tmp_path):
+    from abc_harness.interfaces.console import task_summary
+
+    result = run_task(write_plan(), FakeRunner(), approve, runs_root=tmp_path / "runs")
+    check = {"verdict": "FAIL", "exit_code": 1, "lines": [
+        "PASS: trace.jsonl and approvals.jsonl: 4 recorded starts checked",
+        "FAIL: raw/base__seed-1/t90_ms: raw value 440.0 differs from results.json (441.0)"]}  # fmt: skip
+    (result.artifact_dir / "trace_check.json").write_text(json.dumps(check))
+    summary = task_summary(result.artifact_dir)
+    assert "Evidence check: FAIL; details in trace_check.json" in summary
+    assert "  FAIL: raw/base__seed-1/t90_ms: raw value 440.0 differs from results.json (441.0)" in summary

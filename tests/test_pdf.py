@@ -21,6 +21,7 @@ from abc_harness.execution.trace import read_trace
 from abc_harness.interfaces import cli
 from abc_harness.literature import Library
 from abc_harness.literature.http import FetchError
+from abc_harness.literature.library import library_pdfs
 from abc_harness.literature.pdf import NOTE, PARSER_IMAGE, TABLE_WARNING, PdfError, parse_structured
 
 FIXTURE = "tests/fixtures/pdf"
@@ -40,8 +41,9 @@ def structured(request):
 
 
 @pytest.fixture
-def supplied_pdf(tmp_path):
-    path = tmp_path / "My Paper.pdf"
+def library_pdf(tmp_path):
+    path = tmp_path / "papers" / "My Paper.pdf"
+    path.parent.mkdir()
     path.write_bytes(b"%PDF-1.4\nnot a real document; FakeRunner ignores it\n")
     return path
 
@@ -50,7 +52,8 @@ def run_agent(model, tmp_path, papers, runner=None, literature=None, review=None
     runner = runner or FakeRunner(clock=clock)
     budget = Budget(clock=clock) if clock else None
     return run_agent_task("Reproduce Table 1.", model, runner, lambda q: "", review or (lambda plan: ("approve", "")),
-                          runs_root=tmp_path / "runs", literature=literature, papers=papers, budget=budget)  # fmt: skip
+                          runs_root=tmp_path / "runs", literature=literature, budget=budget,
+                          library_dir=papers[0].parent if papers else None)  # fmt: skip
 
 
 # ----- MinerU output -----
@@ -86,10 +89,10 @@ def test_unsafe_image_paths_are_dropped_and_panels_merge():
     assert "$$ x = 1 $$" in parsed.lines
 
 
-# ----- supplied PDFs -----
+# ----- PDFs from the local library -----
 
 
-def test_supplied_pdf_is_parsed_before_the_agent_starts_and_can_be_cited(tmp_path, supplied_pdf):
+def test_a_library_pdf_is_parsed_when_opened_and_can_be_cited(tmp_path, library_pdf):
     clock = FakeClock()
     citations = [{"paper": PAPER, "supports": "PTO is exact", "quote": TEXT_QUOTE}, TABLE_READING]
     model = ScriptedModel([
@@ -99,10 +102,10 @@ def test_supplied_pdf_is_parsed_before_the_agent_starts_and_can_be_cited(tmp_pat
         run_last_proposed,
         text_turn("Done."),
     ])  # fmt: skip
-    result = run_agent(model, tmp_path, [supplied_pdf], clock=clock)
+    result = run_agent(model, tmp_path, [library_pdf], clock=clock)
     assert result.status == "completed", result.stop_reason
     first = model.calls[0][0]["content"]
-    assert first.startswith("Reproduce Table 1.") and f"`{PAPER}`: Efficient MDP Analysis" in first
+    assert first.startswith("Reproduce Table 1.") and f"`{PAPER}`: papers/My Paper.pdf" in first
     opened = model.calls[1][-1]["content"][0]["content"]
     assert NOTE in opened and "Figures and tables (view one with view_figure" in opened
     assert "- Table 1 (at line" in opened
@@ -110,30 +113,30 @@ def test_supplied_pdf_is_parsed_before_the_agent_starts_and_can_be_cited(tmp_pat
     assert [b["type"] for b in shown] == ["text", "image"] and shown[1]["source"]["media_type"] == "image/jpeg"
 
     task_dir = result.artifact_dir
-    assert (task_dir / "papers" / "local-my-paper.pdf").read_bytes() == supplied_pdf.read_bytes()
+    assert (task_dir / "papers" / "local-my-paper.pdf").read_bytes() == library_pdf.read_bytes()
     saved = json.loads((task_dir / "literature.json").read_text())
     assert saved["sources"][PAPER]["kind"] == "pdf" and saved["sources"][PAPER]["file"] == "My Paper.pdf"
     assert "mineru_pdf" in saved["services"]
     manifest = json.loads((task_dir / "manifest.json").read_text())
-    assert manifest["supplied_papers"] == ["My Paper.pdf"]
+    assert manifest["local_library"].endswith("papers")
     assert manifest["pdf_parse_seconds"] == 120.0 and manifest["active_seconds"] < 120
     assert manifest["pdf_parses"][0]["cached"] is False
     events = [e["event"] for e in read_trace(task_dir / "trace.jsonl")]
-    assert events.index("pdf_parse_finished") < events.index("model_call")
+    assert events.index("model_call") < events.index("pdf_parse_finished")  # parsed when opened, not before
     report = (task_dir / "report.md").read_text()
     assert "PDF parsing: 1 PDF(s); 120.0s, not counted in active runtime" in report
     assert "machine-recognized from [the PDF](papers/local-my-paper.pdf) by MinerU" in report
     assert "[image](papers/local-my-paper/pdf/images/page_7_table_15.jpg)" in report
 
 
-def test_a_quote_from_a_pdf_table_is_refused(tmp_path, supplied_pdf):
+def test_a_quote_from_a_pdf_table_is_refused(tmp_path, library_pdf):
     seen = []
     model = ScriptedModel([
         tool_turn("read_paper", {"paper": PAPER}),
         tool_turn("propose_plan", blocksim_plan(citations=[{"paper": PAPER, "supports": "x", "quote": TABLE_QUOTE}])),
         lambda messages: text_turn(last_tool_result(messages)["content"]),
     ])  # fmt: skip
-    result = run_agent(model, tmp_path, [supplied_pdf], review=lambda plan: seen.append(plan) or ("approve", ""))
+    result = run_agent(model, tmp_path, [library_pdf], review=lambda plan: seen.append(plan) or ("approve", ""))
     assert result.status == "not_executed" and seen == []
     assert "comes from a table recognized from the PDF" in model.calls[2][-1]["content"][0]["content"]
 
@@ -143,30 +146,21 @@ def test_a_quote_from_a_pdf_table_is_refused(tmp_path, supplied_pdf):
     ("timeout", "did not finish within 15 minutes"),
     ("garbage", "unreadable output"),
 ])  # fmt: skip
-def test_a_supplied_pdf_that_cannot_be_parsed_ends_the_task(tmp_path, supplied_pdf, behaviour, reason):
-    model = ScriptedModel([text_turn("never called")])
-    result = run_agent(model, tmp_path, [supplied_pdf], runner=FakeRunner(pdf_behaviour=behaviour))
-    assert result.status == "failed"
-    assert "could not parse the supplied paper My Paper.pdf" in result.stop_reason and reason in result.stop_reason
-    assert model.calls == []
+def test_a_library_pdf_that_cannot_be_parsed_is_reported_to_the_agent(tmp_path, library_pdf, behaviour, reason):
+    model = ScriptedModel([tool_turn("read_paper", {"paper": PAPER}), text_turn("Gave up.")])
+    result = run_agent(model, tmp_path, [library_pdf], runner=FakeRunner(pdf_behaviour=behaviour))
+    assert result.status == "not_executed"  # the task goes on without that paper
+    error = model.calls[1][-1]["content"][0]["content"]
+    assert error.startswith("the PDF could not be parsed") and reason in error
     if behaviour != "garbage":
         assert "pdf_parse_failed" in [e["event"] for e in read_trace(result.artifact_dir / "trace.jsonl")]
 
 
-def test_without_the_parser_image_a_supplied_pdf_ends_the_task(tmp_path, supplied_pdf):
+def test_without_the_parser_image_a_library_pdf_cannot_be_opened(tmp_path, library_pdf):
     runner = FakeRunner(missing_images={PARSER_IMAGE})
-    result = run_agent(ScriptedModel([text_turn("never called")]), tmp_path, [supplied_pdf], runner=runner)
-    assert result.status == "failed" and "has no PDF parser" in result.stop_reason
-
-
-def test_cli_checks_supplied_files_before_starting(tmp_path, capsys):
-    text = tmp_path / "notes.pdf"
-    text.write_text("plain text\n")
-    assert cli.main(["ask", "q", "--paper", str(tmp_path / "missing.pdf"), "--runs-dir", str(tmp_path)]) == 2
-    assert cli.main(["ask", "q", "--paper", str(text), "--runs-dir", str(tmp_path)]) == 2
-    err = capsys.readouterr().err
-    assert "no such file" in err and "not a PDF file" in err
-    assert list(tmp_path.iterdir()) == [text]  # no task was created
+    model = ScriptedModel([tool_turn("read_paper", {"paper": PAPER}), text_turn("Gave up.")])
+    run_agent(model, tmp_path, [library_pdf], runner=runner)
+    assert "has no PDF parser" in model.calls[1][-1]["content"][0]["content"]
 
 
 # ----- the arXiv PDF fallback -----
@@ -209,10 +203,10 @@ def test_without_a_parser_a_missing_html_stays_an_error(tmp_path, monkeypatch):
 # ----- cache and limits -----
 
 
-def test_the_same_pdf_and_parser_image_are_parsed_once(tmp_path, supplied_pdf):
+def test_the_same_pdf_and_parser_image_are_parsed_once(tmp_path, library_pdf):
     runner = FakeRunner()
-    first = run_agent(ScriptedModel([text_turn("Done.")]), tmp_path, [supplied_pdf], runner=runner)
-    second = run_agent(ScriptedModel([text_turn("Done.")]), tmp_path, [supplied_pdf], runner=runner)
+    first = run_agent(ScriptedModel([tool_turn("read_paper", {"paper": PAPER}), text_turn("Done.")]), tmp_path, [library_pdf], runner=runner)
+    second = run_agent(ScriptedModel([tool_turn("read_paper", {"paper": PAPER}), text_turn("Done.")]), tmp_path, [library_pdf], runner=runner)
     assert runner.pdf_calls == ["local-my-paper.pdf"]
     manifest = json.loads((second.artifact_dir / "manifest.json").read_text())
     assert manifest["pdf_parses"][0]["cached"] is True and manifest["pdf_parses"][0]["seconds"] == 120.0
@@ -220,14 +214,14 @@ def test_the_same_pdf_and_parser_image_are_parsed_once(tmp_path, supplied_pdf):
     assert (first.artifact_dir / "papers" / "local-my-paper.txt").read_text().splitlines()[2:] == \
         (second.artifact_dir / "papers" / "local-my-paper.txt").read_text().splitlines()[2:]  # fmt: skip
     runner.rebuild(PARSER_IMAGE)  # a new parser image parses again
-    run_agent(ScriptedModel([text_turn("Done.")]), tmp_path, [supplied_pdf], runner=runner)
+    run_agent(ScriptedModel([tool_turn("read_paper", {"paper": PAPER}), text_turn("Done.")]), tmp_path, [library_pdf], runner=runner)
     assert len(runner.pdf_calls) == 2
 
 
-def test_parse_time_does_not_count_toward_the_time_limit(tmp_path, supplied_pdf):
+def test_parse_time_does_not_count_toward_the_time_limit(tmp_path, library_pdf):
     clock = FakeClock()
     runner = FakeRunner(clock=clock, seconds_per_pdf=600)
-    result = run_agent(ScriptedModel([text_turn("Done.")]), tmp_path, [supplied_pdf], runner=runner, clock=clock)
+    result = run_agent(ScriptedModel([tool_turn("read_paper", {"paper": PAPER}), text_turn("Done.")]), tmp_path, [library_pdf], runner=runner, clock=clock)
     assert result.status == "not_executed"  # a 10-minute parse inside a 2-hour limit leaves it untouched
     manifest = json.loads((result.artifact_dir / "manifest.json").read_text())
     assert manifest["pdf_parse_seconds"] == 600 and manifest["active_seconds"] == 0
@@ -242,18 +236,18 @@ def test_budget_excludes_parsing():
     assert budget.active_seconds == 4 and budget.parsing_seconds == 100 and budget.remaining_seconds == 6
 
 
-def test_parse_error_message_names_the_missing_image(tmp_path, supplied_pdf):
+def test_parse_error_message_names_the_missing_image(tmp_path, library_pdf):
     task = Task(FakeRunner(missing_images={PARSER_IMAGE}), tmp_path / "runs")
     with pytest.raises(PdfError, match="abc-harness image build"):
-        task.convert_pdf(supplied_pdf, tmp_path / "out")
+        task.convert_pdf(library_pdf, tmp_path / "out")
 
 
 # ----- local library -----
 
 
-def run_with_library(model, tmp_path, library, runner, papers=()):
+def run_with_library(model, tmp_path, library, runner):
     return run_agent_task("Reproduce Table 1.", model, runner, lambda q: "", lambda plan: ("approve", ""),
-                          runs_root=tmp_path / "runs", papers=list(papers), library_dir=library)  # fmt: skip
+                          runs_root=tmp_path / "runs", library_dir=library)  # fmt: skip
 
 
 def test_the_local_library_is_listed_and_only_the_paper_read_is_parsed(tmp_path):
@@ -289,13 +283,131 @@ def test_the_local_library_is_listed_and_only_the_paper_read_is_parsed(tmp_path)
     assert runner.pdf_calls == ["local-my-paper.pdf"]
 
 
-def test_a_supplied_paper_is_not_listed_again_and_a_missing_library_is_ignored(tmp_path):
-    library = tmp_path / "papers"
-    library.mkdir()
-    (library / "My Paper.pdf").write_bytes(b"%PDF-1.4\n")
-    model = ScriptedModel([text_turn("Done.")])
-    run_with_library(model, tmp_path, library, FakeRunner(), papers=[library / "My Paper.pdf"])
-    assert "local library" not in model.calls[0][0]["content"]
+def test_a_missing_library_is_ignored(tmp_path):
     model = ScriptedModel([text_turn("Done.")])
     run_with_library(model, tmp_path, tmp_path / "absent", FakeRunner())
     assert "local library" not in model.calls[0][0]["content"]
+
+
+# ----- keeping papers in the local library (save_paper) -----
+
+ARXIV_TITLE = "Efficient MDP Analysis for Selfish-Mining in Blockchains"
+ARXIV_FILE = "Efficient MDP Analysis for Selfish-Mining in Blockchains.pdf"
+
+
+def agent_with_library(tmp_path, library, steps, literature=None, runner=None):
+    model = ScriptedModel(steps)
+    lines: list[str] = []
+    result = run_agent_task("q", model, runner or FakeRunner(), lambda q: "", lambda p: ("approve", ""),
+                            runs_root=tmp_path / "runs", literature=literature, library_dir=library,
+                            on_event=cli.Console(lines.append, color=False, live=False))  # fmt: skip
+    return result, model, lines
+
+
+def said(model, call):
+    return model.calls[call][-1]["content"][0]["content"]
+
+
+SEARCH_AND_READ = [tool_turn("search_papers", {"query": "selfish mining", "limit": 3}),
+                   tool_turn("read_paper", {"paper": "arxiv:2007.05614"})]  # fmt: skip
+
+
+def test_reading_a_paper_keeps_nothing(tmp_path):
+    library = tmp_path / "papers"
+    literature, _ = recorded_literature()
+    agent_with_library(tmp_path, library, [*SEARCH_AND_READ, text_turn("Done.")], literature)
+    assert library_pdfs(library) == []
+
+
+def test_save_paper_keeps_a_read_paper_in_a_folder_and_indexes_it(tmp_path, monkeypatch):
+    monkeypatch.setitem(RECORDED, "https://arxiv.org/pdf/2007.05614", "../pdf/handwritten.pdf")
+    library, runner = tmp_path / "papers", FakeRunner()
+    literature, _ = recorded_literature()
+    result, model, lines = agent_with_library(tmp_path, library, [
+        *SEARCH_AND_READ,
+        tool_turn("save_paper", {"paper": "arxiv:2007.05614", "folder": "security"}),
+        tool_turn("save_paper", {"paper": "arxiv:2007.05614"}),
+        text_turn("Done."),
+    ], literature, runner)  # fmt: skip
+    kept = library / "security" / ARXIV_FILE
+    assert kept.read_bytes().startswith(b"%PDF")
+    assert said(model, 3) == f"Saved in the researcher's local library as papers/security/{ARXIV_FILE}; the library index records it."
+    assert said(model, 4) == f"Not saved: the same arXiv id is already there, as papers/security/{ARXIV_FILE}."
+    index = json.loads((library / "index.json").read_text())
+    (entry,) = index.values()
+    assert entry["path"] == f"security/{ARXIV_FILE}" and entry["arxiv_id"] == "2007.05614"
+    assert entry["title"] == ARXIV_TITLE and entry["added_by_task"] == result.artifact_dir.name
+    assert f"✓ Saved to the local library: security/{ARXIV_FILE}" in lines
+    saved = json.loads((result.artifact_dir / "literature.json").read_text())
+    assert saved["kept_in_library"] == {"arxiv:2007.05614": f"security/{ARXIV_FILE}"}
+
+    # The researcher moves the file; the index follows it by content, and the next task reads it from arXiv.
+    moved = library / "mining" / "mdp.pdf"
+    moved.parent.mkdir()
+    kept.rename(moved)
+    literature, fetcher = recorded_literature()
+    _, model, _ = agent_with_library(tmp_path, library, [
+        tool_turn("read_paper", {"paper": "local:mdp"}), text_turn("Done.")], literature, runner)  # fmt: skip
+    assert f"`local:mdp`: papers/mining/mdp.pdf ({ARXIV_TITLE}) [arXiv 2007.05614]" in model.calls[0][0]["content"]
+    assert "# Source: https://arxiv.org/html/2007.05614" in said(model, 1)
+    assert runner.pdf_calls == [] and not any("/pdf/" in url for url, _ in fetcher.requests)
+    (entry,) = json.loads((library / "index.json").read_text()).values()
+    assert entry["path"] == "mining/mdp.pdf" and entry["arxiv_id"] == "2007.05614"
+
+
+def test_a_paper_already_kept_by_hand_is_found_by_its_title(tmp_path, monkeypatch):
+    monkeypatch.setitem(RECORDED, "https://arxiv.org/pdf/2007.05614", "../pdf/handwritten.pdf")
+    library = tmp_path / "papers"
+    library.mkdir()
+    (library / "Efficient MDP analysis for selfish mining in blockchains.pdf").write_bytes(b"%PDF-1.4\nmine\n")
+    literature, _ = recorded_literature()
+    _, model, _ = agent_with_library(tmp_path, library, [
+        *SEARCH_AND_READ, tool_turn("save_paper", {"paper": "arxiv:2007.05614"}), text_turn("Done.")], literature)  # fmt: skip
+    assert said(model, 3).startswith("Not saved: a paper with the same title is already there")
+    assert len(library_pdfs(library)) == 1
+
+
+@pytest.mark.parametrize(("args", "message"), [
+    ({"paper": "arxiv:2007.05614", "folder": "../outside"}, "folder must be"),
+    ({"paper": "doi:10.1109/icbc48266.2020.9169446"}, "read doi:10.1109/icbc48266.2020.9169446 with read_paper first"),
+])  # fmt: skip
+def test_save_paper_refuses_unsafe_folders_and_unread_papers(tmp_path, args, message):
+    library = tmp_path / "papers"
+    literature, _ = recorded_literature()
+    _, model, _ = agent_with_library(tmp_path, library, [
+        *SEARCH_AND_READ, tool_turn("save_paper", args), text_turn("Done.")], literature)  # fmt: skip
+    assert message in said(model, 3) and library_pdfs(library) == []
+
+
+def test_a_failed_download_is_reported_and_nothing_is_kept(tmp_path):
+    library = tmp_path / "papers"
+    literature, _ = recorded_literature()  # no recorded PDF: the download fails with 404
+    _, model, _ = agent_with_library(tmp_path, library, [
+        *SEARCH_AND_READ, tool_turn("save_paper", {"paper": "arxiv:2007.05614"}), text_turn("Done.")], literature)  # fmt: skip
+    assert "could not download the PDF" in said(model, 3) and library_pdfs(library) == []
+
+
+def test_a_large_library_is_reported(tmp_path):
+    library = tmp_path / "papers"
+    library.mkdir()
+    for i in range(101):
+        (library / f"Paper {i}.pdf").write_bytes(b"%PDF-1.4\n")
+    lines: list[str] = []
+    run_agent_task("q", ScriptedModel([text_turn("Done.")]), FakeRunner(), lambda q: "", lambda p: ("approve", ""),
+                   runs_root=tmp_path / "runs", library_dir=library,
+                   on_event=cli.Console(lines.append, color=False, live=False))  # fmt: skip
+    assert any(line.startswith("! The local library ") and "holds 101 PDFs, more than 100" in line for line in lines)
+
+
+def test_a_damaged_library_index_is_set_aside_not_overwritten(tmp_path):
+    from abc_harness.literature.library import sync_index
+
+    library = tmp_path / "papers"
+    library.mkdir()
+    (library / "a.pdf").write_bytes(b"%PDF-1.4 a")
+    (library / "index.json").write_text('{"truncated": ', encoding="utf-8")
+    index = sync_index(library)
+    (kept,) = library.glob("index.json.damaged-*")
+    assert kept.read_text() == '{"truncated": '
+    assert [e["path"] for e in index.values()] == ["a.pdf"]
+    assert json.loads((library / "index.json").read_text()) == index

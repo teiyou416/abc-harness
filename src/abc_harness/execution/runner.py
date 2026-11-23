@@ -217,4 +217,5 @@ def build_image(context: Path, tag: str) -> str:
 
 
 def running_containers(task_id: str) -> list[str]:
-    return _docker("ps", "-q", "--filter", f"label={TASK_LABEL}={task_id}", check=False).stdout.split()
+    """The task's running containers. A failed `docker ps` raises, so it cannot pass for "none left"."""
+    return _docker("ps", "-q", "--filter", f"label={TASK_LABEL}={task_id}").stdout.split()

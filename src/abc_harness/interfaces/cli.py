@@ -9,10 +9,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from abc_harness.agent.judge import JUDGE_EFFORT
 from abc_harness.agent.model import (
     API_KEY_NAMES,
     DEFAULT_EFFORT,
     DEFAULT_MODEL,
+    EFFORTS,
     MODELS,
     ModelUnavailable,
     make_model,
@@ -24,7 +26,7 @@ from abc_harness.execution.limits import DEFAULT_LLM_CALL_LIMIT, DEFAULT_TIME_LI
 from abc_harness.execution.runner import DockerRunner, build_image
 from abc_harness.execution.task import TaskResult, run_task
 from abc_harness.execution.trace import summarize_trace
-from abc_harness.interfaces.chat import ModelControl, check_papers, run_chat, terminal_reader
+from abc_harness.interfaces.chat import ModelControl, clean_runs, judge_task, run_chat, terminal_reader
 from abc_harness.interfaces.console import Console, task_summary
 from abc_harness.literature.pdf import PARSER_IMAGE
 from abc_harness.planning.plan import Plan, PlanError, load_plan
@@ -51,19 +53,20 @@ def prompt_decision(
 ) -> tuple[str, str]:
     """Show the plan and ask the researcher to decide.
 
-    End of input or an unreadable terminal counts as a rejection, so a closed
-    terminal never starts a run.
+    An empty answer (Enter) approves. End of input or an unreadable terminal
+    counts as a rejection, so a closed terminal never starts a run.
     """
     read = read or input
     choices = "approve/revise/reject" if allow_revise else "approve/reject"
+    shown = choices.replace("approve", "approve(default)", 1)
     write(plan.render())
     write("")
     while True:
         try:
-            answer = read(f"Approve this plan? [{choices}]: ").strip().lower()
+            answer = read(f"Approve this plan? [{shown}]: ").strip().lower()
         except (EOFError, OSError):
             return "reject", "no answer (input closed)"
-        if answer in ("approve", "a", "yes", "y"):
+        if answer in ("", "approve", "a", "yes", "y"):
             return "approve", ""
         if answer in ("reject", "no", "n") or (answer == "r" and not allow_revise):
             return "reject", _read_optional(read, "Reason (optional): ")
@@ -104,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--time-limit-seconds", type=float, default=DEFAULT_TIME_LIMIT_SECONDS,
                        help="active runtime limit per task (default: 7200)")  # fmt: skip
         p.add_argument("--quiet", action="store_true",
-                       help="do not print each model call, tool call, and run as it happens")  # fmt: skip
+                       help="hide live progress: the status line and the line kept for each tool call")  # fmt: skip
 
     run = sub.add_parser("run", help="review a plan file (TOML or plan.json) and run it after approval")
     run.add_argument("plan", type=Path)
@@ -112,13 +115,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     def agent_options(p: argparse.ArgumentParser) -> None:
         p.add_argument("--model", default=DEFAULT_MODEL)
-        p.add_argument("--effort", default=DEFAULT_EFFORT, choices=["low", "medium", "high", "xhigh", "max"])
+        p.add_argument("--effort", default=DEFAULT_EFFORT, choices=EFFORTS)
         p.add_argument("--llm-call-limit", type=int, default=DEFAULT_LLM_CALL_LIMIT, help="per task")
         p.add_argument("--env-file", type=Path, default=DEFAULT_ENV_FILE, help="file holding API keys")
-        p.add_argument("--paper", type=Path, action="append", default=[], metavar="PDF",
-                       help="a paper the agent should read, as a PDF file; repeat for several")  # fmt: skip
         p.add_argument("--library", type=Path, default=DEFAULT_LIBRARY_DIR, metavar="DIR",
-                       help="local PDFs the agent may open when needed, parsed on first read (default: papers)")  # fmt: skip
+                       help="the local library: PDFs the agent may open; name a paper in your request to have it read (default: papers)")  # fmt: skip
         task_options(p)
 
     ask = sub.add_parser("ask", help="describe an experiment; the agent drafts a plan for your approval")
@@ -129,6 +130,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     trace = sub.add_parser("trace", help="inspect task traces")
     trace_sub = trace.add_subparsers(dest="trace_command", required=True)
+    judge = sub.add_parser("judge", help="ask a model whether a finished task's answer follows from its results")
+    judge.add_argument("task", help="runs/<task_id>, or a task ID under --runs-dir")
+    judge.add_argument("--runs-dir", type=Path, default=Path("runs"))
+    judge.add_argument("--model", help="the judge model (default: the first one with a key that is not the task's own)")
+    judge.add_argument("--env-file", type=Path, default=DEFAULT_ENV_FILE, help="file holding API keys")
+    judge.add_argument("--yes", action="store_true", help="judge without asking after the cost estimate")
+    clean = sub.add_parser("clean", help="free disk space in runs/: sandbox files, and optionally old unrun tasks")
+    clean.add_argument("--runs-dir", type=Path, default=Path("runs"))
+    clean.add_argument("--older-than", type=float, metavar="DAYS",
+                       help="also remove whole tasks that ran no simulation (rejected, or no plan executed) "
+                            "and started more than DAYS days ago")  # fmt: skip
+    clean.add_argument("--yes", action="store_true", help="remove without asking; without it, only list")
     export = sub.add_parser("export", help="package a task's modified simulator source")
     export.add_argument("task", help="runs/<task_id>, or a task ID under --runs-dir")
     export.add_argument("--runs-dir", type=Path, default=Path("runs"))
@@ -149,9 +162,9 @@ def _chat(
     console = None if args.quiet else Console()
     current = {"model": model}
 
-    def switch(name: str) -> str | None:
+    def switch(name: str, effort: str | None = None) -> str | None:
         try:
-            current["model"] = make_model(name, args.effort, key)
+            current["model"] = make_model(name, effort or current["model"].effort, key)
         except ModelUnavailable as e:
             return str(e)
         return None
@@ -177,9 +190,28 @@ def _chat(
         )  # fmt: skip
 
     print(f"ABC Harness chat with {model.name}.")
-    models = ModelControl(lambda: current["model"].name, switch, available)
-    return run_chat(lambda: ChatSession(args.runs_dir, list(args.paper)), turn, read, show_answers=args.quiet,
-                    models=models)  # fmt: skip
+    def judge(task_dir: Path) -> None:
+        judge_task(task_dir, None, lambda name: make_model(name, JUDGE_EFFORT, key),
+                   lambda name: key(name) is not None, lambda: _confirm_yes(read), redact)  # fmt: skip
+
+    models = ModelControl(lambda: current["model"].name, switch, available,
+                          effort=lambda: current["model"].effort,
+                          set_effort=lambda level: switch(current["model"].name, level))
+    return run_chat(lambda: ChatSession(args.runs_dir), turn, read, show_answers=args.quiet,
+                    models=models, limits=lambda: (args.time_limit_seconds, args.llm_call_limit),
+                    judge=judge)  # fmt: skip
+
+
+def _key_lookup(secrets: Secrets) -> Callable[[str], str | None]:
+    return lambda name: secrets.get(name) if secrets.has(name) else None
+
+
+def _confirm_yes(read: Read) -> bool:
+    """Enter means yes: the researcher asked for the judgment already."""
+    try:
+        return read("Judge it? [Y/n]: ").strip().lower() in ("", "y", "yes")
+    except (EOFError, KeyboardInterrupt, OSError):
+        return False
 
 
 def _announce(artifact_dir: Path) -> None:
@@ -208,6 +240,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Built {tag} ({build_image(context, tag)})")
         return 0
 
+    if args.command == "judge":
+        task_dir = Path(args.task) if Path(args.task).is_dir() else args.runs_dir / args.task
+        secrets = Secrets.load(args.env_file, names=API_KEY_NAMES)
+        key = _key_lookup(secrets)
+        return judge_task(task_dir, args.model, lambda name: make_model(name, JUDGE_EFFORT, key),
+                          lambda name: key(name) is not None, lambda: args.yes or _confirm_yes(input),
+                          secrets.redact)  # fmt: skip
+
+    if args.command == "clean":
+        return clean_runs(args.runs_dir, args.older_than, confirm=lambda: args.yes,
+                          dry_run_hint="Run again with --yes to remove them.")  # fmt: skip
+
     if args.command == "export":
         task_dir = Path(args.task) if Path(args.task).is_dir() else args.runs_dir / args.task
         try:
@@ -234,15 +278,9 @@ def main(argv: list[str] | None = None) -> int:
         from abc_harness.agent.loop import run_agent_task
         from abc_harness.literature import HttpFetcher, Literature
 
-        problem = check_papers(args.paper)
-        if problem:
-            print(f"error: --paper {problem}", file=sys.stderr)
-            return 2
         secrets = Secrets.load(args.env_file, names=(*API_KEY_NAMES, S2_KEY))
 
-        def key(name: str) -> str | None:
-            return secrets.get(name) if secrets.has(name) else None
-
+        key = _key_lookup(secrets)
         try:
             model = make_model(args.model, args.effort, key)
         except ModelUnavailable as e:
@@ -262,7 +300,6 @@ def main(argv: list[str] | None = None) -> int:
             redact=secrets.redact,
             literature=literature,
             on_start=_announce,
-            papers=args.paper,
             library_dir=args.library,
             on_event=None if args.quiet else Console(),
         )

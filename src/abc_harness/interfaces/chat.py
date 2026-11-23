@@ -13,19 +13,29 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from abc_harness.agent.model import MODELS
+from abc_harness.agent.model import EFFORTS, MODELS
 from abc_harness.agent.session import ChatSession, Turn
-from abc_harness.execution.runner import DockerRunner, RunnerError
-from abc_harness.interfaces.console import Write, task_summary
-from abc_harness.literature.pdf import PARSER_IMAGE
+from abc_harness.execution.cleanup import LARGE_RUNS_BYTES, apply_cleanup, describe, dir_size, human_size, plan_cleanup
+from abc_harness.interfaces.console import (
+    CURRENCY_SIGNS,
+    Write,
+    cost_line,
+    estimated_cost,
+    judgment_lines,
+    task_summary,
+)
 
 Read = Callable[[str], str]
 PROMPT = "› "
 HELP = """Type a research request and press Enter (Alt+Enter for a new line). Each request runs as its own task.
   /tasks          list this conversation's tasks
-  /paper <pdf>    add a paper for the agent to read in every following task
   /model [name]   show the model, or switch the following tasks to another one
+  /effort [level] show the effort, or set it for the following tasks
+  /status         show the model, effort, limits, tasks, estimated cost, and disk use
+  /judge [n]      ask a model whether task n's answer (default: the latest with a plan) follows from its results
+  /clean [days]   free disk space: list sandbox files (and with days, unrun tasks older than that), then ask
   /new            start a new conversation; the agent forgets the earlier tasks
   /help           show this help
   /quit           leave (or Ctrl-D)
@@ -34,27 +44,14 @@ Ctrl-C while a task runs stops that task and returns here."""
 
 @dataclass
 class ModelControl:
-    """How the chat shows and switches the model. `switch` returns why it refused, or None."""
+    """How the chat shows and switches the model and its effort. `switch` and `set_effort` return why they
+    refused, or None."""
 
     current: Callable[[], str]
     switch: Callable[[str], str | None]
     available: Callable[[], list[str]]
-
-
-def check_papers(papers: list[Path], parser_check: Callable[[], None] | None = None) -> str | None:
-    """Why the given PDF files cannot be used, or None. Checked before any task starts."""
-    for path in papers:
-        if not path.is_file():
-            return f"{path}: no such file"
-        with path.open("rb") as f:
-            if f.read(5) != b"%PDF-":
-                return f"{path}: not a PDF file"
-    if papers:
-        try:
-            (parser_check or (lambda: DockerRunner().image_info(PARSER_IMAGE)))()
-        except RunnerError:
-            return f"reading a PDF needs the PDF parser image {PARSER_IMAGE}; run `abc-harness image build --only pdf-parser`"
-    return None
+    effort: Callable[[], str] | None = None
+    set_effort: Callable[[str], str | None] | None = None
 
 
 def run_chat(
@@ -62,16 +59,21 @@ def run_chat(
     run_turn: Callable[[ChatSession, str], Turn],
     read: Read,
     write: Write = print,
-    parser_check: Callable[[], None] | None = None,
     show_answers: bool = False,
     models: ModelControl | None = None,
+    limits: Callable[[], tuple[float, int]] | None = None,
+    judge: Callable[[Path], None] | None = None,
 ) -> int:
     """Run the conversation until the researcher leaves. Returns the exit status.
 
     `show_answers` prints each final answer after its task; leave it off when the live output already shows it.
+    `limits` returns the active runtime limit in seconds and the LLM call limit that each following task gets.
     """
     session = new_session()
     write(f"Conversation {session.session_id} (log: {session.dir / 'session.jsonl'}). /help lists the commands.")
+    size = dir_size(session.runs_root)
+    if size > LARGE_RUNS_BYTES:
+        write(f"{session.runs_root} uses {human_size(size)}; /clean lists what can be removed.")
     while True:
         try:
             line = read(PROMPT).strip()
@@ -89,19 +91,19 @@ def run_chat(
                 write(HELP)
             elif command == "/tasks":
                 write(_task_list(session))
+            elif command == "/status":
+                write(_status(session, models, limits))
+            elif command == "/judge":
+                _judge_command(session, argument.strip(), judge, write)
+            elif command == "/clean":
+                _clean_command(session.runs_root, argument.strip(), read, write)
             elif command == "/new":
                 session = new_session()
-                write(f"New conversation {session.session_id}; earlier tasks are forgotten. Papers are cleared too.")
+                write(f"New conversation {session.session_id}; earlier tasks are forgotten.")
             elif command == "/model":
                 write(_model_command(models, argument.strip()))
-            elif command == "/paper":
-                path = Path(argument.strip()).expanduser()
-                problem = check_papers([path], parser_check) if argument.strip() else "usage: /paper <file.pdf>"
-                if problem:
-                    write(f"! {problem}")
-                else:
-                    session.papers.append(path)
-                    write(f"Added {path.name}; every following task in this conversation reads it.")
+            elif command == "/effort":
+                write(_effort_command(models, argument.strip().lower()))
             else:
                 write(f"! unknown command {command}; /help lists the commands")
             continue
@@ -121,10 +123,144 @@ def run_chat(
 def _task_list(session: ChatSession) -> str:
     if not session.turns:
         return "No task yet in this conversation."
-    rows = [f"{i}. {t.task_id}  {t.status}  {t.model}  {' '.join(t.question.split())[:60]}"
+    rows = [f"{i}. {t.task_id}  {'reply (no plan)' if t.is_reply else t.status}  {t.model}{f' ({t.effort})' if t.effort else ''}  "
+            f"{' '.join(t.question.split())[:60]}"
             for i, t in enumerate(session.turns, 1)]  # fmt: skip
-    papers = f"\nPapers: {', '.join(p.name for p in session.papers)}" if session.papers else ""
-    return "\n".join(rows) + papers
+    return "\n".join(rows)
+
+
+def _status(
+    session: ChatSession, models: ModelControl | None, limits: Callable[[], tuple[float, int]] | None
+) -> str:
+    lines = [f"Conversation {session.session_id} (log: {session.dir / 'session.jsonl'})"]
+    if models is not None:
+        effort = f", effort {models.effort()}" if models.effort else ""
+        lines.append(f"Model: {models.current()}{effort} (for the following tasks)")
+    if limits is not None:
+        seconds, calls = limits()
+        lines.append(f"Limits per task: {seconds:g} s of active runtime, {calls} LLM calls")
+    lines.append(f"Disk: {session.runs_root} uses {human_size(dir_size(session.runs_root))}; /clean frees space")
+    if not session.turns:
+        lines.append("Tasks: none yet")
+        return "\n".join(lines)
+    counts: dict[str, int] = {}
+    totals: dict[str, float] = {}
+    priced, unknown = set[str](), set[str]()
+    for t in session.turns:
+        if not t.is_reply:
+            counts[t.status] = counts.get(t.status, 0) + 1
+        trace = t.artifact_dir / "trace.jsonl"
+        if trace.exists():
+            costs, p, u = estimated_cost(trace, t.model)
+            for currency, amount in costs.items():
+                totals[currency] = totals.get(currency, 0.0) + amount
+            priced, unknown = priced | p, unknown | u
+    tasks = sum(counts.values())
+    by_status = f" ({', '.join(f'{n} {s}' for s, n in counts.items())})" if tasks else ""
+    lines.append(f"Tasks with a plan: {tasks}{by_status}; replies without a plan: {len(session.turns) - tasks}; "
+                 "/tasks lists both")  # fmt: skip
+    lines.append(cost_line(totals, priced, unknown) if priced or unknown else "Estimated cost: no model call yet")
+    return "\n".join(lines)
+
+
+def _judge_command(
+    session: ChatSession, argument: str, judge: Callable[[Path], None] | None, write: Write
+) -> None:
+    if judge is None:
+        write("! this chat cannot judge tasks")
+        return
+    if argument:
+        if not argument.isdigit() or not 1 <= int(argument) <= len(session.turns):
+            write(f"! /judge takes a task number from /tasks (1 to {len(session.turns)}), not {argument!r}")
+            return
+        turn = session.turns[int(argument) - 1]
+    else:
+        planned = [t for t in session.turns if not t.is_reply]
+        if not planned:
+            write("! no task in this conversation has a plan to judge")
+            return
+        turn = planned[-1]
+    judge(turn.artifact_dir)
+
+
+def judge_task(
+    task_dir: Path, model_name: str | None, make: Callable[[str], Any], has_key: Callable[[str], bool],
+    confirm: Callable[[], bool], redact: Callable[[str], str], write: Write = print,
+) -> int:
+    """Check the task can be judged, show the judge and its estimated cost, and judge it if `confirm()` says yes.
+
+    `make(name)` builds the judge's model client. Returns the exit status: 0 judged or declined, 1 the judge
+    gave no verdict, 2 the task cannot be judged or no judge model is available.
+    """
+    from abc_harness.agent.judge import JUDGE_EFFORT, JudgeRefused, default_model, judge, prepare
+    from abc_harness.agent.model import ModelUnavailable
+
+    try:
+        prepared = prepare(task_dir, redact)
+    except JudgeRefused as e:
+        write(f"! cannot judge {task_dir.name}: {e}")
+        return 2
+    name = model_name or default_model(prepared.task_model, has_key)
+    if name is None:
+        write("! no judge model: add a key for a model other than the task's own to .env, or pass --model")
+        return 2
+    try:
+        model = make(name)
+    except ModelUnavailable as e:
+        write(f"! {e}")
+        return 2
+    same = " (the task's own model, which tends to favour its own answers)" if name == prepared.task_model else ""
+    estimate = prepared.estimate(name)
+    if estimate:
+        typical, most, currency = estimate
+        sign = CURRENCY_SIGNS.get(currency, currency + " ")
+        cost = f"about {sign}{typical:.3f}, at most {sign}{most:.3f} at list prices"
+    else:
+        cost = "cost unknown (no list price)"
+    write(f"Judge {task_dir.name} with {name}{same}, effort {JUDGE_EFFORT}: {cost}.")
+    if not confirm():
+        write("Not judged.")
+        return 0
+    record = judge(prepared, model)
+    for line in judgment_lines(record):
+        write(line)
+    return 0 if record["status"] == "scored" else 1
+
+
+def _clean_command(runs_root: Path, argument: str, read: Read, write: Write) -> None:
+    try:
+        days = float(argument) if argument else None
+    except ValueError:
+        write(f"! /clean takes a number of days, not {argument!r}")
+        return
+
+    def confirm() -> bool:
+        try:
+            return read("Remove these? [y/N]: ").strip().lower() in ("y", "yes")
+        except (EOFError, KeyboardInterrupt):
+            return False
+
+    clean_runs(runs_root, days, confirm, write)
+
+
+def clean_runs(
+    runs_root: Path, older_than_days: float | None, confirm: Callable[[], bool], write: Write = print,
+    dry_run_hint: str = "Nothing was removed.",
+) -> int:
+    """List what a cleanup would remove, and remove it only if `confirm()` says yes. Returns the exit status."""
+    removals = plan_cleanup(runs_root, older_than_days)
+    if not removals:
+        write(f"Nothing to remove in {runs_root}.")
+        return 0
+    write(f"These can be removed from {runs_root} (raw output, plans, approvals, traces, and reports of other "
+          "tasks are kept):")  # fmt: skip
+    for line in describe(removals, runs_root):
+        write(line)
+    if not confirm():
+        write(dry_run_hint)
+        return 0
+    write(f"Removed {human_size(apply_cleanup(removals))}.")
+    return 0
 
 
 def _model_command(models: ModelControl | None, name: str) -> str:
@@ -139,6 +275,20 @@ def _model_command(models: ModelControl | None, name: str) -> str:
     spec = MODELS.get(name)
     note = " It cannot see images: figures in papers and its own figures are not shown to it." if spec and not spec.sees_images else ""
     return f"The following tasks use {name}.{note} Earlier tasks keep the model they ran with."
+
+
+def _effort_command(models: ModelControl | None, level: str) -> str:
+    if models is None or models.effort is None or models.set_effort is None:
+        return "! this chat cannot change the effort"
+    if not level:
+        return (f"Effort: {models.effort()}\nLevels: {', '.join(EFFORTS)}\n"
+                "Set it with /effort <level>; it applies to the following tasks.")  # fmt: skip
+    if level not in EFFORTS:
+        return f"! unknown effort {level!r}; choose one of: {', '.join(EFFORTS)}"
+    problem = models.set_effort(level)
+    if problem:
+        return f"! {problem}"
+    return f"The following tasks use effort {level}. Earlier tasks keep the effort they ran with."
 
 
 def terminal_reader(history_file: Path) -> Read:

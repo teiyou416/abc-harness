@@ -13,8 +13,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
 
+from abc_harness.agent.judge import latest as latest_judgment
 from abc_harness.agent.model import price_for
-from abc_harness.execution.trace import read_trace, summarize_trace
+from abc_harness.execution.trace import MODEL_CALL_EVENTS, read_trace, summarize_trace
 
 Write = Callable[[str], None]
 
@@ -25,8 +26,9 @@ TARGET_KEYS = ("path", "pattern", "query", "command", "name", "simulator", "pape
 
 
 class Console:
-    """Live progress: one status line, redrawn in place, says what the task is doing now; milestones,
-    errors, and the final answer stay on screen above it. Details stay in trace.jsonl and history.md.
+    """Live progress: one status line, redrawn in place, says what the task is doing now; each tool call,
+    milestones, errors, and the final answer stay on screen above it. Details stay in trace.jsonl and
+    history.md.
 
     The status line is drawn only on a terminal (`live`); elsewhere only the lasting lines are written.
     """
@@ -108,6 +110,8 @@ class Console:
             return f"\033[32m{word}\033[0m" + line[len(word):]
         if line.startswith("!"):
             return f"\033[31m{line}\033[0m"
+        if line.startswith("●"):
+            return f"\033[36m●\033[0m{line[1:]}"
         return line
 
     def _describe(self, e: dict[str, Any]) -> tuple[str | None, list[str]]:
@@ -134,7 +138,8 @@ class Console:
             target = ""
             if self._pending_tools and self._pending_tools[0].get("name") == name:
                 target = _target(self._pending_tools.pop(0).get("input"))
-            return f"Using {name}" + (f" {target}" if target else ""), []
+            action = name + (f" {target}" if target else "")
+            return f"Using {action}", [f"● {action}"]
         if kind == "tool_call" and e.get("is_error"):
             return None, [f"! {e.get('tool', '')}: {_short(e.get('result', ''))}"]
         if kind == "pdf_parse_started":
@@ -170,6 +175,11 @@ class Console:
             return None, ["✓ Validation passed" if e.get("passed") else "! Validation failed"]
         if kind in ("pdf_parse_failed", "error", "cleanup_failed"):
             return None, [f"! {kind.replace('_', ' ')}: {_short(e.get('error', ''))}"]
+        if kind == "library_paper_added":
+            return None, [f"✓ Saved to the local library: {e.get('file', '')}"]
+        if kind == "library_large":
+            return None, [(f"! The local library {e.get('library')}/ holds {e.get('papers')} PDFs, more than "
+                           f"{e.get('threshold')}; every task lists them all, so consider removing some.")]
         if kind == "limit_reached":
             return None, [f"! Limit reached: {_short(e.get('detail', ''))}"]
         return None, []
@@ -221,7 +231,9 @@ def task_summary(task_dir: Path) -> list[str]:
         time_line += f", {manifest['pdf_parse_seconds']:.1f}s parsing PDFs (not counted)"
     lines.append(time_line)
     if trace.get("model_calls"):
-        lines.append(f"Model: {trace['model_calls']} calls of {(manifest.get('limits') or {}).get('llm_call_limit')}, "
+        compactions = f" ({trace['compactions']} summarizing the context)" if trace.get("compactions") else ""
+        lines.append(f"Model: {trace['model_calls']} calls of {(manifest.get('limits') or {}).get('llm_call_limit')}"
+                     f"{compactions}, "
                      f"{trace.get('model_latency_seconds', 0):.1f}s waiting for answers; tokens {tokens_in:,} in "
                      f"({cached:,} from cache), {tokens.get('output_tokens', 0):,} out")  # fmt: skip
     if trace.get("model_calls"):
@@ -232,19 +244,57 @@ def task_summary(task_dir: Path) -> list[str]:
     if records:
         done = sum(r.get("status") == "completed" for r in records)
         lines.append(f"Simulation runs: {done} of {len(records)} completed")
+    lines += _evidence_lines(task_dir)
+    record = latest_judgment(task_dir)
+    if record:
+        lines += judgment_lines(record)
     lines.append(f"Report: {task_dir / 'report.md'}")
     return lines
 
 
-def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[float, set[str], set[str]]:
-    """(USD, models priced, models without a known price) over every model call, summary calls included.
+CURRENCY_SIGNS = {"USD": "$", "CNY": "¥"}
+
+
+def judgment_lines(record: dict[str, Any]) -> list[str]:
+    """A judgment for the terminal, always labelled as model-assessed."""
+    who = f"{record['judge_model']}, model-assessed" + (", the task's own model" if record.get("same_model_as_task")
+                                                         else "")  # fmt: skip
+    if record["status"] != "scored":
+        return [f"Judge ({who}): no verdict: {record['reason']}"]
+    lines = [f"Judge ({who}): {record['dimension']} {record['score']}/10. {record['reason']}"]
+    lines += [f"  faulted: \"{s}\"" for s in record.get("faulted") or []]
+    return lines
+
+
+def _evidence_lines(task_dir: Path, shown: int = 5) -> list[str]:
+    """The verdict of the automatic `trace check`, with its problems when it did not pass."""
+    check = _read_json(task_dir / "trace_check.json")
+    if not check:
+        return []
+    passes = [line.removeprefix("PASS: ") for line in check["lines"] if line.startswith("PASS: ")]
+    warnings = [line for line in check["lines"] if line.startswith("WARN: ")]
+    if check["verdict"] == "PASS" and not warnings:
+        return [f"Evidence check: PASS ({'; '.join(passes)})"]
+    problems = [line for line in check["lines"] if not line.startswith(("PASS: ", "NOTE: "))]
+    verdict = check["verdict"] + (f" with {len(warnings)} warning(s)" if warnings else "")
+    lines = [f"Evidence check: {verdict}; details in trace_check.json"]
+    lines += [f"  {p}" for p in problems[:shown]]
+    if len(problems) > shown:
+        lines.append(f"  … and {len(problems) - shown} more")
+    return lines
+
+
+def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[dict[str, float], set[str], set[str]]:
+    """(total per currency, models priced, models without a known price) over every model call, summary calls
+    included. Currencies stay apart: a conversation may mix USD-priced and CNY-priced models.
 
     Each call is priced by the model that answered it (a server-side fallback may answer with another model),
     from its own usage: uncached input, output (thinking included), cache reads, and cache writes.
     """
-    total, priced, unknown = 0.0, set(), set()
+    totals: dict[str, float] = {}
+    priced, unknown = set(), set()
     for e in read_trace(trace_file):
-        if e["event"] not in ("model_call", "compaction"):
+        if e["event"] not in MODEL_CALL_EVENTS:
             continue
         model = str(e.get("model") or default_model)
         price = price_for(model)
@@ -253,18 +303,26 @@ def estimated_cost(trace_file: Path, default_model: str = "") -> tuple[float, se
             continue
         priced.add(model)
         when = datetime.fromisoformat(e["ts"]) if e.get("ts") else None  # DeepSeek prices by time of day
-        total += price.cost(e.get("usage") or {}, when)
-    return total, priced, unknown
+        totals[price.currency] = totals.get(price.currency, 0.0) + price.cost(e.get("usage") or {}, when)
+    return totals, priced, unknown
 
 
 def estimated_cost_line(trace_file: Path, default_model: str = "") -> str:
-    total, priced, unknown = estimated_cost(trace_file, default_model)
+    return cost_line(*estimated_cost(trace_file, default_model))
+
+
+def cost_line(totals: dict[str, float], priced: set[str], unknown: set[str]) -> str:
     if not priced:
         return f"Estimated cost: unknown (no list price for {', '.join(sorted(unknown))})"
-    line = f"Estimated cost: ${total:.2f} at list prices for {', '.join(sorted(priced))} (an estimate, not a bill)"
+    amount = " + ".join(f"{CURRENCY_SIGNS.get(c, c + ' ')}{v:.2f}" for c, v in sorted(totals.items(), key=_usd_first))
+    line = f"Estimated cost: {amount} at list prices for {', '.join(sorted(priced))} (an estimate, not a bill)"
     if unknown:
         line += f"; calls to {', '.join(sorted(unknown))} are not included"
     return line
+
+
+def _usd_first(item: tuple[str, float]) -> tuple[bool, str]:
+    return item[0] != "USD", item[0]
 
 
 def _read_json(path: Path) -> Any:

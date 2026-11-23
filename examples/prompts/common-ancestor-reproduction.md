@@ -31,10 +31,10 @@ new task of the same conversation.
 
 ## 中文
 
-启动（带上论文；每个任务默认有 2 小时）：
+启动（论文放在 papers/ 里，agent 会在本地库清单里看到它；每个任务默认有 2 小时）：
 
 ```bash
-uv run abc-harness chat --paper papers/common_anchestor.pdf
+uv run abc-harness chat
 ```
 
 第一条提示词：
@@ -65,10 +65,10 @@ uv run abc-harness chat --paper papers/common_anchestor.pdf
 
 ## 日本語
 
-起動（論文を渡す。1 タスクの制限時間は既定で 2 時間）：
+起動（論文は papers/ に置く。エージェントはローカルライブラリの一覧で見つける。1 タスクの制限時間は既定で 2 時間）：
 
 ```bash
-uv run abc-harness chat --paper papers/common_anchestor.pdf
+uv run abc-harness chat
 ```
 
 最初のプロンプト：
@@ -99,10 +99,10 @@ uv run abc-harness chat --paper papers/common_anchestor.pdf
 
 ## English
 
-Start (with the paper; each task has 2 hours by default):
+Start (the paper is in papers/, where the agent finds it in the local library; each task has 2 hours by default):
 
 ```bash
-uv run abc-harness chat --paper papers/common_anchestor.pdf
+uv run abc-harness chat
 ```
 
 First prompt:

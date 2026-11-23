@@ -17,8 +17,8 @@ flowchart TB
 
     subgraph LOOP["Agent: agent/"]
         CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft and hard context limits"]
-        LLM["Model client: agent/model.py<br/>only holder of the API keys<br/>Claude or DeepSeek"]
-        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_files, search_papers, read_paper,<br/>view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan,<br/>make_figure"]
+        LLM["Model client: agent/model.py<br/>only holder of the API keys<br/>Claude, DeepSeek, or Kimi"]
+        TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_files, search_papers, read_paper,<br/>save_paper, view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan,<br/>make_figure"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
     end
 
@@ -46,7 +46,7 @@ flowchart TB
     end
 
     subgraph ART["runs/task_id/"]
-        FILES["approvals.jsonl, plans/, plan.json<br/>raw/, changes/, results.json<br/>report.md, manifest.json<br/>trace.jsonl, history.md"]
+        FILES["approvals.jsonl, plans/, plan.json<br/>raw/, changes/, results.json<br/>report.md, answer.md, manifest.json<br/>trace.jsonl, history.md<br/>trace_check.json"]
     end
 
     subgraph LIT["Literature: literature/"]
@@ -57,9 +57,9 @@ flowchart TB
 
     ENV[(".env")] -->|keys| LLM
     ENV -->|optional S2 key| LIB
-    TOOLS -->|search_papers, read_paper, view_figure| LIB
+    TOOLS -->|search_papers, read_paper, save_paper, view_figure| LIB
     LIB <-->|HTTPS from the host| ACADEMIC(["OpenAlex, Semantic Scholar, arXiv"])
-    R -->|--paper or /paper PDF| LIB
+    R -->|PDFs in the local library| LIB
     LIB -->|parse a PDF, via the task| RUNNER
     LIB --> FILES
     LLM <-->|Messages API| CLAUDE(["Claude API"])
@@ -91,20 +91,22 @@ checks that every module appears in this table.
 | Layer (high to low) | File | What it does |
 |---|---|---|
 | Entry | `interfaces/__init__.py` | Names the entry points of the package. |
-| Entry | `interfaces/cli.py` | Commands `image build`, `run`, `ask` (with `--paper`), `chat`, `trace summary`, `trace check`, `export`; shows plans and questions in the terminal. Holds no task logic. |
+| Entry | `interfaces/cli.py` | Commands `image build`, `run`, `ask`, `chat`, `trace summary`, `trace check`, `export`, `clean`; shows plans and questions in the terminal. Holds no task logic. |
 | Entry | `interfaces/chat.py` | The `chat` loop: reads a line (prompt_toolkit, with history), runs slash commands, sends anything else to the chat session, and turns Ctrl-C during a task into stopping that task. |
-| Entry | `interfaces/console.py` | Shows a status line redrawn in place for the current action, with milestones, errors, and the final answer above it (`Console`) and the run statistics at the end of a task (`task_summary`). |
+| Entry | `interfaces/console.py` | Shows a status line redrawn in place for the current action, with each tool call, milestones, errors, and the final answer above it (`Console`) and the run statistics at the end of a task (`task_summary`). |
 | Entry | `__init__.py` | Version number and the `abc-harness` entry point. |
 | Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
-| Agent | `agent/session.py` | A chat session: runs each request as a new task, writes the earlier tasks into the next task's first message from their records, and logs the session in `runs/sessions/<id>/session.jsonl`. |
-| Agent | `agent/model.py` | The model client for Anthropic's Messages API and DeepSeek's Anthropic-compatible one; the list of supported models with their provider, list price, and whether they see images; the only code that receives a model API key. Caps connection attempts at 5 seconds and retries transient failures up to three times within the remaining task time. The terminal shows each retry and its delay. |
+| Agent | `agent/session.py` | A chat session: runs each request as a new task, writes the earlier tasks into the next task's first message from their records, logs the session in `runs/sessions/<id>/session.jsonl`, and moves each chat reply (a task that proposed no plan) to `runs/sessions/<id>/replies/` when it ends. |
+| Agent | `agent/model.py` | The model client for Anthropic's Messages API and the Anthropic-compatible ones of DeepSeek and Moonshot (Kimi); the list of supported models with their provider, list price, and whether they see images; the only code that receives a model API key. Caps connection attempts at 5 seconds and retries transient failures up to three times within the remaining task time. The terminal shows each retry and its delay. |
+| Agent | `agent/judge.py` | The on-demand judge: builds its input from a finished task's artifacts, calls one model, parses the verdict, and appends it to `judge.jsonl`. |
 | Agent | `agent/context.py` | Token estimates, `history.md`, and the message that starts a new window. |
 | Agent | `agent/secrets.py` | Reads API keys from `.env` and redacts them from traces. |
-| Agent | `agent/prompts/` | `SOUL.md` (identity), `rules.md` (workflow), `compact.md` (summary instructions). |
+| Agent | `agent/prompts/` | `SOUL.md` (identity), `rules.md` (workflow), `compact.md` (summary instructions), `judge.md` (the judge's rubric). |
 | Tools | `tools/__init__.py` | The explicit list of tools the agent can call. |
 | Tools | `tools/base.py` | `ToolContext` (shared task state), `ToolOutput` (a result with images), `ToolError` (refusal), `EndTask` (ends the task). |
 | Tools | `tools/describe_simulator.py` | Returns a simulator's capability card. |
 | Tools | `tools/search_papers.py` | Searches the first-round venues, or everything when broadened. |
+| Tools | `tools/save_paper.py` | Keeps a paper the agent read in the local library, optionally in a folder, after checking the library index for the same file, arXiv id, DOI, or title. |
 | Tools | `tools/read_paper.py` | Opens a paper's full text (arXiv HTML, or a PDF parsed by MinerU) in `papers/` and returns its source, outline, and figure and table list. |
 | Tools | `tools/view_figure.py` | Shows the model one figure (or, for a PDF, a table) as an image and records that it was viewed. |
 | Tools | `tools/read_file.py` | Reads lines of a file, or lists a folder, under the roots in `tools/paths.py`, nothing else. |
@@ -122,12 +124,14 @@ checks that every module appears in this table.
 | Execution | `execution/runner.py` | Docker: one container per simulation run, sandbox command, or PDF parse, no network, label-based cleanup. |
 | Execution | `execution/workspace.py` | The original, edited, and scratch trees; which paths a write may touch; the diff of the edits. |
 | Execution | `execution/figures.py` | Runs one figure script in the plot image with the results read-only, checks its PNG, and keeps script, PNG, SVG, and log in `figures/` with `figures/index.json`. |
+| Execution | `execution/cleanup.py` | `abc-harness clean` and `/clean`: lists, then on confirmation removes, the sandbox files in `workspace/scratch/` of ended tasks (leaving a `REMOVED.md` note) and, with an age limit, whole tasks that ran no simulation. Never removes raw output or evidence of other tasks. |
 | Execution | `execution/export.py` | `abc-harness export`: packages the edited source with the plan, diff, and validation result. |
 | Execution | `execution/limits.py` | The active-time and model-call limits; waiting for the researcher and PDF parsing do not count. |
 | Execution | `execution/trace.py` | Writes `trace.jsonl`, passes each redacted event to an optional listener (the live terminal output), and summarises it. |
-| Execution | `execution/trace_check.py` | Audits approval and validation order and checks saved result tables offline. |
+| Execution | `execution/grounding.py` | Grounded numbers: finds each number of the agent's final answer in what the task saw or produced (tool results, the researcher's messages, plan, results, report tables), never in the agent's own words; `trace check` reports one without a source as a warning. |
+| Execution | `execution/trace_check.py` | Audits approval and validation order and checks saved result tables offline; `execution/task.py` also runs it when a task that executed a plan ends and keeps the verdict in `trace_check.json`. |
 | Execution | `execution/recompute.py` | Independent standard-library metric calculations, also available as the standalone recomputation script. |
-| Execution | `execution/report.py` | Writes `report.md`, `results.json`, and `manifest.json`. |
+| Execution | `execution/report.py` | Writes `report.md`, `answer.md` (the final answer alone), `results.json`, and `manifest.json`. |
 | Planning | `planning/plan.py` | Plan format, validation, version hash, and the text the researcher reviews. |
 | Planning | `planning/approval.py` | Records decisions in `approvals.jsonl` and refuses unapproved versions. |
 | Literature | `literature/__init__.py` | The public names of the literature layer. |
@@ -157,7 +161,7 @@ interfaces/cli.py -> agent/loop.py <-> agent/model.py
 ## Agent tools
 
 The agent has thirteen tools, one module each in `tools/`: `describe_simulator`,
-`read_file`, `search_files`, `search_papers`, `read_paper`, `view_figure`, `ask_researcher`,
+`read_file`, `search_files`, `search_papers`, `read_paper`, `save_paper`, `view_figure`, `ask_researcher`,
 `propose_plan`, `write_file`, `edit_file`, `run_command` (sandbox exec),
 `run_plan`, and `make_figure`. The three code tools work only after the researcher approved a plan
 with permitted edits; `make_figure` works only after a plan ran, needs no
@@ -170,7 +174,7 @@ proposed plan in code before the researcher sees it, records each decision
 itself, and refuses `run_plan` for any plan version without a recorded
 approval. A rejection ends the task without another model call. A plan's
 citations pass only if each paper came from `search_papers` in the same task
-or was supplied by the researcher,
+or was opened from the local library,
 and its quote appears verbatim in the paper's abstract or saved full text or
 its figure reading names a figure the agent viewed, with an uncertainty.
 
@@ -183,9 +187,20 @@ agent remembers of the conversation is a block the harness writes from the
 earlier tasks' records (question, plan, results table, figures, the agent's
 final answer; the latest five in full), added to the new task's first
 message; the earlier artifact directories are readable at
-`previous/<task_id>/`. Papers must be found again in each task before they
-are cited; papers added with `/paper` or `--paper` are parsed into every task
-of the session (the parse cache makes this instant).
+`previous/<task_id>/`. Papers must be found or opened again in each task
+before they are cited; the parse cache makes reopening a library PDF instant.
+
+## Judge
+
+`abc-harness judge` and `/judge` call `agent/judge.py`, which builds the
+judge's input from the task's saved artifacts, calls one model through
+`agent/model.py` (so the key, retries, and pricing are the same as for the
+agent), parses its JSON verdict, and appends it to `judge.jsonl`. It runs
+only after the task ended and only when `trace_check.json` has no `FAIL`; it
+reads artifacts and writes nothing else. The rubric is
+`agent/prompts/judge.md`, and its SHA-256 goes into each record, so a score
+can be traced to the exact prompt. Limits are in
+[project-spec.md](project-spec.md#limits).
 
 ## Data flow
 
@@ -199,11 +214,14 @@ of the session (the parse cache makes this instant).
    full texts. The harness performs every request from the host, so the
    execution images stay offline, and records each paper in `literature.json`.
    A full text comes from arXiv's HTML or, when there is none, from the arXiv
-   PDF parsed in the PDF parser image. PDFs the researcher supplies with
-   `ask --paper` are parsed before step 2 and listed in the first message.
-   PDFs in the local library (`--library`, default `papers/`) are listed
+   PDF parsed in the PDF parser image. PDFs in the local library (`--library`, default `papers/`) are listed
    there unparsed, with the title from an earlier parse if the parse cache
-   has one; `read_paper` parses one when the agent opens it.
+   has one; `read_paper` parses one when the agent opens it. Reading keeps
+   nothing; `save_paper` copies a read paper's PDF into the library (or a
+   folder of it), named by its title. The library's `index.json` maps each
+   file's SHA-256 to its path, title, arXiv id, and DOI, follows files the
+   researcher moves, and is checked before saving so no paper is kept twice.
+   Later tasks read a kept arXiv paper from arXiv's HTML.
 5. The model drafts a plan. The harness checks its citations, pins the execution image's ID into
    it, the Human Interaction tool shows it to the researcher, and the harness
    records the decision for that plan version.

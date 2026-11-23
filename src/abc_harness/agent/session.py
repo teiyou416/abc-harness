@@ -7,11 +7,17 @@ block: the question, the plan, the results table, the figures, and the
 agent's final answer. The earlier artifact directories are readable at
 `previous/<task_id>/`. `runs/sessions/<session_id>/session.jsonl` lists the
 session's tasks in order.
+
+A task that ends without proposing a plan is a chat reply: once it ends, its
+artifact directory moves to `runs/sessions/<session_id>/replies/<task_id>/`, so
+`runs/` itself holds only tasks with a plan. A task with a plan never moves,
+so its paths stay valid while it runs.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -41,15 +47,20 @@ class Turn:
     stop_reason: str
     summary: str | None
     model: str = ""
+    effort: str | None = None
+
+    @property
+    def is_reply(self) -> bool:
+        """A chat reply: the task proposed no plan."""
+        return not _has_plan(self.artifact_dir)
 
 
 class ChatSession:
-    def __init__(self, runs_root: Path, papers: list[Path] | None = None) -> None:
+    def __init__(self, runs_root: Path) -> None:
         self.runs_root = runs_root
         self.session_id = new_task_id()
         self.dir = runs_root / "sessions" / self.session_id
         self.dir.mkdir(parents=True)
-        self.papers: list[Path] = list(papers or [])
         self.turns: list[Turn] = []
 
     def run_turn(
@@ -68,6 +79,7 @@ class ChatSession:
     ) -> Turn:
         """Run one request as a new task. A KeyboardInterrupt is recorded as an interrupted turn and re-raised."""
         started: list[Path] = []
+        effort = getattr(model, "effort", None)
 
         def start(artifact_dir: Path) -> None:
             started.append(artifact_dir)
@@ -77,26 +89,36 @@ class ChatSession:
         try:
             result = run_agent_task(
                 question, model, runner, ask, review, runs_root=self.runs_root, budget=budget(), redact=redact,
-                literature=literature, on_start=start, papers=self.papers, on_event=on_event,
+                literature=literature, on_start=start, on_event=on_event,
                 preface=self.preface(), previous_tasks={t.task_id: t.artifact_dir for t in self.turns},
                 session_id=self.session_id, library_dir=library_dir,
             )  # fmt: skip
-            turn = Turn(question, result.task_id, result.artifact_dir, result.status, result.stop_reason, result.summary,
-                        model.name)  # fmt: skip
+            turn = Turn(question, result.task_id, self._file(result.artifact_dir), result.status, result.stop_reason,
+                        result.summary, model.name, effort)  # fmt: skip
         except KeyboardInterrupt:
             if started:
                 manifest = _read_json(started[0] / "manifest.json") or {}
-                self._record(Turn(question, started[0].name, started[0], manifest.get("status", "failed"),
-                                  manifest.get("stop_reason", "interrupted by researcher"), None, model.name))  # fmt: skip
+                self._record(Turn(question, started[0].name, self._file(started[0]), manifest.get("status", "failed"),
+                                  manifest.get("stop_reason", "interrupted by researcher"), None, model.name, effort))  # fmt: skip
             raise
         self._record(turn)
         return turn
+
+    def _file(self, artifact_dir: Path) -> Path:
+        """Where an ended task's artifact directory belongs: unchanged for a task with a plan, under the session's
+        `replies/` for a chat reply."""
+        if _has_plan(artifact_dir) or not artifact_dir.exists():
+            return artifact_dir
+        replies = self.dir / "replies"
+        replies.mkdir(exist_ok=True)
+        return Path(shutil.move(str(artifact_dir), str(replies / artifact_dir.name)))
 
     def _record(self, turn: Turn) -> None:
         self.turns.append(turn)
         line = {"ts": datetime.now().astimezone().isoformat(timespec="seconds"), "turn": len(self.turns),
                 "question": turn.question, "task_id": turn.task_id, "task_dir": str(turn.artifact_dir),
-                "status": turn.status, "stop_reason": turn.stop_reason, "model": turn.model}  # fmt: skip
+                "status": turn.status, "stop_reason": turn.stop_reason, "model": turn.model, "effort": turn.effort,
+                "reply": turn.is_reply}  # fmt: skip
         with (self.dir / "session.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
@@ -110,7 +132,7 @@ class ChatSession:
             ("Each earlier request ran as its own task. Their files are read-only under `previous/<task_id>/`, "
             "for example `previous/<task_id>/report.md`; read them with read_file when you need a detail. "
             "This request is a new task: propose a new plan if it needs a simulation, and find a paper again "
-            "with search_papers before you cite it here."),
+            "with search_papers, or open it from the local library, before you cite it here."),
         ]
         older = self.turns[:-FULL_TASKS]
         if older:
@@ -151,6 +173,11 @@ def _describe(number: int, turn: Turn) -> list[str]:
             answer = answer[:MAX_ANSWER_CHARS] + f" [cut; the full answer is in previous/{turn.task_id}/report.md]"
         lines.append(f"Your final answer then: {answer}")
     return lines
+
+
+def _has_plan(artifact_dir: Path) -> bool:
+    plans = artifact_dir / "plans"
+    return plans.is_dir() and any(plans.iterdir())
 
 
 def _one_line(text: str, limit: int = 160) -> str:

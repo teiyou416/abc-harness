@@ -7,7 +7,7 @@ listed under each.
 ## Tasks and experiments
 
 **Task**:
-One research request, with one task ID, one artifact directory `runs/<task_id>/`, one trace, and one set of limits.
+One research request, with one task ID, one artifact directory `runs/<task_id>/`, one trace, and one set of limits. A chat reply's artifact directory moves into its chat session's directory when it ends.
 _Avoid_: job, session, run (a run is a simulation run)
 
 **Plan version**:
@@ -21,6 +21,10 @@ _Avoid_: experiment, trial, job
 **Chat session**:
 A conversation started with `abc-harness chat`. Each request in it runs as its own task; the next task learns about the earlier ones from a block the harness writes from their records.
 _Avoid_: thread, conversation task
+
+**Chat reply**:
+A task in a chat session that ended without proposing a plan. When it ends, the harness moves its artifact directory to `runs/sessions/<session_id>/replies/<task_id>/`, so `runs/` itself holds only tasks with a plan.
+_Avoid_: chat task, small talk
 
 **Task workspace**:
 `runs/<task_id>/workspace/`, the task's copy of the simulator source, where every file change for the task happens.
@@ -68,17 +72,21 @@ _Avoid_: plotting container, matplotlib sandbox
 
 ## Evidence
 
+**Judgment**:
+A model's score of whether a finished task's final answer is supported by its results, made only when the researcher asks (`abc-harness judge`, `/judge`) and recorded in `judge.jsonl`. It is advice labelled as model-assessed, never evidence, and never changes the task.
+_Avoid_: evaluation, grade, review (a review is the researcher's decision on a plan)
+
+**Grounded number**:
+A number in the agent's final answer that some number the task saw or produced rounds to: a tool result, the researcher's message, the plan, `results.json`, or a report table, never the agent's own words. `trace check` warns about each number that is not grounded; such a number is not a failure, since the agent may have derived it.
+_Avoid_: verified number, cited number
+
 **Found paper**:
-A paper that a literature search returned during the task. Found papers and supplied papers are the only ones that can be cited.
+A paper that a literature search returned during the task. Found papers and library papers the agent opened are the only ones that can be cited.
 _Avoid_: source, reference
 
-**Supplied paper**:
-A paper the researcher hands to a task as a PDF file. It is parsed before the agent starts and can be cited like a found paper.
-_Avoid_: local paper, uploaded paper, attachment
-
 **Local library**:
-The researcher's folder of PDFs (`papers/` unless `--library` names another). The agent sees every PDF in it listed by file name, and the harness parses one only when the agent opens it. A library paper the agent opened can be cited like a supplied paper.
-_Avoid_: paper folder, thesis folder
+The researcher's folder of PDFs (`papers/` unless `--library` names another). The agent sees every PDF in it listed by file name, and the harness parses one only when the agent opens it; the researcher points the agent at a paper by naming it in the request. A library paper the agent opened can be cited like a found paper. When the researcher asks, or a paper supports an approved plan, the agent can keep a paper it read in the library with `save_paper`, named by its title; the library's `index.json` records its arXiv id and DOI and prevents keeping it twice.
+_Avoid_: paper folder, thesis folder, supplied paper
 
 **PDF parser image**:
 The container image that turns one PDF into text, formulas, tables, and cropped figure images, without network. Its parse time does not count toward the task's time limit.
@@ -93,11 +101,11 @@ The venues every literature search starts from: FC, AFT, and ICBC. A broadened s
 _Avoid_: configured sources, default venues
 
 **Citation**:
-An entry in a plan that ties one found or supplied paper to the parameter, assumption, or metric it supports. Every citation rests on either a quote or a figure reading.
+An entry in a plan that ties one found or library paper to the parameter, assumption, or metric it supports. Every citation rests on either a quote or a figure reading.
 _Avoid_: reference, source
 
 **Quote**:
-A passage copied verbatim from a found or supplied paper's abstract or saved full text. The harness confirms it appears there, and refuses one taken from a table of machine-recognized text.
+A passage copied verbatim from a found or library paper's abstract or saved full text. The harness confirms it appears there, and refuses one taken from a table of machine-recognized text.
 _Avoid_: excerpt, snippet, evidence text
 
 **Figure reading**:

@@ -193,11 +193,13 @@ Tools and controls added while preparing M6, after real tasks showed they were n
 - `abc-harness chat` (`interfaces/chat.py`, `agent/session.py`): each request runs as its own task; the next task gets a harness-written account of the earlier ones and can read their files under `previous/`; Ctrl-C stops the running task; `/tasks`, `/paper`, `/model`, and `/new` manage the conversation. The command line moved to `interfaces/`.
 - Custom metrics: a plan with permitted edits can define metrics that the edited code prints as `ABC_METRIC <name>=<value>` lines, and built-in metrics are computed only when a plan asks for them.
 - Models: the list is fixed to `claude-opus-5-5` (default), `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-2`, `deepseek-v4-pro`, and `deepseek-flash`; DeepSeek runs through its Anthropic-compatible API with `DEEPSEEK_API_KEY`.
-- The terminal shows the current action (model call, tool, PDF parse, simulation run k/N) in one status line redrawn in place, keeps milestones and errors above it, and ends with run statistics, including a cost estimate at list prices (DeepSeek's off-peak prices by the time of each call).
+- The terminal shows the current action (model call, tool, PDF parse, simulation run k/N) in one status line redrawn in place, keeps each tool call, milestones, and errors above it, and ends with run statistics, including a cost estimate at list prices (DeepSeek's off-peak prices by the time of each call).
 - The default active-runtime limit is 2 hours instead of 30 minutes.
 - Added 2026-11-21: `abc-harness trace check` (`execution/trace_check.py`, `execution/recompute.py`) audits a saved task offline: approval and validation before each run, and raw output against `results.json` and `report.md` (`tests/test_trace_check.py`).
 - Added 2026-11-21: each model connection attempt waits at most 5 seconds; transient failures are retried within the remaining task time, and the terminal shows each retry (`tests/test_context.py`).
 - Added 2026-11-21: the local library: PDFs in `papers/` (or `--library`) are listed in the first message and parsed only when the agent opens one with `read_paper` (`tests/test_pdf.py`).
+- Added 2026-11-22: `--paper` and `/paper` are gone; the researcher names a paper in the local library in the request, and the agent opens it with `read_paper`.
+- Added 2026-11-22: `save_paper` keeps a paper the agent read in the local library, optionally in a folder, as a PDF named by its title; `papers/index.json`, keyed by file content, records arXiv id and DOI, follows moved files, and blocks duplicates. Later tasks read a kept arXiv paper from arXiv's HTML; above 100 PDFs the terminal warns (`tests/test_pdf.py`).
 - Added 2026-11-21: the default model is `deepseek-flash`, chosen by the maintainer; `--model` still picks any listed model.
 
 **Test doubles:** `FakeRunner` gained the plot container and printed custom metrics; the chat loop runs from a scripted input sequence.
@@ -209,6 +211,21 @@ Tools and controls added while preparing M6, after real tasks showed they were n
 - Custom metrics fixed a real failure: a task that relabelled `orphan_rate` as the attacker's revenue share failed because the unused `t90_ms` could not be computed.
 - DeepSeek with real chat tasks (2026-11-19): 88 `deepseek-flash` calls and 61 `deepseek-v4-pro` calls returned thinking, tool calls, and the cache usage fields the cost estimate reads; `deepseek-v4-pro` averaged about 29 s per call.
 - The 30-minute limit stopped two paper reproductions (tasks `20261119-231750-318e68` and `20261120-102217-6a74bc`); the second had completed 132 of 216 runs.
+
+## M5.2: Judge (added and done 2026-11-22)
+
+**What the researcher can do.** Ask a model whether a finished task's final answer is supported by its results, and see the score, the reason, and the sentences it faults, labelled as model-assessed.
+
+**Scope:** `agent/judge.py`, `agent/prompts/judge.md`, `abc-harness judge`, `/judge` in chat, `judge.jsonl`, and the latest judgment in the run statistics, as specified in [Judge](project-spec.md#judge). One dimension, `conclusion_supported`. Judged offline evaluation suites (DeepEval) come later.
+
+**Test doubles:** a scripted judge model returns fixed verdicts, unreadable JSON, and errors.
+
+**Acceptance (passed)**
+
+- Offline tests (`tests/test_judge.py`) cover input building, the `trace check` precondition, refusal of an unexecuted task, parsing, one retry then `no_verdict`, a timeout recorded as an error, the record, the summary line, the cost prompt, and `/judge` in chat.
+- Live (`test_real_judge_tells_an_overstated_answer_from_a_faithful_one`, 2026-11-22): `claude-sonnet-5-5` scored the overstated answer 2 and the faithful one 9, for about $0.007.
+- Judge evaluation (`make eval-judge`, `tests/test_judge_eval.py`, 2026-11-23): 26 gold cases in `tests/fixtures/judge/cases.json`, labelled good, bad, or grey; drafted by the agent, reviewed blind by a second agent (21 of 22 agreed; its one change, M1 to grey, was taken), and confirmed by the maintainer. A good case agrees at 6 or more and a bad one at 5 or less, the rubric's own bands; the first threshold, 7 and 4, was set before the rubric was compared and was changed after the first run, then checked with a second judge model. Agreement on the 24 scored cases: claude-sonnet-5-5 23 (the miss was a fixture that carried the original answer's evidence check, since fixed), deepseek-v4-pro 23 (it scored H3 6 while its reason named the fault). deepseek-v4-pro gave no verdict on the longest case: its thinking filled the 4,096-token output cap twice, so the cap is now 16,384 and a cut reply says so; it then scored that case in one call with 9,700 output tokens.
+- A real task (`20261121-233655-dc17ae`, judged on a copy): 6/10, faulting a comparison with a paper value the judge cannot see and a break-even claim made with five seeds, for about $0.018. The reason came back in English for a Chinese answer, against the rubric; not fixed yet.
 
 ## M6: MVP demonstration
 

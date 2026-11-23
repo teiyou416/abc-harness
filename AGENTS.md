@@ -45,11 +45,14 @@ as defined there, and add a term there before using a new one.
    check, or execution image requires a new plan version and fresh approval.
 4. **Enforce limits in code.** Write only inside the task workspace. There,
    change simulator source only in the files the approved plan permits, and
-   put builds and tests in `scratch/`. Enforce two limits per task, with the
-   values in [Limits](docs/project-spec.md#limits): active runtime,
-   excluding time spent waiting for the researcher or parsing PDFs (the PDF
-   parser has its own timeout), and LLM calls. At either limit, stop active
-   work, remove the task's containers, and preserve partial results.
+   put builds and tests in `scratch/`. The harness itself may save a paper the
+   agent read to the local library through `save_paper`; the agent never
+   writes there.
+   Enforce two limits per task, with the values in
+   [Limits](docs/project-spec.md#limits): active runtime, excluding time
+   spent waiting for the researcher or parsing PDFs (the PDF parser has its
+   own timeout), and LLM calls. At either limit, stop active work, remove the
+   task's containers, and preserve partial results.
 5. **Keep credentials private.** Every API key lives in `.env` (gitignored;
    `.env.example` lists the names). Pass each key only to the client that needs
    it, never through `os.environ`. Keep keys out of containers, traces,
@@ -84,6 +87,6 @@ model client.
 
 ## Commands
 
-`make check` (lint + offline tests) · `make test` · `make test-docker` · `make test-live` · `make lint` · `make fmt`
+`make check` (lint + offline tests) · `make test` · `make test-docker` · `make test-live` · `make eval-judge` · `make lint` · `make fmt`
 `make image` (build every image) · `make example` / `make example-blocksim` (review and run an example plan)
-`uv run abc-harness ask "<question>" [--paper paper.pdf]` (agent drafts a plan) · `uv run abc-harness chat` (conversation, one task per request) · `uv run abc-harness trace summary runs/<task_id>` · `uv run abc-harness export runs/<task_id>`
+`uv run abc-harness ask "<question>"` (agent drafts a plan) · `uv run abc-harness chat` (conversation, one task per request) · `uv run abc-harness trace summary runs/<task_id>` · `uv run abc-harness export runs/<task_id>` · `uv run abc-harness clean` (list removable sandbox files; `--yes` removes) · `uv run abc-harness judge runs/<task_id>`

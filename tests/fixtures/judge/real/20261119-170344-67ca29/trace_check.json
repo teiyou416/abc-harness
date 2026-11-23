@@ -1,0 +1,9 @@
+{
+ "lines": [
+  "NOTE: 15 runs recorded node0_block_share, a metric the plan did not list; the 2026-11-19 BlockSim adapter recorded it for every run. The planned metric stale_rate is unaffected.",
+  "INSUFFICIENT: trace.jsonl: 15 run start(s) without a plan version, or no plan.json",
+  "PASS: report.md Agent summary: 22 of 22 numbers found in the task's sources"
+ ],
+ "note": "the trace check of the original task, run on its full artifacts",
+ "fixture_note": "Edited for the judge evaluation: the original check had 15 FAIL lines 'results.json: unplanned metrics for <run>', all from that extra metric, replaced by the NOTE line above. Every other line is the original check's."
+}

@@ -269,11 +269,15 @@ def _model_command(models: ModelControl | None, name: str) -> str:
     if not name:
         listed = "\n".join(f"  {m}" for m in models.available())
         return f"Model: {models.current()}\nModels:\n{listed}\nSwitch with /model <name>; it applies to the following tasks."
+    before = models.effort() if models.effort else None
     problem = models.switch(name)
     if problem:
         return f"! {problem}"
     spec = MODELS.get(name)
     note = " It cannot see images: figures in papers and its own figures are not shown to it." if spec and not spec.sees_images else ""
+    after = models.effort() if models.effort else None
+    if before and after and after != before:
+        note += f" It has no effort {before}, so the effort is now {after}."
     return f"The following tasks use {name}.{note} Earlier tasks keep the model they ran with."
 
 

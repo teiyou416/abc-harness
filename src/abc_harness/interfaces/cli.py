@@ -17,6 +17,7 @@ from abc_harness.agent.model import (
     EFFORTS,
     MODELS,
     ModelUnavailable,
+    closest_effort,
     make_model,
 )
 from abc_harness.agent.secrets import DEFAULT_ENV_FILE, Secrets
@@ -164,7 +165,8 @@ def _chat(
 
     def switch(name: str, effort: str | None = None) -> str | None:
         try:
-            current["model"] = make_model(name, effort or current["model"].effort, key)
+            # Switching models keeps the effort, or moves to the nearest level the new model accepts.
+            current["model"] = make_model(name, effort or closest_effort(name, current["model"].effort), key)
         except ModelUnavailable as e:
             return str(e)
         return None

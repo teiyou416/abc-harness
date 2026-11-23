@@ -33,7 +33,8 @@ DIMENSION = "conclusion_supported"
 RECORD_FILE = "judge.jsonl"
 # The cheaper capable models first; the first one with a key that is not the task's own model judges by default.
 JUDGE_PREFERENCE = ("claude-sonnet-5-5", "kimi-k3.1-pro", "deepseek-v4-pro", "deepseek-flash", "claude-opus-5-5",
-                    "kimi-k3", "claude-haiku-5-5", "claude-fable-5-2", "kimi-k3.1-pro-highspeed")  # fmt: skip
+                    "kimi-k3", "claude-haiku-5-5", "claude-fable-5-2", "kimi-k3.1-pro-highspeed", "gpt-6.2-sol",
+                    "gpt-6.2-astra", "gpt-6-luna", "qwen4-max")  # fmt: skip
 TYPICAL_OUTPUT_TOKENS = 1000  # for the estimate; JUDGE_MAX_TOKENS bounds it
 # Length caps on each part of the judge's input, in characters.
 CAPS = {"question": 2000, "plan": 6000, "tables": 10000, "validation": 2000, "check": 3000, "answer": 8000}
@@ -116,6 +117,7 @@ def default_model(task_model: str, has_key: Callable[[str], bool]) -> str | None
 def judge(prepared: JudgeInput, model: ModelClient, now: Callable[[], datetime] = datetime.now) -> dict[str, Any]:
     """Call the judge, append its record to judge.jsonl, and return the record."""
     import anthropic  # imported where used, as in agent/model.py
+    import openai
 
     messages: list[dict[str, Any]] = [{"role": "user", "content": prepared.message}]
     usage: dict[str, int] = {}
@@ -129,7 +131,7 @@ def judge(prepared: JudgeInput, model: ModelClient, now: Callable[[], datetime] 
         except ModelDeadlineExceeded:
             error = f"the judge did not answer within {JUDGE_TIMEOUT_SECONDS:.0f} seconds"
             break
-        except anthropic.APIError as e:  # after the client's own retries; recorded, since a call was made
+        except (anthropic.APIError, openai.APIError) as e:  # after the client's own retries; recorded, since a call was made
             error = f"the judge's model API failed: {type(e).__name__} {getattr(e, 'status_code', '') or ''}".strip()
             break
         answered_by = turn.model or model.name

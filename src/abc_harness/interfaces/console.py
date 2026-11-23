@@ -20,7 +20,8 @@ from abc_harness.execution.trace import MODEL_CALL_EVENTS, read_trace, summarize
 Write = Callable[[str], None]
 
 PREVIEW_CHARS = 200
-SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+SPINNER = "₿|"  # a coin turning: its face, then its edge
+SPINNER_COLOR = "\033[38;5;214m"  # bitcoin gold
 # The tool argument that best says what a call is about, in this order.
 TARGET_KEYS = ("path", "pattern", "query", "command", "name", "simulator", "paper", "figure")
 
@@ -34,7 +35,7 @@ class Console:
     """
 
     def __init__(self, write: Write = print, color: bool | None = None, live: bool | None = None,
-                 stream: TextIO | None = None, tick_seconds: float = 0.1) -> None:  # fmt: skip
+                 stream: TextIO | None = None, tick_seconds: float = 0.2) -> None:  # fmt: skip
         self.write = write
         tty = sys.stdout.isatty()
         self.color = tty and "NO_COLOR" not in os.environ if color is None else color
@@ -98,7 +99,7 @@ class Console:
         text = f"{SPINNER[self._frame % len(SPINNER)]} {self.status} · {clock}"
         width = max(20, shutil.get_terminal_size().columns - 1)
         text = text if len(text) <= width else text[: width - 1] + "…"
-        self.stream.write("\r" + (f"\033[36m{text[0]}\033[0m{text[1:]}" if self.color else text))
+        self.stream.write("\r" + (f"{SPINNER_COLOR}{text[0]}\033[0m{text[1:]}" if self.color else text))
         self.stream.flush()
         self._drawn = True
 

@@ -106,7 +106,7 @@ suggests removing some.
 `--model` (and `/model` in chat) takes one of: `deepseek-flash` (default),
 `deepseek-v4-pro`, `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`,
 `claude-fable-5-2`, `kimi-k3.1-pro`, `kimi-k3.1-pro-highspeed`, `kimi-k3`, `gpt-6.2-sol`,
-`gpt-6.2-astra`, and `gpt-6-luna`. The DeepSeek models need `DEEPSEEK_API_KEY` in `.env`
+`gpt-6.2-astra`, `gpt-6-luna`, `qwen4-max`, and `qwen3.8-flash`. The DeepSeek models need `DEEPSEEK_API_KEY` in `.env`
 and send your question, papers, and results to DeepSeek's servers.
 `deepseek-v4-pro` cannot see images, so it cannot read figures in papers or
 check the figures it draws.
@@ -120,6 +120,13 @@ The OpenAI models `gpt-6.2-sol`, `gpt-6.2-astra`, and `gpt-6-luna` need
 `OPENAI_API_KEY` in `.env` and send your question, papers, and results to
 OpenAI's servers. Requests are sent with `store: false`, so OpenAI keeps no
 conversation. They accept effort `low`, `medium`, `high`, or `xhigh`.
+
+The Qwen models `qwen4-max` and `qwen3.8-flash` need `DASHSCOPE_API_KEY` in
+`.env`, from Alibaba Model Studio (Bailian) in the Beijing region, and send
+your question, papers, and results to Alibaba's servers. `qwen4-max` accepts
+effort `low`, `high`, or `xhigh`; `qwen3.8-flash` accepts `low`, `medium`, or
+`xhigh` and is treated as unable to see images until that is verified. Their
+cost estimate is in CNY (`¥`).
 
 `--effort` (and `/effort` in chat) sets how hard the model thinks: `low`,
 `medium`, `high` (default), `xhigh`, or `max`. Each task records its model and

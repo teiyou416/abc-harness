@@ -273,6 +273,29 @@ def test_kimi_uses_the_china_endpoint_and_only_its_effort_levels():
     assert request["output_config"] == {"effort": "high"} and "betas" not in request
 
 
+def test_qwen_uses_the_beijing_endpoint_enabled_thinking_and_each_models_own_options():
+    from abc_harness.agent.model import QWEN, ModelUnavailable, make_model, price_for
+
+    keys = {"DASHSCOPE_API_KEY": "sk-qwen-x"}
+    big, flash = make_model("qwen4-max", "xhigh", keys.get), make_model("qwen3.8-flash", "medium", keys.get)
+    assert big.provider is QWEN and big.sees_images and not flash.sees_images
+    assert str(big._client.base_url).startswith("https://dashscope.aliyuncs.com/apps/anthropic")
+    with pytest.raises(ModelUnavailable, match="accepts effort low, high, xhigh, not medium"):
+        make_model("qwen4-max", "medium", keys.get)
+    with pytest.raises(ModelUnavailable, match="accepts effort low, medium, xhigh, not high"):
+        make_model("qwen3.8-flash", "high", keys.get)
+    with pytest.raises(ModelUnavailable, match="needs DASHSCOPE_API_KEY in .env"):
+        make_model("qwen4-max", "high", {}.get)
+    sent_big, sent_flash = _capturing(big), _capturing(flash)
+    big.create("s", [{"role": "user", "content": "q"}], [])
+    flash.create("s", [{"role": "user", "content": "q"}], [])
+    (big_request,), (flash_request,) = sent_big["plain"], sent_flash["plain"]
+    assert big_request["thinking"] == {"type": "enabled"} and big_request["output_config"] == {"effort": "xhigh"}
+    assert big_request["cache_control"] == {"type": "ephemeral"} and "cache_control" not in flash_request
+    assert flash_request["system"][0]["cache_control"] == {"type": "ephemeral"}  # block-level caching stays
+    assert price_for("qwen4-max").currency == "CNY"
+
+
 def test_deepseek_requests_leave_out_the_anthropic_only_extras():
     from abc_harness.agent.model import make_model
 

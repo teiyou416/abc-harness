@@ -204,19 +204,22 @@ def test_real_model_reads_a_value_off_a_figure(tmp_path):
 
 
 @pytest.mark.parametrize("name", ["deepseek-flash", "deepseek-v4-pro", "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed",
-                                  "kimi-k3", "gpt-6.2-sol", "gpt-6.2-astra", "gpt-6-luna"])
+                                  "kimi-k3", "gpt-6.2-sol", "gpt-6.2-astra", "gpt-6-luna",
+                                  "qwen4-max", "qwen3.8-flash"])
 def test_compatible_provider_answers_a_tool_call_and_reports_usage(name):
     """A non-Anthropic provider takes the harness's request as sent (thinking, effort, cache_control; for OpenAI,
     its translation), calls a tool, and continues after the tool result with its own thinking blocks (OpenAI's
     encrypted reasoning items) passed back unchanged."""
-    from abc_harness.agent.model import MODELS, make_model
+    from abc_harness.agent.model import MODELS, efforts_of, make_model
     from abc_harness.tools import TOOLS
 
     key_name = MODELS[name].provider.key_name
     secrets = Secrets.load(ROOT / ".env", names=(key_name,))
     if not secrets.has(key_name):
         pytest.skip(f"{key_name} is not set in .env")
-    model = make_model(name, "high", lambda key: secrets.get(key) if secrets.has(key) else None)
+    efforts = efforts_of(MODELS[name])
+    effort = "high" if "high" in efforts else efforts[-1]  # qwen3.8-flash has no "high"
+    model = make_model(name, effort, lambda key: secrets.get(key) if secrets.has(key) else None)
     system = "You plan blockchain simulations. Use the tools."
     messages = [{"role": "user", "content": "Read the SimBlock capability card, then say in one sentence what "
                                             "SimBlock simulates."}]  # fmt: skip

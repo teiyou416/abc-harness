@@ -27,9 +27,10 @@ history.
   searches the source and task files; `chat` keeps a conversation of tasks
   with `/tasks`, `/model`, `/effort`, `/status`, `/clean`, and `/new`;
   `abc-harness clean` frees disk space without touching evidence. [M5.1]
-- Twelve models: four Claude models, two DeepSeek models, three Kimi models
+- Fourteen models: four Claude models, two DeepSeek models, three Kimi models
   (China platform; all three pass the live tool-call test, and `kimi-k3.1-pro` ran a full BlockSim task on
-  2026-11-23), and three OpenAI models (not yet verified against the live API); `deepseek-flash`
+  2026-11-23), three OpenAI models, and two Qwen models (Beijing region; OpenAI and Qwen not yet verified against the live
+  API); `deepseek-flash`
   is the default. [M5.1]
 - The terminal shows a status line for the current action, each tool call,
   milestones, and errors above it, and ends with run statistics, including
@@ -48,8 +49,8 @@ history.
   maintainer confirmed. 2026-11-23: claude-sonnet-5-5 agreed on 23 of 24
   scored cases ($0.24), deepseek-v4-pro on 23 of 24 ($0.13), though
   deepseek-v4-pro put four bad cases at exactly the boundary score 5. [M5.2]
-- `make check` runs ruff and 282 offline tests; `make test-docker` runs 11
-  Docker tests and `make test-live` runs 16 tests against the model APIs and
+- `make check` runs ruff and 283 offline tests; `make test-docker` runs 11
+  Docker tests and `make test-live` runs 18 tests against the model APIs and
   literature services.
 
 ## Broken or not verified

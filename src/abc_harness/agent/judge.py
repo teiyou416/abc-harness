@@ -34,7 +34,7 @@ RECORD_FILE = "judge.jsonl"
 # The cheaper capable models first; the first one with a key that is not the task's own model judges by default.
 JUDGE_PREFERENCE = ("claude-sonnet-5-5", "kimi-k3.1-pro", "deepseek-v4-pro", "deepseek-flash", "claude-opus-5-5",
                     "kimi-k3", "claude-haiku-5-5", "claude-fable-5-2", "kimi-k3.1-pro-highspeed", "gpt-6.2-sol",
-                    "gpt-6.2-astra", "gpt-6-luna")  # fmt: skip
+                    "gpt-6.2-astra", "gpt-6-luna", "qwen4-max")  # fmt: skip
 TYPICAL_OUTPUT_TOKENS = 1000  # for the estimate; JUDGE_MAX_TOKENS bounds it
 # Length caps on each part of the judge's input, in characters.
 CAPS = {"question": 2000, "plan": 6000, "tables": 10000, "validation": 2000, "check": 3000, "answer": 8000}

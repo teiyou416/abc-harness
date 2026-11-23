@@ -227,30 +227,6 @@ Tools and controls added while preparing M6, after real tasks showed they were n
 - Judge evaluation (`make eval-judge`, `tests/test_judge_eval.py`, 2026-11-23): 26 gold cases in `tests/fixtures/judge/cases.json`, labelled good, bad, or grey; drafted by the agent, reviewed blind by a second agent (21 of 22 agreed; its one change, M1 to grey, was taken), and confirmed by the maintainer. A good case agrees at 6 or more and a bad one at 5 or less, the rubric's own bands; the first threshold, 7 and 4, was set before the rubric was compared and was changed after the first run, then checked with a second judge model. Agreement on the 24 scored cases: claude-sonnet-5-5 23 (the miss was a fixture that carried the original answer's evidence check, since fixed), deepseek-v4-pro 23 (it scored H3 6 while its reason named the fault). deepseek-v4-pro gave no verdict on the longest case: its thinking filled the 4,096-token output cap twice, so the cap is now 16,384 and a cut reply says so; it then scored that case in one call with 9,700 output tokens.
 - A real task (`20261121-233655-dc17ae`, judged on a copy): 6/10, faulting a comparison with a paper value the judge cannot see and a break-even claim made with five seeds, for about $0.018. The reason came back in English for a Chinese answer, against the rubric; not fixed yet.
 
-## M5.3: Model benchmark (planned)
-
-**What the researcher can do.** Run the same benchmark tasks with several models, then compare in charts how often each model completes a task, how well its conclusions are supported, and what it costs, separately for tasks that need only parameters and tasks that need edits to simulator source.
-
-**Scope:** as specified in [Benchmark](project-spec.md#benchmark): approval by the benchmark command and its record, `parameter` and `code` benchmark tasks in `examples/bench/tasks.toml` (P1 to P3 and C1 to C2, agreed 2026-11-23), a benchmark command that runs the matrix and appends to `results.jsonl`, and a separate chart command (also `make bench-plot BENCH=<bench_id>`) that draws PNG charts from `results.jsonl` alone. matplotlib becomes a development dependency of the host, not of the execution image. No new evaluation framework: the signals are the task status, the validation verdict, `trace check`, the [judge](project-spec.md#judge), and the run statistics.
-
-**Order of work**
-
-1. Approval by the benchmark command: the approval record names who approved, with the spec change above.
-2. The benchmark command, the fixed reply to clarification questions, the plan deviation check, `results.jsonl`, and resuming an interrupted benchmark.
-3. The chart command.
-4. A pilot: two models on one `parameter` task and one `code` task, to measure the cost of one task of each kind.
-5. The maintainer chooses the full matrix (models, benchmark tasks, repetitions) from the pilot's cost.
-
-**Real components:** the listed models, the simulators, and the judge model.
-
-**Test doubles:** scripted models produce a plan that matches its benchmark task, a `code` plan that loosens the fixed validation check, a `parameter` plan that permits an edit, a clarification question, and a task stopped by a limit; the runner is `FakeRunner`. The chart command is tested on a fixed `results.jsonl`, including missing values.
-
-**Acceptance (planned)**
-
-- Offline tests cover the approval record naming the benchmark command, only the researcher approving outside a benchmark, each plan deviation recorded without changing the task's status, the clarification reply, one record per task with missing values kept missing, resuming without rerunning finished cells, and every chart drawn from a fixed `results.jsonl` with deviating tasks marked.
-- The pilot runs with real models and records its cost.
-- The full benchmark runs, its charts are drawn from `results.jsonl`, and the results, with their date and benchmark ID, go into `docs/status.md`.
-
 ## M6: MVP demonstration
 
 **What the researcher can do.** Compare honest mining and selfish mining across mining-power shares and inspect the measured reward share.

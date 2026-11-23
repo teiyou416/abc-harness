@@ -65,6 +65,5 @@ history.
 
 ## Next
 
-M5.3 in [development-plan.md](development-plan.md): a benchmark comparing the
-models on the same research tasks, then M6, the MVP demonstration, selfish
-versus honest mining.
+M6 in [development-plan.md](development-plan.md): the MVP demonstration,
+selfish versus honest mining.

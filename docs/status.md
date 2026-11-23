@@ -29,8 +29,8 @@ history.
   `abc-harness clean` frees disk space without touching evidence. [M5.1]
 - Fourteen models: four Claude models, two DeepSeek models, three Kimi models
   (China platform; all three pass the live tool-call test, and `kimi-k3.1-pro` ran a full BlockSim task on
-  2026-11-23), three OpenAI models, and two Qwen models (Beijing region; OpenAI and Qwen not yet verified against the live
-  API); `deepseek-flash`
+  2026-11-23), three OpenAI models, and two Qwen models (Beijing region); the OpenAI and Qwen models pass the live tool-call
+  test (2026-11-23) but have not yet run a full task; `deepseek-flash`
   is the default. [M5.1]
 - The terminal shows a status line for the current action, each tool call,
   milestones, and errors above it, and ends with run statistics, including

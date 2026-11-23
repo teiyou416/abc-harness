@@ -104,6 +104,15 @@ def efforts_of(spec: ModelSpec) -> tuple[str, ...]:
     return spec.efforts or spec.provider.efforts
 
 
+def closest_effort(name: str, effort: str) -> str:
+    """`effort` if the model accepts it, else its nearest accepted level, the lower one on a tie."""
+    spec = MODELS.get(name)
+    if spec is None or effort in efforts_of(spec) or effort not in EFFORTS:
+        return effort
+    rank = EFFORTS.index(effort)
+    return min(efforts_of(spec), key=lambda e: (abs(EFFORTS.index(e) - rank), EFFORTS.index(e)))
+
+
 def _deepseek(hit: float, miss: float, output: float) -> Price:
     """Peak prices, with off-peak at half. A cache miss is billed as plain input; there is no write charge."""
     off = Price(miss / 2, output / 2, hit / 2, miss / 2)

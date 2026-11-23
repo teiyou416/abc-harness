@@ -49,7 +49,7 @@ history.
   maintainer confirmed. 2026-11-23: claude-sonnet-5-5 agreed on 23 of 24
   scored cases ($0.24), deepseek-v4-pro on 23 of 24 ($0.13), though
   deepseek-v4-pro put four bad cases at exactly the boundary score 5. [M5.2]
-- `make check` runs ruff and 283 offline tests; `make test-docker` runs 11
+- `make check` runs ruff and 284 offline tests; `make test-docker` runs 11
   Docker tests and `make test-live` runs 18 tests against the model APIs and
   literature services.
 

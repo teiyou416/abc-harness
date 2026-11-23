@@ -130,7 +130,9 @@ cost estimate is in CNY (`¥`).
 
 `--effort` (and `/effort` in chat) sets how hard the model thinks: `low`,
 `medium`, `high` (default), `xhigh`, or `max`. Each task records its model and
-effort in `manifest.json`.
+effort in `manifest.json`. `/model` keeps the effort when the new model accepts
+it and otherwise moves to its nearest level (the lower one on a tie), and says
+so.
 
 ### Chat
 

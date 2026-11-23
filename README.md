@@ -105,7 +105,8 @@ suggests removing some.
 
 `--model` (and `/model` in chat) takes one of: `deepseek-flash` (default),
 `deepseek-v4-pro`, `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`,
-`claude-fable-5-2`, `kimi-k3.1-pro`, `kimi-k3.1-pro-highspeed`, and `kimi-k3`. The DeepSeek models need `DEEPSEEK_API_KEY` in `.env`
+`claude-fable-5-2`, `kimi-k3.1-pro`, `kimi-k3.1-pro-highspeed`, `kimi-k3`, `gpt-6.2-sol`,
+`gpt-6.2-astra`, and `gpt-6-luna`. The DeepSeek models need `DEEPSEEK_API_KEY` in `.env`
 and send your question, papers, and results to DeepSeek's servers.
 `deepseek-v4-pro` cannot see images, so it cannot read figures in papers or
 check the figures it draws.
@@ -114,6 +115,11 @@ The Kimi models `kimi-k3.1-pro`, `kimi-k3.1-pro-highspeed`, and `kimi-k3` need
 `MOONSHOT_API_KEY` in `.env`, from the China platform (platform.moonshot.cn),
 and send your question, papers, and results to Moonshot's servers. They accept
 only effort `low`, `high`, or `max`, and their cost estimate is in CNY (`¥`).
+
+The OpenAI models `gpt-6.2-sol`, `gpt-6.2-astra`, and `gpt-6-luna` need
+`OPENAI_API_KEY` in `.env` and send your question, papers, and results to
+OpenAI's servers. Requests are sent with `store: false`, so OpenAI keeps no
+conversation. They accept effort `low`, `medium`, `high`, or `xhigh`.
 
 `--effort` (and `/effort` in chat) sets how hard the model thinks: `low`,
 `medium`, `high` (default), `xhigh`, or `max`. Each task records its model and

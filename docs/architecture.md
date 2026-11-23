@@ -17,7 +17,7 @@ flowchart TB
 
     subgraph LOOP["Agent: agent/"]
         CTX["Context window: agent/context.py<br/>system = SOUL.md + rules.md<br/>soft and hard context limits"]
-        LLM["Model client: agent/model.py<br/>only holder of the API keys<br/>Claude, DeepSeek, or Kimi"]
+        LLM["Model client: agent/model.py<br/>only holder of the API keys<br/>Claude, DeepSeek, Kimi, or OpenAI"]
         TOOLS["Tools: tools/<br/>describe_simulator, read_file, search_files, search_papers, read_paper,<br/>save_paper, view_figure, ask_researcher, propose_plan,<br/>write_file, edit_file, run_command, run_plan,<br/>make_figure"]
         CTX --> LLM -->|tool request| TOOLS -->|tool result| CTX
     end
@@ -64,6 +64,7 @@ flowchart TB
     LIB --> FILES
     LLM <-->|Messages API| CLAUDE(["Claude API"])
     LLM <-->|Anthropic-compatible API| DEEPSEEK(["DeepSeek API"])
+    LLM <-->|Responses API| OPENAIAPI(["OpenAI API"])
     R --> ASK --> LOOP
     R --> RUN --> PLAN
     TOOLS --> PLAN
@@ -98,6 +99,7 @@ checks that every module appears in this table.
 | Agent | `agent/loop.py` | The agent loop: call the model, run the requested tools, compress the context at the soft limit. |
 | Agent | `agent/session.py` | A chat session: runs each request as a new task, writes the earlier tasks into the next task's first message from their records, logs the session in `runs/sessions/<id>/session.jsonl`, and moves each chat reply (a task that proposed no plan) to `runs/sessions/<id>/replies/` when it ends. |
 | Agent | `agent/model.py` | The model client for Anthropic's Messages API and the Anthropic-compatible ones of DeepSeek and Moonshot (Kimi); the list of supported models with their provider, list price, and whether they see images; the only code that receives a model API key. Caps connection attempts at 5 seconds and retries transient failures up to three times within the remaining task time. The terminal shows each retry and its delay. |
+| Agent | `agent/openai_model.py` | The client for OpenAI's Responses API behind the same interface: translates the Messages API blocks the loop uses into Responses input items and back. Stateless (`store: false`); each reasoning item, with its encrypted content, rides in a thinking block and is sent back on the next request. |
 | Agent | `agent/judge.py` | The on-demand judge: builds its input from a finished task's artifacts, calls one model, parses the verdict, and appends it to `judge.jsonl`. |
 | Agent | `agent/context.py` | Token estimates, `history.md`, and the message that starts a new window. |
 | Agent | `agent/secrets.py` | Reads API keys from `.env` and redacts them from traces. |

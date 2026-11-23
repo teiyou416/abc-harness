@@ -70,7 +70,8 @@ class Provider:
     key_name: str  # the .env entry holding its API key
     base_url: str | None
     anthropic_extras: bool  # the beta endpoint with server-side fallback and summarized thinking
-    efforts: tuple[str, ...] = EFFORTS  # the output_config.effort values it accepts
+    efforts: tuple[str, ...] = EFFORTS  # the effort values it accepts
+    api: str = "messages"  # "messages" (Anthropic's Messages API or a compatible one) or "responses" (OpenAI's)
 
 
 ANTHROPIC = Provider("Anthropic", "ANTHROPIC_API_KEY", None, True)
@@ -78,7 +79,11 @@ DEEPSEEK = Provider("DeepSeek", "DEEPSEEK_API_KEY", "https://api.deepseek.com/an
 # The China platform (platform.moonshot.cn); its keys do not work on the international one (api.moonshot.ai).
 KIMI = Provider("Moonshot", "MOONSHOT_API_KEY", "https://api.moonshot.cn/anthropic", False,
                 efforts=("low", "high", "max"))
-API_KEY_NAMES = (ANTHROPIC.key_name, DEEPSEEK.key_name, KIMI.key_name)
+# OpenAI's own Responses API, through agent/openai_model.py. The GPT-6 models reject effort "none"; "max" is
+# left out until a model page confirms it.
+OPENAI = Provider("OpenAI", "OPENAI_API_KEY", None, False, efforts=("low", "medium", "high", "xhigh"),
+                  api="responses")
+API_KEY_NAMES = (ANTHROPIC.key_name, DEEPSEEK.key_name, KIMI.key_name, OPENAI.key_name)
 
 
 @dataclass(frozen=True)
@@ -94,6 +99,13 @@ def _deepseek(hit: float, miss: float, output: float) -> Price:
     return Price(miss, output, hit, miss, off_peak=off)
 
 
+def _openai(input: float, cached: float, output: float) -> Price:
+    """USD; a request whose prompt exceeds 272K tokens pays twice the input and 1.5 times the output price.
+    OpenAI caches by itself and charges no cache writes."""
+    long = Price(input * 2, output * 1.5, cached * 2, input * 2)
+    return Price(input, output, cached, input, above=long, above_tokens=272_000)
+
+
 def _kimi(miss: float, hit: float, write_5m: float, output: float) -> Price:
     """China-platform prices in CNY."""
     return Price(miss, output, hit, write_5m, currency="CNY")
@@ -101,7 +113,8 @@ def _kimi(miss: float, hit: float, write_5m: float, output: float) -> Price:
 
 # The models the harness may use. Claude prices from https://platform.claude.com/docs/en/about-claude/pricing and
 # DeepSeek prices from https://api-docs.deepseek.com/quick_start/pricing, both read 2026-11-19; Kimi prices from
-# the China price table at https://platform.kimi.com/docs/pricing/chat, as the maintainer read it on 2026-11-22.
+# the China price table at https://platform.kimi.com/docs/pricing/chat, as the maintainer read it on 2026-11-22;
+# OpenAI prices from https://developers.openai.com/api/docs/pricing, read 2026-11-23.
 # Update them when the published prices change; they feed only the cost estimate in the run statistics.
 MODELS: dict[str, ModelSpec] = {
     "claude-opus-5-5": ModelSpec(ANTHROPIC, Price(4.0, 20.0, 0.20, 5.0)),
@@ -115,6 +128,9 @@ MODELS: dict[str, ModelSpec] = {
     "kimi-k3.1-pro": ModelSpec(KIMI, _kimi(13.0, 1.30, 13.0, 68.0)),
     "kimi-k3.1-pro-highspeed": ModelSpec(KIMI, _kimi(26.0, 1.30, 26.0, 136.0)),
     "kimi-k3": ModelSpec(KIMI, _kimi(20.0, 2.0, 20.0, 100.0)),
+    "gpt-6.2-sol": ModelSpec(OPENAI, _openai(2.0, 0.10, 10.0)),
+    "gpt-6.2-astra": ModelSpec(OPENAI, _openai(8.0, 0.40, 40.0)),
+    "gpt-6-luna": ModelSpec(OPENAI, _openai(0.10, 0.01, 0.50)),
 }
 
 
@@ -171,7 +187,7 @@ class ModelClient(Protocol):
         ...
 
 
-def make_model(name: str, effort: str, key: Callable[[str], str | None]) -> AnthropicModel:
+def make_model(name: str, effort: str, key: Callable[[str], str | None]) -> ModelClient:
     """The client for a listed model, with its provider's key from `key(name_of_env_entry)`."""
     spec = MODELS.get(name)
     if spec is None:
@@ -181,6 +197,10 @@ def make_model(name: str, effort: str, key: Callable[[str], str | None]) -> Anth
         raise ModelUnavailable(f"{name} needs {spec.provider.key_name} in .env")
     if effort not in spec.provider.efforts:
         raise ModelUnavailable(f"{name} accepts effort {', '.join(spec.provider.efforts)}, not {effort}")
+    if spec.provider.api == "responses":
+        from abc_harness.agent.openai_model import OpenAIModel
+
+        return OpenAIModel(api_key, model=name, effort=effort)
     return AnthropicModel(api_key, model=name, effort=effort, provider=spec.provider)
 
 
@@ -246,39 +266,46 @@ class AnthropicModel:
         )
 
     def _send(self, request: dict[str, Any], deadline: float | None, on_retry: RetryNotice | None) -> Any:
-        from httpx2 import ConnectTimeout
+        messages = self._client.beta.messages if self.provider.anthropic_extras else self._client.messages
+        return send_with_retries(messages.create, request, self._anthropic, deadline, on_retry)
 
-        errors = self._anthropic
-        for attempt in range(MAX_RETRIES + 1):
-            left = None if deadline is None else deadline - time.monotonic()
-            if left is not None and left <= 0:
-                raise ModelDeadlineExceeded("the task's active time ran out before the model answered")
-            try:
-                if left is not None:
-                    request["timeout"] = errors.Timeout(left, connect=min(CONNECT_TIMEOUT_SECONDS, left))
-                messages = self._client.beta.messages if self.provider.anthropic_extras else self._client.messages
-                return messages.create(**request)
-            except (errors.APIConnectionError, errors.APIStatusError) as e:
-                status = getattr(e, "status_code", None)
-                retryable = status is None or status in RETRY_STATUS or status >= 500
-                remaining = None if deadline is None else deadline - time.monotonic()
-                if retryable and remaining is not None and remaining <= 0:
-                    raise ModelDeadlineExceeded("the task's active time ran out during a model call") from e
-                if not retryable or attempt == MAX_RETRIES:
-                    raise
-                pause = 0.5 * 2**attempt
-                if remaining is not None and remaining <= pause:
-                    time.sleep(remaining)
-                    raise ModelDeadlineExceeded("the task's active time ran out before the next retry") from e
-                if on_retry:
-                    if status is not None:
-                        reason = f"Model API returned HTTP {status}."
-                    elif isinstance(e.__cause__, ConnectTimeout):
-                        reason = "Connection timed out."
-                    elif isinstance(e, errors.APITimeoutError):
-                        reason = "Model request timed out."
-                    else:
-                        reason = "Connection failed."
-                    on_retry(reason, attempt + 1, pause)
-                time.sleep(pause)
-        raise AssertionError("unreachable")
+
+def send_with_retries(create: Callable[..., Any], request: dict[str, Any], errors: Any, deadline: float | None,
+                      on_retry: RetryNotice | None) -> Any:
+    """Call `create(**request)`, retrying 408, 409, 429, 5xx and connection errors up to MAX_RETRIES times, so
+    that every attempt and every pause fits before `deadline`. `errors` is the SDK module (anthropic or openai),
+    whose error classes and Timeout have the same names in both."""
+    from httpx2 import ConnectTimeout
+
+    for attempt in range(MAX_RETRIES + 1):
+        left = None if deadline is None else deadline - time.monotonic()
+        if left is not None and left <= 0:
+            raise ModelDeadlineExceeded("the task's active time ran out before the model answered")
+        try:
+            if left is not None:
+                request["timeout"] = errors.Timeout(left, connect=min(CONNECT_TIMEOUT_SECONDS, left))
+            return create(**request)
+        except (errors.APIConnectionError, errors.APIStatusError) as e:
+            status = getattr(e, "status_code", None)
+            retryable = status is None or status in RETRY_STATUS or status >= 500
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if retryable and remaining is not None and remaining <= 0:
+                raise ModelDeadlineExceeded("the task's active time ran out during a model call") from e
+            if not retryable or attempt == MAX_RETRIES:
+                raise
+            pause = 0.5 * 2**attempt
+            if remaining is not None and remaining <= pause:
+                time.sleep(remaining)
+                raise ModelDeadlineExceeded("the task's active time ran out before the next retry") from e
+            if on_retry:
+                if status is not None:
+                    reason = f"Model API returned HTTP {status}."
+                elif isinstance(e.__cause__, ConnectTimeout):
+                    reason = "Connection timed out."
+                elif isinstance(e, errors.APITimeoutError):
+                    reason = "Model request timed out."
+                else:
+                    reason = "Connection failed."
+                on_retry(reason, attempt + 1, pause)
+            time.sleep(pause)
+    raise AssertionError("unreachable")

@@ -60,7 +60,8 @@ def estimate_tokens(value: Any) -> int:
             if v.get("type") == "image" and isinstance(v.get("source"), dict):
                 images.append(image_tokens(base64.b64decode(v["source"].get("data", ""))))
                 return {"type": "image"}
-            return {k: without_images(x) for k, x in v.items()}
+            # A reasoning item's encrypted content (agent/openai_model.py) is not text the model reads as such.
+            return {k: without_images(x) for k, x in v.items() if k != "encrypted_content"}
         if isinstance(v, list):
             return [without_images(x) for x in v]
         return v

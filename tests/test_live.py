@@ -204,10 +204,11 @@ def test_real_model_reads_a_value_off_a_figure(tmp_path):
 
 
 @pytest.mark.parametrize("name", ["deepseek-flash", "deepseek-v4-pro", "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed",
-                                  "kimi-k3"])
+                                  "kimi-k3", "gpt-6.2-sol", "gpt-6.2-astra", "gpt-6-luna"])
 def test_compatible_provider_answers_a_tool_call_and_reports_usage(name):
-    """A non-Anthropic provider takes the harness's request as sent (thinking, effort, cache_control), calls a
-    tool, and continues after the tool result with its own thinking blocks passed back unchanged."""
+    """A non-Anthropic provider takes the harness's request as sent (thinking, effort, cache_control; for OpenAI,
+    its translation), calls a tool, and continues after the tool result with its own thinking blocks (OpenAI's
+    encrypted reasoning items) passed back unchanged."""
     from abc_harness.agent.model import MODELS, make_model
     from abc_harness.tools import TOOLS
 

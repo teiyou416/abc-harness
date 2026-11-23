@@ -10,7 +10,8 @@ since the report's tables round them. A number in the answer is grounded when so
 at the answer's precision, directly or after the usual unit changes: a fraction stated as a percentage (0.0932
 as 9.3%), a factor of 1000 (21412 ms as 21.4 s), and a count written in words or Chinese units ("23 million"
 as 2300万). LaTeX thin spaces inside a number (`0.337\\,05`) are ignored. One-digit integers are not checked,
-nor anything inside `code` spans (plan versions, paths, file names). The check is a heuristic: a number the agent derived itself, such as a standard error it
+nor anything inside `code` spans (plan versions, paths, file names) except a span that holds only numbers,
+such as `0.0245` or `0.0245 ± 0.0016`: some models format their results that way. The check is a heuristic: a number the agent derived itself, such as a standard error it
 computed, has no source and is reported, and a small integer may find a source by coincidence. So an
 ungrounded number is a warning for the researcher, not a failed check.
 """
@@ -33,6 +34,7 @@ _NUMBER = re.compile(r"(?<![A-Za-z0-9_.])(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?"
 _SCALE = {"k": 1e3, "K": 1e3, "M": 1e6, "thousand": 1e3, "million": 1e6, "billion": 1e9, "万": 1e4, "亿": 1e8}
 _THIN_SPACE = re.compile(r"(?<=\d)(?:\\[,;:! ]|\{,\}|[\u2009\u202f])(?=\d)")
 _CODE = re.compile(r"```.*?```|`[^`\n]*`", re.DOTALL)
+_NUMBERS_ONLY = re.compile(r"[\s\d.,%±+\-−]*\d[\s\d.,%±+\-−]*")  # a code span that is a result, not a path or id
 _LINK_TARGET = re.compile(r"\]\([^)]*\)")
 # history.md sections the harness starts; anything else inside a section belongs to it.
 _TOOL_SECTION = re.compile(r"^### tool (result|error): `[^`]*` \(id `[^`]*`\)$")
@@ -112,8 +114,13 @@ def source_text(history: str) -> str:
     return "\n".join(kept)
 
 
+def _code_span(match: re.Match[str]) -> str:
+    inner = match.group(0).strip("`")
+    return f" {inner} " if not match.group(0).startswith("```") and _NUMBERS_ONLY.fullmatch(inner) else " "
+
+
 def claims_in(answer: str) -> list[Claim]:
-    text = _THIN_SPACE.sub("", _LINK_TARGET.sub("]", _CODE.sub(" ", answer)))
+    text = _THIN_SPACE.sub("", _LINK_TARGET.sub("]", _CODE.sub(_code_span, answer)))
     claims = []
     for m in _NUMBER.finditer(text):
         whole, fraction, suffix = m.group(1), m.group(2) or "", (m.group(3) or "").strip()

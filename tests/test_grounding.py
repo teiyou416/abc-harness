@@ -85,3 +85,9 @@ def test_trace_check_reports_ungrounded_numbers_as_a_warning_without_failing(tmp
         in lines
     assert "NOTE: report.md Agent summary: 1 of 2 numbers found in the task's sources" in lines
     assert not any(line.startswith("FAIL") and "summary" in line for line in lines)
+
+
+def test_numbers_formatted_as_code_are_still_checked(tmp_path):
+    root = task_dir(tmp_path, "Mean `0.6000` (SD `0.0700 ± 0.01`), version `6dca409e`, file `run-2026.csv`.")
+    checked = [c.text for c in check_answer(root).checked]
+    assert checked == ["0.6000", "0.0700", "0.01"]

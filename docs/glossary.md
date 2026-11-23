@@ -75,11 +75,11 @@ A fixed set of benchmark tasks that several models each run a fixed number of ti
 _Avoid_: evaluation (a judgment is not an evaluation suite), eval, leaderboard
 
 **Benchmark task** (planned):
-One research request in a benchmark, with the checks its result must pass. Each run of it by a model is an ordinary task.
+One research request in a benchmark, with the checks its result must pass and its kind: `parameter` (the simulator's own parameters suffice) or `code` (it needs a permitted edit and a fixed validation check). Each run of it by a model is an ordinary task.
 _Avoid_: test case, scenario
 
 **Benchmark envelope** (planned):
-The limits the researcher approves once before a benchmark: simulators, parameter ranges, metrics, and permitted edits. The harness approves a plan version inside it in code and refuses any other.
+The limits the researcher approves once before a benchmark: simulators, parameter ranges, metrics, and for each `code` task the permitted edits and its fixed validation check. The harness approves a plan version inside it in code and refuses any other.
 _Avoid_: auto-approval, policy
 
 **Benchmark chart** (planned):
